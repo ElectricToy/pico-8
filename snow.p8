@@ -2,6 +2,258 @@ pico-8 cartridge // http://www.pico-8.com
 version 8
 __lua__
 
+-- vector class
+
+vector = {}
+
+function vector:new( x, y )
+	local newobj = { x = x, y = y }
+	self.__index = self
+	return setmetatable( newobj, self )
+end
+
+function vector:__unm()
+	return vector:new( -self.x, -self.y )
+end
+
+function vector:__add( other )
+	return vector:new( self.x + other.x, self.y + other.y )
+end
+
+function vector:__sub( other )
+	return vector:new( self.x - other.x, self.y - other.y )
+end
+
+function vector:__mul( other )
+	return vector:new( self.x * other.x, self.y * other.y )
+end
+
+function vector:__div( other )
+	return vector:new( self.x / other.x, self.y / other.y )
+end
+
+function vector:dot( other )
+	return self.x * other.x + self.y * other.y
+end
+
+function vector:lengthSquared()
+	return self:dot( self )
+end
+
+function vector:length()
+	return sqrt( self:lengthSquared() )
+end
+
+function vector:normal()
+	local len = self:length()
+	if len > 0 then
+		return vector:new( self.x / len, self.y / len )
+	end
+
+	return vector:new( 0, 0 )
+end
+
+function vector:perpendicular()
+	return vector:new( self.y, -self.x )
+end
+
+-- utilities 
+
+function randinrange( min, max )
+	assert( max > min )
+	return min + rnd( max - min )
+end
+
+function wrap( x, min, maxexclusive )
+	assert( maxexclusive > min )
+	return min + ( x - min ) % ( maxexclusive - min )
+end
+
+function clamp( x, least, greatest )
+	assert( greatest >= least )
+	return min( greatest, max( least, x ))
+end
+
+-- class body
+
+body = {}
+
+function body:new( x, y, radius )
+	local newobj = { 
+		alive = true,
+		pos = vector:new( x, y ),
+		vel = vector:new( 0, 0 ),
+		acc = vector:new( 0, 0 ),
+		mass = 1,
+		radius = radius,
+		drag = 0.01,
+		color = 3,
+	}
+	self.__index = self
+	return setmetatable( newobj, self )
+end
+
+function body:update()
+	self.acc = self.acc - self.vel * vector:new( self.drag, self.drag )
+	self.vel = self.vel + self.acc
+	self.pos = self.pos + self.vel
+
+	self.acc.x = 0
+	self.acc.y = 0
+end
+
+function body:draw()
+	-- TODO: Drawing
+	circfill( self.pos.x, self.pos.y, self.radius, self.color )
+end
+
+function body:addimpulse( impulse )
+	if self.mass > 0 then
+		self.acc = self.acc + impulse / vector:new( self.mass, self.mass )
+	end
+end
+
+-- World state
+
+bodies = {}
+
+function createbody( x, y, radius )
+	local body = body:new( x, y, radius )
+	add( bodies, body )
+	return body
+end
+
+function eachbody( apply )
+	for index, body in pairs( bodies ) do
+		if body.alive then
+			apply( body )
+		end
+	end
+end
+
+-- Initial scene
+
+function _init()
+	-- for i = 1, 10 do
+	-- 	createbody( randinrange( 1, 128 ), randinrange( 1, 128 ), randinrange( 1, 8 ) )
+	-- end
+
+	local a = createbody( 32, 64, 5 )
+	local b = createbody( 96, 64, 20 )
+
+	a:addimpulse( vector:new(  4, 0 ))
+	-- b:addimpulse( vector:new( -1, 0 ))
+
+	a.mass = 3.141 * a.radius * a.radius
+	b.mass = 3.141 * b.radius * b.radius
+
+	b.color = 4
+end
+
+
+-- updating and drawing
+
+function collidebodies( a, b )
+	-- colliding?
+
+	-- collidable?
+	-- TODO!!!
+
+	-- overlapping?
+
+	local delta = b.pos - a.pos
+	local distSquared = delta:lengthSquared()
+
+	local minOverlapDistance = a.radius + b.radius
+	local minOverlapDistanceSquared = minOverlapDistance * minOverlapDistance
+
+	if distSquared >= minOverlapDistanceSquared then
+		return
+	end
+
+	-- overlapping. resolve collision.
+
+	local totalMass = a.mass + b.mass
+
+	if totalMass <= 0 then
+		-- Both immoveable. Nothing to do.
+		return
+	end
+
+	local massProportionA = a.mass / totalMass
+	local massProportionB = 1.0 - massProportionA
+
+	if a.mass <= 0 then
+		massProportionA = 1
+		massProportionB = 0
+	elseif b.mass <= 0 then
+		massProportionA = 0
+		massProportionB = 1
+	end
+
+	local dist = sqrt( distSquared )
+	local overlapDistance = minOverlapDistance - dist
+
+	local normal = delta:normal()
+
+	-- already moving apart?
+
+	-- if a.vel:dot( b.vel ) > 0 then
+	-- 	return
+	-- end
+
+	-- reposition to not overlap.
+
+	local adjustmentDist = overlapDistance + 1
+
+	a.pos = a.pos - normal * vector:new( adjustmentDist * massProportionB, adjustmentDist * massProportionB )
+	b.pos = b.pos + normal * vector:new( adjustmentDist * massProportionA, adjustmentDist * massProportionA )
+
+	-- impulse to bounce velocity.
+
+	local force = a.vel:dot( normal ) * a.mass + b.vel:dot( -normal ) * b.mass
+
+	a:addimpulse( normal * vector:new( -force, -force ))
+	b:addimpulse( normal * vector:new(  force,  force ))
+
+end
+
+function updatecollisions()
+	for i = 1, #bodies - 1 do
+		for j = i + 1, #bodies do
+			collidebodies( bodies[ i ], bodies[ j ])
+		end
+	end
+end
+
+function _update()
+	eachbody( function( body )
+		body:update() 
+	end )
+
+	-- Update collision
+
+	for iteration = 1,1 do
+		updatecollisions()
+	end
+
+	-- Remove dead bodies
+
+	for index, body in pairs( bodies ) do
+		if not body.alive then
+			del( bodies, index )
+		end
+	end
+
+end
+
+function _draw()
+	cls()
+	eachbody( function( body ) 
+		body:draw() 
+	end )
+end
+
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
