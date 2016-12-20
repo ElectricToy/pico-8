@@ -74,6 +74,40 @@ function clamp( x, least, greatest )
 	return min( greatest, max( least, x ))
 end
 
+-- class sprite
+
+sprite = {}
+sprites = {}
+
+function sprite:new( x, y )
+	local newobj = { 
+		pos = vector:new( x, y ),
+		baseSprite = 0,
+		spriterow = 0,
+		spritecol = 0,
+		spriteflip = false,
+	}
+	self.__index = self
+	add( sprites, newobj )
+	return setmetatable( newobj, self )
+end
+
+function sprite:currentSprite()
+	if self.baseSprite == 0 then return self.baseSprite end
+	return self.baseSprite + self.spriterow * 16 + self.spritecol
+end
+
+function sprite:draw()
+	local pos = self.pos
+	local sprite = self:currentSprite()
+	spr( sprite, pos.x, pos.y, 1, 1, self.spriteflip )
+end
+
+function sprite:incrementAnimation()
+	if self.spritecol == 0 then return end
+	self.spritecol = wrap( self.spritecol + 1, 1, 3 )
+end
+
 -- class body
 
 body = {}
@@ -88,10 +122,7 @@ function body:new( x, y, radius )
 		radius = radius,
 		drag = 0.01,
 		color = 1,
-		baseSprite = 0,
-		spriterow = 0,
-		spritecol = 0,
-		spriteflip = false,
+		sprite = sprite:new( x, y ),
 		controller = nil,
 		controllerimpulsescalar = 1.0,
 		totalcontrollerimpulse = 0,
@@ -99,11 +130,6 @@ function body:new( x, y, radius )
 	self.__index = self
 	add( bodies, newobj )
 	return setmetatable( newobj, self )
-end
-
-function body:currentSprite()
-	if self.baseSprite == 0 then return self.baseSprite end
-	return self.baseSprite + self.spriterow * 16 + self.spritecol
 end
 
 function body:update()
@@ -124,24 +150,30 @@ function body:updateworldcollision()
 
 	-- check collision with the 4 corners.
 
-	-- local mapSprite = mget( self.pos.x, self.pos.y )
-	-- if fget( mapSprite, 0 ) then
-	-- 	-- colliding. extract.
+	local center = self.pos + vector:new( 4, 4 )
+	local offset = vector:new( 2, 2 )
 
-	-- 	local mapPos = self:mapPos()
-	-- end
+	for i = 0, 3 do
+		local corner = center + offset
+
+		local mapSprite = mget( corner.x / 8, corner.y / 8 )
+		if fget( mapSprite, 0 ) then
+
+			-- colliding. move out.
+
+			-- TODO!!!
+
+			self.pos = self.pos - offset
+		end
+
+		offset = offset:perpendicular()
+	end
+
 end
 
 function body:draw()
-	local pos = self.pos
-
-	local sprite = self:currentSprite()
-
-	if sprite == 0 then 
-		circfill( pos.x, pos.y, self.radius, self.color )
-	else
-		spr( sprite, pos.x, pos.y, 1, 1, self.spriteflip )
-	end
+	self.sprite.pos = self.pos
+	self.sprite:draw()
 end
 
 function body:addimpulse( impulse )
@@ -158,30 +190,25 @@ function body:addcontrollerimpulse( impulse )
 	-- set spriterow (directional)
 
 	if impulse.x == 0 and impulse.y == 0 then
-		self.spriterow = 0
-		self.spritecol = 0
-		self.spriteflip = false
+		self.sprite.spriterow = 0
+		self.sprite.spritecol = 0
+		self.sprite.spriteflip = false
 	elseif abs( impulse.y ) >= abs( impulse.x ) then
-		if self.spritecol == 0 then self.spritecol = 1 end
+		if self.sprite.spritecol == 0 then self.sprite.spritecol = 1 end
 
-		self.spriterow = impulse.y >= 0 and 0 or 1
-		self.spriteflip = false
+		self.sprite.spriterow = impulse.y >= 0 and 0 or 1
+		self.sprite.spriteflip = false
 	else
-		if self.spritecol == 0 then self.spritecol = 1 end
+		if self.sprite.spritecol == 0 then self.sprite.spritecol = 1 end
 
-		self.spriterow = 2
-		self.spriteflip = impulse.x >= 0
+		self.sprite.spriterow = 2
+		self.sprite.spriteflip = impulse.x >= 0
 	end
 
 	if self.totalcontrollerimpulse > 1 then
-		self:incrementAnimation()
+		self.sprite:incrementAnimation()
 		self.totalcontrollerimpulse = 0
 	end
-end
-
-function body:incrementAnimation()
-	if self.spritecol == 0 then return end
-	self.spritecol = wrap( self.spritecol + 1, 1, 3 )
 end
 
 -- class controller
@@ -256,13 +283,13 @@ function _init()
 	-- Setup the players
 
 	local player1 = body:new( 32, 64, 4 )
-	player1.baseSprite = 64
+	player1.sprite.baseSprite = 64
 	player1.drag = 0.5
 	player1.controllerimpulsescalar = 0.8
 	local playercontroller1 = playercontroller:new( player1 )
 
 	local player2 = body:new( 96, 64, 4 )
-	player2.baseSprite = 67
+	player2.sprite.baseSprite = 67
 	player2.drag = 0.5
 	player2.controllerimpulsescalar = 0.75
 
