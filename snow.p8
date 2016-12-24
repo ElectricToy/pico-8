@@ -660,6 +660,7 @@ seeker = nil
 function clearworld()
 	hider = nil
 	seeker = nil
+	currentplayer = nil
 	bodies = {}
 	footprints = {}
 end
@@ -829,8 +830,8 @@ function printshadowed( text, x, y, color )
 	print( text, x, y, color )
 end
 
-function drawpressxprompt( ticks )
-	local presspromptcolor = ( band( ticks / 15, 1 ) != 0 ) and 7 or 12
+function drawpressxprompt()
+	local presspromptcolor = ( band( stateTicks / 15, 1 ) != 0 ) and 7 or 12
 	printshadowed( "press —", 48, 78, presspromptcolor )
 end
 
@@ -841,18 +842,23 @@ function drawcountdown( countdown )
 	printshadowed( ( minutes > 0 and minutes or "" ) .. ":" .. ( seconds < 10 and "0" or "" ) .. seconds, 56, 2, 8 )
 end
 
+hiding_seconds = 10
+seeking_seconds = hiding_seconds
+
+hiding_ticks = hiding_seconds * 30
+seeking_ticks = seeking_seconds * 30
+
 gamestates = {}
+stateTicks = 0
 
 gamestates[ "initial" ] = 
 {
-	ticks = 0,
 	beginstate = function( self )
 		-- music( 0 )
 		initializeworld()
 	end,
 
 	update = function( self )
-		self.ticks += 1
 		if btn( 4, 0 ) or btn( 5, 0 ) then
 			-- start the game
 			gotostate( "hiding" )
@@ -860,7 +866,7 @@ gamestates[ "initial" ] =
 	end,
 
 	draw = function( self )
-	drawpressxprompt( self.ticks )
+	drawpressxprompt()
 	end,
 
 	endstate = function( self )
@@ -869,7 +875,6 @@ gamestates[ "initial" ] =
 
 gamestates[ "hiding" ] = 
 {
-	countdown = 30 * 90,
 	beginstate = function( self )
 		-- music( 0 )
 
@@ -880,15 +885,15 @@ gamestates[ "hiding" ] =
 	end,
 
 	update = function( self )
-		self.countdown -= 1
-
-		if self.countdown <= 0 then
+		local remainingTicks = hiding_ticks - stateTicks
+		if remainingTicks <= 0 then
 			gotostate( "seeking_prepare" )
 		end
 	end,
 
 	draw = function( self )
-		drawcountdown( self.countdown )
+		local remainingTicks = hiding_ticks - stateTicks
+		drawcountdown( remainingTicks )
 	end,
 	
 	endstate = function( self )
@@ -909,7 +914,6 @@ gamestates[ "seeking_prepare" ] =
 	end,
 
 	update = function( self )
-		self.ticks += 1
 		if btn( 4, 0 ) or btn( 5, 0 ) then
 			-- start the game
 			gotostate( "seeking" )
@@ -917,7 +921,7 @@ gamestates[ "seeking_prepare" ] =
 	end,
 
 	draw = function( self )
-		drawpressxprompt( self.ticks )
+		drawpressxprompt()
 	end,
 	
 	endstate = function( self )
@@ -926,7 +930,6 @@ gamestates[ "seeking_prepare" ] =
 
 gamestates[ "seeking" ] = 
 {
-	countdown = 30 * 90,
 	beginstate = function( self )
 		-- music( 0 )
 
@@ -934,15 +937,15 @@ gamestates[ "seeking" ] =
 	end,
 
 	update = function( self )
-		self.countdown -= 1
-
-		if self.countdown <= 0 then
+		local remainingTicks = seeking_ticks - stateTicks
+		if remainingTicks <= 0 then
 			gotostate( "outcome" )
 		end
 	end,
 
 	draw = function( self )
-		drawcountdown( self.countdown )
+		local remainingTicks = seeking_ticks - stateTicks
+		drawcountdown( remainingTicks )
 	end,
 	
 	endstate = function( self )
@@ -964,10 +967,11 @@ gamestates[ "outcome" ] =
 	end,
 
 	draw = function( self )
-		drawpressxprompt( 0 )
+		drawpressxprompt()
 	end,
 	
 	endstate = function( self )
+		initializeworld()
 	end
 }
 
@@ -975,12 +979,15 @@ currentgamestate = nil
 
 function gotostate( name )
 	if currentgamestate then
+		printh( "Leaving old state" )
 		currentgamestate:endstate()
 	end
 
 	currentgamestate = gamestates[ name ]
 	assert( currentgamestate )
 
+	printh( "Entering state " .. name )
+	stateTicks = 0
 	currentgamestate:beginstate()
 end
 
@@ -1107,6 +1114,7 @@ end
 function _update()
 
 	if currentgamestate then
+		stateTicks += 1
 		currentgamestate:update()
 	end
 
