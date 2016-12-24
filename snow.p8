@@ -2,40 +2,40 @@ pico-8 cartridge // http://www.pico-8.com
 version 10
 __lua__
 
--- object oriented infrastructure. See http://lua-users.org/wiki/InheritanceTutorial
+-- object oriented infrastructure. see http://lua-users.org/wiki/inheritancetutorial
 
-function inheritsFrom( baseClass )
+function inheritsfrom( baseclass )
 
     local new_class = {}
     new_class.__index = new_class
 
-    if nil ~= baseClass then
-        setmetatable( new_class, { __index = baseClass } )
+    if nil ~= baseclass then
+        setmetatable( new_class, { __index = baseclass } )
     end
 
-    -- Implementation of additional OO properties starts here --
+    -- implementation of additional oo properties starts here --
 
-    -- Return the class object of the instance
+    -- return the class object of the instance
     function new_class:class()
         return new_class
     end
 
-    -- Return the super class object of the instance
-    function new_class:superClass()
-        return baseClass
+    -- return the super class object of the instance
+    function new_class:superclass()
+        return baseclass
     end
 
-    -- Return true if the caller is an instance of theClass
-    function new_class:isa( theClass )
+    -- return true if the caller is an instance of theclass
+    function new_class:isa( theclass )
         local b_isa = false
 
         local cur_class = new_class
 
         while ( nil ~= cur_class ) and ( false == b_isa ) do
-            if cur_class == theClass then
+            if cur_class == theclass then
                 b_isa = true
             else
-                cur_class = cur_class:superClass()
+                cur_class = cur_class:superclass()
             end
         end
 
@@ -48,7 +48,7 @@ end
 
 -- vector class
 
-vector = inheritsFrom( nil )
+vector = inheritsfrom( nil )
 
 function vector:new( x, y )
 	local newobj = { x = x, y = y }
@@ -157,7 +157,7 @@ end
 
 -- class sprite
 
-sprite = inheritsFrom( nil )
+sprite = inheritsfrom( nil )
 
 function sprite:new( x, y )
 	local newobj = { 
@@ -195,7 +195,7 @@ end
 
 -- class body
 
-body = inheritsFrom( nil )
+body = inheritsfrom( nil )
 
 function body:new( x, y, radius )
 	assert( x )
@@ -223,7 +223,7 @@ function body:new( x, y, radius )
 		footstep_sfx = nil,
 		footstep_sfx_snowy = nil,
 		currentmappos = nil,				-- todo
-		collisionmask = 0xFF,
+		collisionmask = 0xff,
 		collisionrefusalmask = 0,
 	}
 	add( bodies, newobj )
@@ -275,60 +275,13 @@ function body:update()
 end
 
 function body:onenteringmappos( mappos )
-	-- todo
-	printh( "entering " .. mappos:tostring() )
-end
-
-function setgate( mappos, step, ulspriteindex, brspriteindex )
-	local ulmappos = mappos
-	local brmappos = mappos + step
-
-	local spritehere = mget( mappos.x, mappos.y )
-	if fget( spritehere, 5 ) then	-- ul rather than br
-		-- ulmappos and brmappos already correct.
-	else
-		brmappos = mappos
-		ulmappos = mappos - step
-	end
-
-	if mget( ulmappos.x, ulmappos.y ) != ulspriteindex or mget( brmappos.x, brmappos.y ) != brspriteindex then
-		mset( ulmappos.x, ulmappos.y, ulspriteindex )
-		mset( brmappos.x, brmappos.y, brspriteindex )
-
-		sfx( 1 )
-	end
 end
 
 function body:onleavingmappos( mappos )
+end
 
-	local mapsprite = mget( mappos.x, mappos.y )
-
-	-- update gates.
-	if fget( mapsprite, 2 )	then -- gate?
-
-		local horizontalgate = fget( mapsprite, 4 )
-
-		if horizontalgate then
-			-- what direction are we going?
-			if self.vel.y > 0 then
-				-- down				
-				setgate( mappos, vector:new( 1, 0 ), 39, 40 )
-			else
-				-- up
-				setgate( mappos, vector:new( 1, 0 ), 23, 24 )
-			end
-		else
-			-- what direction are we going?
-			if self.vel.x > 0 then
-				-- right
-				setgate( mappos, vector:new( 0, 1 ), 22, 38 )
-			else
-				-- left
-				setgate( mappos, vector:new( 0, 1 ), 21, 37 )
-			end
-		end
-		
-	end
+function body:shouldcollidewithmapsprite( mapsprite )
+	return fget( mapsprite, 0 ) or is_closed_gate( mapsprite )
 end
 
 function body:updateworldcollision()
@@ -347,7 +300,7 @@ function body:updateworldcollision()
 		local corner = center + offset
 
 		local mapsprite = mapatworld( corner )
-		if fget( mapsprite, 0 ) then
+		if self:shouldcollidewithmapsprite( mapsprite ) then
 
 			-- colliding. move out.
 
@@ -420,27 +373,35 @@ function body:onfootstep()
 
 	-- place footprints
 	if self.feetsnowiness > 0 and self.footprintsprite > 0 then
-		local footprint = sprite:new( self.pos.x, self.pos.y )
-		footprint.animation = { self.footprintsprite }
-		add( footprints, footprint )
+		self:makefootprint( self.pos )
 	end
+end
+
+function body:makefootprint( pos )
+	local footprint = sprite:new( pos.x, pos.y )
+	footprint.animation = { self.footprintsprite }
+	add( footprints, footprint )
 end
 
 -- class player
 
-player = inheritsFrom( body )
+player = inheritsfrom( body )
 
 function player:new( x, y )
 	local newobj = body:new( x, y, 4 )
 
 	newobj.drag = 0.5
 	newobj.controllerimpulsescalar = 0.8
-	newobj.collisionrefusalmask = 1			-- Players don't collide with each other.
+	newobj.collisionrefusalmask = 1			-- players don't collide with each other.
 	newobj.footprintsprite = 112
 	newobj.footstep_sfx = 0
 	newobj.footstep_sfx_snowy = 2
 
 	return setmetatable( newobj, self )
+end
+
+function player:shouldcollidewithmapsprite( mapsprite )
+	return fget( mapsprite, 0 )
 end
 
 function player:updatecontrollerbasedanimations( impulse )
@@ -457,10 +418,53 @@ function player:updatecontrollerbasedanimations( impulse )
 	end
 end
 
+function player:updategates( mappos )
+	local mapsprite = mget( mappos.x, mappos.y )
+
+	-- update gates.
+	if fget( mapsprite, 2 )	then -- gate?
+
+		local horizontalgate = fget( mapsprite, 4 )
+
+		if horizontalgate then
+			-- what direction are we going?
+			if self.vel.y > 0 then
+				-- down				
+				setgate( mappos, vector:new( 1, 0 ), 39, 40 )
+			else
+				-- up
+				setgate( mappos, vector:new( 1, 0 ), 23, 24 )
+			end
+		else
+			-- what direction are we going?
+			if self.vel.x > 0 then
+				-- right
+				setgate( mappos, vector:new( 0, 1 ), 22, 38 )
+			else
+				-- left
+				setgate( mappos, vector:new( 0, 1 ), 21, 37 )
+			end
+		end
+		
+	end
+end
+
+function player:onenteringmappos( mappos )
+	-- todo
+	printh( "entering " .. mappos:tostring() )
+	self:updategates( mappos )
+end
+
+function player:onleavingmappos( mappos )
+	-- todo
+	printh( "entering " .. mappos:tostring() )
+	self:updategates( mappos )
+end
+
 
 -- class chicken 
 
-chicken = inheritsFrom( body )
+chicken = inheritsfrom( body )
 
 function chicken:new( x, y )
 	local newobj = body:new( x, y, 3 )
@@ -471,34 +475,121 @@ function chicken:new( x, y )
 	newobj.collisionmask = 0
 	newobj.footprintsprite = 120
 
+	newobj.fleedestination = nil
+	newobj.fleeticks = 0
+
+	newobj.wanderdirection = nil
+
 	return setmetatable( newobj, self )
 end
 
-function chicken:updatecontrollerbasedanimations( impulse )
-	if impulse.x == 0 and impulse.y == 0 then
+function chicken:update()
+
+	self:superclass().update( self )
+
+	self:update_ai()		-- todo: really should be a controller, but inheritance didn't work for me.
+
+	-- update chicken animations
+
+	if self.fleedestination then
+		-- moving
+		self.sprite.animation = { self.basesprite + 2 }		
+	else
 		-- still
-		local sprite = rnd( 100 ) < 10 and 114 or 113
-		printh( "chicken sprite will now be " .. sprite )
-		self.sprite.animation = { sprite }
+		-- todo!!! pecking animation
+		local sprite = rnd( 100 ) < 2 and self.basesprite + 1 or self.basesprite
+		self.sprite.animation = { sprite }		
+	end
+
+end
+
+function chicken:update_ai()
+
+	if self.fleedestination then
+
+		self.fleeticks += 1
+
+		-- fleeing
+		local fleedelta = self.fleedestination - self.pos
+		assert( fleedelta:manhattanlength() <= 180 )
+
+		local fleedistancesquared = fleedelta:lengthsquared()
 		
+		if fleedistancesquared < 4 * 4 then
+			-- stop fleeing
+			self:makefootprint( self.pos )
+			self.fleedestination = nil
+		end
+
+		-- spent too long fleeing?
+		if self.fleeticks > 30 * 2 then
+			self:makefootprint( self.pos )
+			self.fleedestination = nil
+			return
+		end
+
+		self:addcontrollerimpulse( fleedelta:normal() )
 		return
 	end
 
-	-- moving
+	-- not fleeing. should we be?
 
-	newobj.sprite.animation = { 115 }
+	local delta = currentplayer.pos - self.pos
 
+	local maxresponsedistance = 3 * 8
+
+	local manhattanlength = delta:manhattanlength()
+	if manhattanlength > maxresponsedistance * 1.8 then		-- adding a fudge factor to account for diagonals.
+		self:updatewandering()
+		return
+	end
+
+	if manhattanlength > 180 then
+		printh( "chicken may be encroached by the player but we don't have the numeric precision to decide. ignoring." )
+		self:updatewandering()
+		return
+	end
+
+	local distance = delta:length()
+
+	if distance > maxresponsedistance then
+		self:updatewandering()
+		return
+	end
+
+	-- flee!
+
+	local normal = delta:normal()
+
+	self.wanderdirection = nil
+	self.fleedestination = self.pos + normal * -vector:new( 2 * 8, 2 * 8 ) + vector:new( 8 * randinrange( -2, 2 ), 8 * randinrange( -2, 2 ) )
+	self.fleeticks = 0
+end
+
+function chicken:updatewandering()
+	if self.wanderdirection then
+		if rnd( 100 ) < 5 then
+			self.wanderdirection = nil
+			return
+		end
+
+		self:addcontrollerimpulse( self.wanderdirection * vector:new( 0.25, 0.25 ) )
+	else
+		if rnd( 100 ) < 0.5 then
+			self.wanderdirection = vector:new( randinrange( -10, 10 ), randinrange( -10, 10 ) ):normal()
+		end
+	end
 end
 
 -- class barrel
 
-barrel = inheritsFrom( body )
+barrel = inheritsfrom( body )
 
 function barrel:new( x, y )
 	local newobj = body:new( x, y, 4 )
 	newobj.drag = 0.25
 	newobj.footprintsprite = 104
-	newobj.footstepdistance = 0.25
+	newobj.footstepdistance = 1
 	newobj.footoffset = vector:new( 4, 4 )
 
 	setmetatable( newobj, self )
@@ -509,7 +600,7 @@ end
 
 -- class controller
 
-controller = inheritsFrom( nil )
+controller = inheritsfrom( nil )
 
 function controller:new( body )
 	local newobj = { 
@@ -522,8 +613,14 @@ end
 function controller:update()
 end
 
+-- class playercontroller 
 
-playercontroller = inheritsFrom( controller )
+playercontroller = inheritsfrom( controller )
+
+function playercontroller:new( body )
+	local newobj = controller:new( body )
+	return setmetatable( newobj, self )
+end
 
 function playercontroller:update()
 	local playerindex = 0
@@ -576,6 +673,31 @@ function is_snow( pos )
 	return fget( mget( pos.x, pos.y ), 3 )
 end
 
+function is_closed_gate( spriteindex )
+	return spriteindex == 16 or spriteindex == 32 or spriteindex == 48 or spriteindex == 49
+end
+
+function setgate( mappos, step, ulspriteindex, brspriteindex )
+	local ulmappos = mappos
+	local brmappos = mappos + step
+
+	local spritehere = mget( mappos.x, mappos.y )
+	if fget( spritehere, 5 ) then	-- ul rather than br
+		-- ulmappos and brmappos already correct.
+	else
+		brmappos = mappos
+		ulmappos = mappos - step
+	end
+
+	if mget( ulmappos.x, ulmappos.y ) != ulspriteindex or mget( brmappos.x, brmappos.y ) != brspriteindex then
+		mset( ulmappos.x, ulmappos.y, ulspriteindex )
+		mset( brmappos.x, brmappos.y, brspriteindex )
+
+		sfx( 1 )
+	end
+end
+
+
 function tidymapcell( pos )
 	local sprite = mget( pos.x, pos.y )
 	
@@ -596,51 +718,51 @@ function tidymapcell( pos )
 	-- count snowy neighbors.
 
 	local offset = vector:new( 1, 0 )
-	local snowyNeighbors = {}
+	local snowyneighbors = {}
 	
-	local grassyNeighbors = {}
+	local grassyneighbors = {}
 	for i = 0, 3 do
 		if is_snow( pos + offset ) then
-			add( snowyNeighbors, i )
+			add( snowyneighbors, i )
 		else
-			add( grassyNeighbors, i )			
+			add( grassyneighbors, i )			
 		end
 
 		offset = offset:perpendicular()
 	end
 
-	-- printh( "snowyNeighbors: " .. #snowyNeighbors .. ", grassy: " .. #grassyNeighbors )
+	-- printh( "snowyneighbors: " .. #snowyneighbors .. ", grassy: " .. #grassyneighbors )
 
-	local newSprite = 2 + rnd( 2 )
+	local newsprite = 2 + rnd( 2 )
 
-	if #snowyNeighbors == 0 then
-		newSprite = 10
-	elseif #snowyNeighbors == 1 then
-		newSprite = 11 + 16 * snowyNeighbors[ 1 ]
-	elseif #snowyNeighbors == 2 then
-		if snowyNeighbors[ 1 ] == 0 then
-			if snowyNeighbors[ 2 ] == 1 then
-				newSprite = 12
-			elseif snowyNeighbors[ 2 ] == 2 then
-				newSprite = 14
-			elseif snowyNeighbors[ 2 ] == 3 then
-				newSprite = 60
+	if #snowyneighbors == 0 then
+		newsprite = 10
+	elseif #snowyneighbors == 1 then
+		newsprite = 11 + 16 * snowyneighbors[ 1 ]
+	elseif #snowyneighbors == 2 then
+		if snowyneighbors[ 1 ] == 0 then
+			if snowyneighbors[ 2 ] == 1 then
+				newsprite = 12
+			elseif snowyneighbors[ 2 ] == 2 then
+				newsprite = 14
+			elseif snowyneighbors[ 2 ] == 3 then
+				newsprite = 60
 			end
-		elseif snowyNeighbors[ 1 ] == 1 then
-			if snowyNeighbors[ 2 ] == 2 then
-				newSprite = 28
-			elseif snowyNeighbors[ 2 ] == 3 then
-				newSprite = 30
+		elseif snowyneighbors[ 1 ] == 1 then
+			if snowyneighbors[ 2 ] == 2 then
+				newsprite = 28
+			elseif snowyneighbors[ 2 ] == 3 then
+				newsprite = 30
 			end
 		else
-			newSprite = 44
+			newsprite = 44
 		end
 
-	elseif #snowyNeighbors == 3 then
-		newSprite = 13 + 16 * grassyNeighbors[ 1 ]
+	elseif #snowyneighbors == 3 then
+		newsprite = 13 + 16 * grassyneighbors[ 1 ]
 	end
 
-	mset( pos.x, pos.y, newSprite )
+	mset( pos.x, pos.y, newsprite )
 end
 
 function tidymap()
@@ -667,16 +789,16 @@ function _init()
 
 	-- north
 	for i = 0, 4 do
-		local barrelXVariance = 1.0
-		local barrelYVariance = 0
-		local barrel = barrel:new( 8 * ( rnd( barrelXVariance ) + 15.75 + 0.5 * band( i, 1 ) ), 8 * ( rnd( barrelYVariance ) + 0 + i ) )
+		local barrelxvariance = 1.0
+		local barrelyvariance = 0
+		local barrel = barrel:new( 8 * ( rnd( barrelxvariance ) + 15.75 + 0.5 * band( i, 1 ) ), 8 * ( rnd( barrelyvariance ) + 0 + i ) )
 	end
 
 	-- south
 	for i = 0, 7 do
-		local barrelXVariance = 0
-		local barrelYVariance = 0
-		local barrel = barrel:new( 8 * ( rnd( barrelXVariance ) + 31 + band( i, 1 ) ), 8 * ( rnd( barrelYVariance ) + 16.5 + i ) )
+		local barrelxvariance = 0
+		local barrelyvariance = 0
+		local barrel = barrel:new( 8 * ( rnd( barrelxvariance ) + 31 + band( i, 1 ) ), 8 * ( rnd( barrelyvariance ) + 16.5 + i ) )
 	end
 
 	-- setup the players
@@ -689,10 +811,14 @@ function _init()
 
 	currentplayer = player1
 
-	-- setup the chickens. Oh yes.
+	-- setup the chickens. oh yes.
 
-	for i = 1, 10 do
-		chicken:new( 8 * randinrange( 19, 31 ), 8 * randinrange( 5, 17 ) )
+	for i = 1, 6 do
+		chicken:new( 8 * randinrange( 20, 28 ), 8 * randinrange( 2, 10 ) )
+	end
+	for i = 1, 6 do
+		local chicken = chicken:new( 8 * randinrange( 22, 30 ), 8 * randinrange( 12, 24 ) )
+		chicken:setbasesprite( 116 )
 	end
 end
 
@@ -707,7 +833,7 @@ function collidebodies( a, b )
 		or
 	   band( a.collisionrefusalmask, b.collisionrefusalmask ) ~= 0 then
 
-	   -- Don't want to collide
+	   -- don't want to collide
 	   return
 	end
 
@@ -721,7 +847,7 @@ function collidebodies( a, b )
 	-- overflow the numeric system, causing truly bizarre errors.
 
 	local manhattanlength = delta:manhattanlength()
-	if manhattanlength > minoverlapdistance then
+	if manhattanlength > minoverlapdistance * 1.8 then		-- adding a fudge factor to account for diagonals.
 		return
 	end
 
@@ -808,8 +934,8 @@ end
 
 function _update()
 
-	eachcontroller( function( controller )
-		controller:update()
+	eachcontroller( function( control )
+		control:update()
 	end )
 
 	eachbody( function( body )
@@ -846,7 +972,7 @@ function _draw()
 
 	map( 0, 0, 0, 0, 96, 64 )
 
-	-- Draw shadows
+	-- draw shadows
 
 	spr( 139, 10.5*8, -3, 4, 4 )
 	spr( 139, 27*8, 8, 4, 4 )
@@ -854,19 +980,19 @@ function _draw()
 	spr( 139, 37*8, 18*8, 4, 4 )
 	spr( 139, 37*8, -1*8, 4, 4 )
 
-	-- Draw footprints
+	-- draw footprints
 
 	for footprint in all( footprints ) do
 		footprint:draw()
 	end
 
-	-- Draw bodies
+	-- draw bodies
 
 	eachbody( function( body ) 
 		body:draw() 
 	end )
 
-	-- Draw hiding places.
+	-- draw hiding places.
 
 	-- sw barn
 	spr( 128, 0, 21*8, 4, 4 )
@@ -952,14 +1078,14 @@ __gfx__
 000ccd00000ccd00000ccd00000ccd00000882000008820000088200000882000000076000000000000000000000000000000000000000000000000000000000
 000cc400000c4d00000cc400000ccd4000082a00000822a000082a00000822a00006760000000000000000000000000000000000000000000000000000000000
 000c0d0000c000d0000c0d000000d000000802000000200000080200000020000070000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000a000000000000009a0aaa000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000009a000000000000000aa990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00060000000aa0000000000000aa9990000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000
-0067060000a9aa0000a9aa9000aaa990000000000000000000000000000000000006700000000000000000000000000000000000000000000000000000000000
-0000000000a99a900aa99a00000aaa00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00060000000a9900aa0a990000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000040009000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000a0000000000000000000000090000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000a000000000000009a0aaa000900000000000000490999000000000000000000000000000000000000000000000000000000000000000000000000
+00000000009a000000000000000aa99000a900000000000000099880000000000000000000000000000000000000000000000000000000000000000000000000
+00060000000aa0000000000000aa9990000990000000000000998880000000000000600000000000000000000000000000000000000000000000000000000000
+0067060000a9aa0000a9aa9000aaa990009899000098998000999880000000000006700000000000000000000000000000000000000000000000000000000000
+0000000000a99a900aa99a00000aaa00009889800998890000099900000000000000000000000000000000000000000000000000000000000000000000000000
+00060000000a9900aa0a990000000040000988009909880000000040000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000040009000400000000000000040004000400000000000000000000000000000000000000000000000000000000000000000000000000000000000
 2eeeeee22eeeeee22eeeeee22eeeeee22eeeeee22eeeeee22eeeeee0000000000000000000000000000000000000000000000000000000000000000000000000
 e222222ee222222ee222222ee222222ee222222ee222222ee222222e000000000000000000000000000000000000000000000000000000000000000000000000
 2222222e2222222e2222222e2222222e2222222e2222222e2222222e00000000000b00770000bb00000000000000000000050055000055000000000000000000
@@ -1026,7 +1152,7 @@ eee22eeeeee22eeeeee22eeeeee22eeeeee22eeeeee22eeeeee22ee000000b0003b7777777777500
 000000000006663660330000000000000cccccccccc11cccccc11cccccc11cccccc11cccccc11ccc000000000000000000000000000000000000000000000000
 
 __gff__
-0000080808000000004008080808080024010900002424341400000808080800040109000004043414000008080800003414090000000000000000080808000000400040004000400000000000000000004000400040004000000000000000000040004000400040000000000000000000400000000000000000000000000000
+0000080808000000004008080808080024010900002424341400000808080800040109000004043414000008080800003414090000000000000000080808000000400040004000400000000000000000004000400040004000000000000000000040004000400040000000000000000000400000400000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0101010101010101010101010101010101010101010101010101010101010101110101010101010101010114141414140000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
