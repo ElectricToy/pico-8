@@ -443,6 +443,15 @@ function player:updatecontrollerbasedanimations( impulse )
 	end
 end
 
+function player:update()
+	self:superclass().update( self )
+
+	local covering = find_covering_hidingplace( self.pos, self.radius )
+	if covering then
+		printh( "TODO: covered" )
+	end
+end
+
 function player:updategates( mappos )
 	local mapsprite = mget( mappos.x, mappos.y )
 
@@ -678,21 +687,22 @@ function initializeworld()
 
 	-- trees
 
-	local smalltreecoverageradius = 2 * 8
-	local largetreecoverageradius = 2 * 8
+	-- TODO tree coverage radii
+	local smalltreecoverageradius = 4 * 8
+	local largetreecoverageradius = 4 * 8
 
 	local smalltreeshadowoffset = vector:new( 1, 1 )
 	local largetreeshadowoffset = vector:new( 4, 4 )
 
-	hidingplace:new( 192, 10 * 8, -1 * 8, vector:new( -largetreecoverageradius, -largetreecoverageradius ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset  )
-	hidingplace:new( 135, 20 * 8,  2 * 8, vector:new( -smalltreecoverageradius, -smalltreecoverageradius ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 192, 26 * 8,  0 * 8, vector:new( -largetreecoverageradius, -largetreecoverageradius ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
-	hidingplace:new( 192, 14 * 8, 11 * 8, vector:new( -largetreecoverageradius, -largetreecoverageradius ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
-	hidingplace:new( 192, 24 * 8, 22 * 8, vector:new( -smalltreecoverageradius, -smalltreecoverageradius ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, largetreeshadowoffset )
-	hidingplace:new( 135, 37 * 8, 18 * 8, vector:new( -smalltreecoverageradius, -smalltreecoverageradius ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 135, 37 * 8, -2 * 8, vector:new( -smalltreecoverageradius, -smalltreecoverageradius ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 135, -1 * 8,  7 * 8, vector:new( -smalltreecoverageradius, -smalltreecoverageradius ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 192, 45 * 8, 22 * 8, vector:new( -largetreecoverageradius, -largetreecoverageradius ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
+	hidingplace:new( 192, 10 * 8, -1 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset  )
+	hidingplace:new( 135, 20 * 8,  2 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
+	hidingplace:new( 192, 26 * 8,  0 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
+	hidingplace:new( 192, 14 * 8, 11 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
+	hidingplace:new( 192, 24 * 8, 22 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, largetreeshadowoffset )
+	hidingplace:new( 135, 37 * 8, 18 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
+	hidingplace:new( 135, 37 * 8, -2 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
+	hidingplace:new( 135, -1 * 8,  7 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
+	hidingplace:new( 192, 45 * 8, 22 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
 
 	-- TODO barn and shed radii
 	-- sw barn
@@ -706,7 +716,7 @@ function initializeworld()
 	barnpart.spriteDims = vector:new( 2, 4 )
 
 	-- se shed
-	hidingplace:new( 202, 40*8, 10*8, 3 * 8 )
+	hidingplace:new( 202, 40*8, 10*8, vector:new( 0, 0 ), vector:new( 2 * 8, 2 * 8 ))
 
 	-- setup the barrels
 
@@ -757,6 +767,8 @@ hidingplace = inheritsfrom( sprite )
 
 function hidingplace:new( spriteIndex, x, y, coverageUL, coverageBR, shadowIndex, shadowOffset )
 	assert( spriteIndex )
+	assert( coverageUL )
+	assert( coverageBR )
 
 	local newobj = sprite:new( x, y, 4, 4 )
 	newobj.coverageUL = coverageUL
@@ -777,9 +789,18 @@ function hidingplace:new( spriteIndex, x, y, coverageUL, coverageBR, shadowIndex
 	return setmetatable( newobj, self )
 end
 
-function hidingplace:covers( pos )
-	return self.pos.x - self.coverageUL.x <= pos.x and pos.x <= self.pos.x - self.coverageBR.x and
-		   self.pos.y - self.coverageUL.y <= pos.y and pos.y <= self.pos.y - self.coverageBR.y
+function hidingplace:covers( pos, radius )
+	return self.pos.x + self.coverageUL.x <= pos.x and pos.x <= self.pos.x + self.coverageBR.x and
+		   self.pos.y + self.coverageUL.y <= pos.y and pos.y <= self.pos.y + self.coverageBR.y
+end
+
+function find_covering_hidingplace( pos, radius )
+	for hidingplace in all( hidingplaces ) do
+		if hidingplace:covers( pos, radius ) then
+			return hidingplace
+		end
+	end
+	return nil
 end
 
 -- initial scene
