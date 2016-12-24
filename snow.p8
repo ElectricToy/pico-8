@@ -451,7 +451,7 @@ end
 function player:update()
 	self:superclass().update( self )
 
-	local newcovering = find_covering_hidingplace( self.pos, self.radius )
+	local newcovering = find_covering_hidingplace( self:center(), self.radius )
 
 	if self.covering ~= newcovering then
 		if self.covering then
@@ -1031,6 +1031,9 @@ function testseekerfoundhider()
 				end
 			end
 		else
+			if lastsearchedcovering then
+				lastsearchedcovering.visible = true
+			end
 			lastsearchedcovering = nil
 		end
 	end
@@ -1107,7 +1110,7 @@ gamestates[ "hiding" ] =
 		end
 
 		-- TODO temporary
-		if ticks_to_seconds( stateTicks ) < 5 then
+		if ticks_to_seconds( stateTicks ) < 4 then
 			stateannouncement( "HIDE!", 50 )
 		end
 
@@ -1194,7 +1197,14 @@ gamestates[ "seeking" ] =
 			promptcoveredcountdown( seeker_seek_cover_time_limit_seconds - coveredseconds, "SEARCHING" )
 		end
 
-		if ticks_to_seconds( stateTicks ) < 5 then
+		-- prompt failure
+
+		if lastsearchedcovering then
+			lastsearchedcovering.visible = false
+			promptcoveredcountdown( 0, "NOT HERE!" )
+		end
+
+		if ticks_to_seconds( stateTicks ) < 4 then
 			stateannouncement( "SEEK!", 50 )
 		end
 
