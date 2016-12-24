@@ -534,6 +534,8 @@ function chicken:update_ai()
 
 	-- not fleeing. should we be?
 
+	if currentplayer == nil then return end
+
 	local delta = currentplayer.pos - self.pos
 
 	local maxresponsedistance = 3 * 8
@@ -647,9 +649,52 @@ end
 
 map_size = vector:new( 48, 25 )
 world_size = map_size * vector:new( 8, 8 )
-thecamera = vector:new( 0, 0 )
+
 bodies = {}
 footprints = {}
+
+thecamera = vector:new( 0, 0 )
+hider = nil
+seeker = nil
+
+function clearworld()
+	hider = nil
+	seeker = nil
+	bodies = {}
+	footprints = {}
+end
+
+function initializeworld()
+	clearworld()
+
+	tidymap()
+
+	-- setup the barrels
+
+		-- north
+	for i = 0, 4 do
+		local barrelxvariance = 1.0
+		local barrelyvariance = 0
+		local barrel = barrel:new( 8 * ( rnd( barrelxvariance ) + 15.75 + 0.5 * band( i, 1 ) ), 8 * ( rnd( barrelyvariance ) + 0 + i ) )
+	end
+
+		-- south
+	for i = 0, 7 do
+		local barrelxvariance = 0
+		local barrelyvariance = 0
+		local barrel = barrel:new( 8 * ( rnd( barrelxvariance ) + 31 + band( i, 1 ) ), 8 * ( rnd( barrelyvariance ) + 16.5 + i ) )
+	end
+
+	-- setup the chickens. oh yes.
+
+	for i = 1, 6 do
+		chicken:new( 8 * randinrange( 20, 28 ), 8 * randinrange( 2, 10 ) )
+	end
+	for i = 1, 6 do
+		local chicken = chicken:new( 8 * randinrange( 22, 30 ), 8 * randinrange( 12, 24 ) )
+		chicken:setbasesprite( 116 )
+	end
+end
 
 function eachbody( apply )
 	for body in all( bodies ) do
@@ -773,53 +818,136 @@ function tidymap()
 	end
 end
 
+-- game states
+
+function ticks_to_seconds( ticks )
+	return flr( ticks / 30 )
+end
+
+gamestates = {}
+
+gamestates[ "initial" ] = 
+{
+	beginstate = function( self )
+		-- music( 0 )
+		initializeworld()
+	end,
+
+	update = function( self )
+		if btn( 4, 0 ) or btn( 5, 0 ) then
+			-- start the game
+			gotostate( "hiding" )
+		end
+	end,
+
+	draw = function( self )
+		print( "What?" )
+	end,
+
+	endstate = function( self )
+	end
+}
+
+gamestates[ "hiding" ] = 
+{
+	countdown = 30 * 60,
+	beginstate = function( self )
+		-- music( 0 )
+
+		hider = player:new( 3 * 8, 3 * 8 )
+		local controller = playercontroller:new( hider )
+
+		currentplayer = hider
+	end,
+
+	update = function( self )
+		self.countdown -= 1
+
+		if self.countdown <= 0 then
+			gotostate( "seeking_prepare" )
+		end
+	end,
+
+	draw = function( self )
+	end,
+	
+	endstate = function( self )
+		hider.controller = nil
+	end
+}
+
+gamestates[ "seeking_prepare" ] = 
+{
+	beginstate = function( self )
+		-- music( 0 )
+
+		seeker = player:new( 3 * 8, 3 * 8 )
+		seeker:setbasesprite( 68 )
+
+		currentplayer = seeker
+	end,
+
+	update = function( self )
+		if btn( 4, 0 ) or btn( 5, 0 ) then
+			-- start the game
+			gotostate( "seeking" )
+		end
+	end,
+
+	draw = function( self )
+	end,
+	
+	endstate = function( self )
+	end
+}
+
+gamestates[ "seeking" ] = 
+{
+	countdown = 30 * 60,
+	beginstate = function( self )
+		-- music( 0 )
+
+		local controller = playercontroller:new( seeker )
+	end,
+
+	update = function( self )
+		self.countdown -= 1
+
+		if self.countdown <= 0 then
+			gotostate( "seeking_prepare" )
+		end
+	end,
+
+	draw = function( self )
+	end,
+	
+	endstate = function( self )
+		seeker.controller = nil
+	end
+}
+
+
+currentgamestate = nil
+
+function gotostate( name )
+	if currentgamestate then
+		currentgamestate:endstate()
+	end
+
+	currentgamestate = gamestates[ name ]
+	assert( currentgamestate )
+
+	currentgamestate:beginstate()
+end
+
+-- init ********************
+
 function _init()
 
 	printh( "starting." )
 
-	tidymap()
+	gotostate( "initial" )
 
-	-- music( 0 )
-
-	-- for i = 1, 10 do
-	-- 	createbody( randinrange( 1, 128 ), randinrange( 1, 128 ), randinrange( 1, 8 ) )
-	-- end
-
-	-- setup the barrels
-
-	-- north
-	for i = 0, 4 do
-		local barrelxvariance = 1.0
-		local barrelyvariance = 0
-		local barrel = barrel:new( 8 * ( rnd( barrelxvariance ) + 15.75 + 0.5 * band( i, 1 ) ), 8 * ( rnd( barrelyvariance ) + 0 + i ) )
-	end
-
-	-- south
-	for i = 0, 7 do
-		local barrelxvariance = 0
-		local barrelyvariance = 0
-		local barrel = barrel:new( 8 * ( rnd( barrelxvariance ) + 31 + band( i, 1 ) ), 8 * ( rnd( barrelyvariance ) + 16.5 + i ) )
-	end
-
-	-- setup the players
-
-	local player1 = player:new( 32, 64 )
-	local playercontroller1 = playercontroller:new( player1 )
-
-	local player2 = player:new( 96, 64 )
-	player2:setbasesprite( 68 )
-
-	currentplayer = player1
-
-	-- setup the chickens. oh yes.
-
-	for i = 1, 6 do
-		chicken:new( 8 * randinrange( 20, 28 ), 8 * randinrange( 2, 10 ) )
-	end
-	for i = 1, 6 do
-		local chicken = chicken:new( 8 * randinrange( 22, 30 ), 8 * randinrange( 12, 24 ) )
-		chicken:setbasesprite( 116 )
-	end
 end
 
 
@@ -934,6 +1062,10 @@ end
 
 function _update()
 
+	if currentgamestate then
+		currentgamestate:update()
+	end
+
 	eachcontroller( function( control )
 		control:update()
 	end )
@@ -958,7 +1090,9 @@ function _update()
 
 	-- update thecamera
 
-	thecamera = currentplayer.pos
+	if currentplayer then
+		thecamera = currentplayer.pos
+	end
 end
 
 function _draw()
@@ -1018,6 +1152,9 @@ function _draw()
 	spr( 135, 37*8, 18*8, 4, 4 )
 	spr( 135, 37*8, -2*8, 4, 4 )
 
+	if currentgamestate then
+		currentgamestate:draw()
+	end
 
 end
 
