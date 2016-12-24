@@ -130,6 +130,24 @@ function clamp( x, least, greatest )
 	return min( greatest, max( least, x ))
 end
 
+function is_close( a, b, maxdist )
+	local delta = b - a
+
+	local manhattanlength = delta:manhattanlength()
+	if manhattanlength > maxdist * 1.8 then		-- adding a fudge factor to account for diagonals.
+		return false
+	end
+
+	if manhattanlength > 180 then
+		printh( "objects may be close but we don't have the numeric precision to decide. ignoring." )
+		return false
+	end
+
+	local distsquared = delta:lengthsquared()
+
+	return distsquared <= maxdist * maxdist
+end
+
 function worldtomap( worldpos )
 	local pos = worldpos / vector:new( 8, 8 )
 	return vector:new( flr( pos.x ), flr( pos.y ))
@@ -159,9 +177,16 @@ end
 
 sprite = inheritsfrom( nil )
 
-function sprite:new( x, y )
+function sprite:new( x, y, width, height )
+	assert( x )
+	assert( y )
+
+	width = width or 1
+	height = height or 1
+
 	local newobj = { 
 		pos = vector:new( x, y ),
+		spriteDims = vector:new( width, height ),
 		animation = { 0 },
 		animationindex = 1,
 		spriteflip = false,
@@ -177,7 +202,7 @@ end
 function sprite:draw()
 	local pos = self.pos
 	local sprite = self:currentsprite()
-	spr( sprite, pos.x, pos.y, 1, 1, self.spriteflip )
+	spr( sprite, pos.x, pos.y, self.spriteDims.x, self.spriteDims.y, self.spriteflip )
 end
 
 function sprite:incrementanimation()
@@ -505,20 +530,20 @@ end
 
 function chicken:update_ai()
 
+	if currentplayer == nil then return end
+
 	if self.fleedestination then
 
 		self.fleeticks += 1
 
 		-- fleeing
-		local fleedelta = self.fleedestination - self.pos
-		assert( fleedelta:manhattanlength() <= 180 )
 
-		local fleedistancesquared = fleedelta:lengthsquared()
-		
-		if fleedistancesquared < 4 * 4 then
-			-- stop fleeing
+		-- Have we gotten to our destination?
+		if is_close( self.fleedestination, self.pos, 4 ) then
+			-- yes. stop fleeing
 			self:makefootprint( self.pos )
 			self.fleedestination = nil
+			return
 		end
 
 		-- spent too long fleeing?
@@ -528,44 +553,27 @@ function chicken:update_ai()
 			return
 		end
 
-		self:addcontrollerimpulse( fleedelta:normal() )
+		self:addcontrollerimpulse( ( self.fleedestination - self.pos ):normal() )
 		return
+	else
+		-- not fleeing. should we be?
+
+		local maxresponsedistance = 3 * 8
+
+		if is_close( currentplayer.pos, self.pos, maxresponsedistance ) then
+			-- flee!
+
+			local delta = currentplayer.pos - self.pos
+		
+			local normal = delta:normal()
+
+			self.wanderdirection = nil
+			self.fleedestination = self.pos + normal * -vector:new( 2 * 8, 2 * 8 ) + vector:new( 8 * randinrange( -2, 2 ), 8 * randinrange( -2, 2 ) )
+			self.fleeticks = 0
+		else
+			self:updatewandering()
+		end
 	end
-
-	-- not fleeing. should we be?
-
-	if currentplayer == nil then return end
-
-	local delta = currentplayer.pos - self.pos
-
-	local maxresponsedistance = 3 * 8
-
-	local manhattanlength = delta:manhattanlength()
-	if manhattanlength > maxresponsedistance * 1.8 then		-- adding a fudge factor to account for diagonals.
-		self:updatewandering()
-		return
-	end
-
-	if manhattanlength > 180 then
-		printh( "chicken may be encroached by the player but we don't have the numeric precision to decide. ignoring." )
-		self:updatewandering()
-		return
-	end
-
-	local distance = delta:length()
-
-	if distance > maxresponsedistance then
-		self:updatewandering()
-		return
-	end
-
-	-- flee!
-
-	local normal = delta:normal()
-
-	self.wanderdirection = nil
-	self.fleedestination = self.pos + normal * -vector:new( 2 * 8, 2 * 8 ) + vector:new( 8 * randinrange( -2, 2 ), 8 * randinrange( -2, 2 ) )
-	self.fleeticks = 0
 end
 
 function chicken:updatewandering()
@@ -650,25 +658,55 @@ end
 map_size = vector:new( 48, 25 )
 world_size = map_size * vector:new( 8, 8 )
 
-bodies = {}
-footprints = {}
-
 thecamera = vector:new( 0, 0 )
-hider = nil
-seeker = nil
 
 function clearworld()
+	thecamera = vector:new( 0, 0 )
 	hider = nil
 	seeker = nil
 	currentplayer = nil
 	bodies = {}
 	footprints = {}
+	hidingplaces = {}
+	shadows = {}
 end
 
 function initializeworld()
 	clearworld()
 
 	tidymap()
+
+	-- trees
+
+	local smalltreecoverageradius = 2 * 8
+	local largetreecoverageradius = 2 * 8
+
+	local smalltreeshadowoffset = vector:new( 1, 1 )
+	local largetreeshadowoffset = vector:new( 4, 4 )
+
+	hidingplace:new( 192, 10 * 8, -1 * 8, largetreecoverageradius, 139, largetreeshadowoffset  )
+	hidingplace:new( 135, 20 * 8,  2 * 8, smalltreecoverageradius, 139, smalltreeshadowoffset )
+	hidingplace:new( 192, 26 * 8,  0 * 8, largetreecoverageradius, 139, largetreeshadowoffset )
+	hidingplace:new( 192, 14 * 8, 11 * 8, largetreecoverageradius, 139, largetreeshadowoffset )
+	hidingplace:new( 192, 24 * 8, 22 * 8, smalltreecoverageradius, 139, largetreeshadowoffset )
+	hidingplace:new( 135, 37 * 8, 18 * 8, smalltreecoverageradius, 139, smalltreeshadowoffset )
+	hidingplace:new( 135, 37 * 8, -2 * 8, smalltreecoverageradius, 139, smalltreeshadowoffset )
+	hidingplace:new( 135, -1 * 8,  7 * 8, smalltreecoverageradius, 139, smalltreeshadowoffset )
+	hidingplace:new( 192, 45 * 8, 22 * 8, largetreecoverageradius, 139, largetreeshadowoffset )
+
+	-- TODO barn and shed radii
+	-- sw barn
+	hidingplace:new( 128, 0 * 8, 21 * 8, 5 * 8 )
+	local barnpart = hidingplace:new( 132, 4 * 8, 21 * 8, 3 * 8 )
+	barnpart.spriteDims = vector:new( 3, 4 )
+
+	-- ne barn
+	hidingplace:new( 196, 42*8, 0, 5 * 8 )
+	barnpart = hidingplace:new( 200, 46*8, 0, 4 * 8 )
+	barnpart.spriteDims = vector:new( 2, 4 )
+
+	-- se shed
+	hidingplace:new( 202, 40*8, 10*8, 3 * 8 )
 
 	-- setup the barrels
 
@@ -711,6 +749,35 @@ function eachcontroller( apply )
 			apply( body.controller ) 
 		end
 	end )
+end
+
+-- class hidingplace
+
+hidingplace = inheritsfrom( sprite )
+
+function hidingplace:new( spriteIndex, x, y, radius, shadowIndex, shadowOffset )
+	assert( spriteIndex )
+
+	local newobj = sprite:new( x, y, 4, 4 )
+	newobj.radius = radius
+	newobj.animation = { spriteIndex }
+	
+	if shadowIndex then
+		if shadowOffset == nil then
+			shadowOffset = vector:new( 0, 0 )
+		end
+		newobj.shadow = sprite:new( x + shadowOffset.x, y + shadowOffset.y, 4, 4 )
+		newobj.shadow.animation = { shadowIndex }
+		add( shadows, newobj.shadow )
+	end
+
+	add( hidingplaces, newobj )
+
+	return setmetatable( newobj, self )
+end
+
+function hidingplace:covers( pos )
+	return is_close( self.pos, pos, radius )
 end
 
 -- initial scene
@@ -1020,31 +1087,7 @@ function collidebodies( a, b )
 
 	local minoverlapdistance = a.radius + b.radius
 
-	local delta = b.pos - a.pos
-
-	-- verify that we're close enough to bother, because if we're too far away we could
-	-- overflow the numeric system, causing truly bizarre errors.
-
-	local manhattanlength = delta:manhattanlength()
-	if manhattanlength > minoverlapdistance * 1.8 then		-- adding a fudge factor to account for diagonals.
-		return
-	end
-
-	if manhattanlength > 180 then
-		printh( "objects may be colliding but we don't have the numeric precision to decide. ignoring." )
-		return
-	end
-
-	local distsquared = delta:lengthsquared()
-
-	-- degenerate?
-	if distsquared <= 0 then
-		return
-	end
-
-	local minoverlapdistancesquared = minoverlapdistance * minoverlapdistance
-
-	if distsquared >= minoverlapdistancesquared then
+	if is_close( b.pos, a.pos, minoverlapdistance ) == false then
 		return
 	end
 
@@ -1068,7 +1111,14 @@ function collidebodies( a, b )
 		massproportionb = 1
 	end
 
-	local dist = sqrt( distsquared )
+	local delta = b.pos - a.pos
+	local dist = delta:length()
+
+	-- degenerate?
+	if dist <= 0 then
+		return true
+	end
+
 	local overlapdistance = minoverlapdistance - dist
 
 	local normal = delta:normal()
@@ -1158,13 +1208,9 @@ function _draw()
 
 	map( 0, 0, 0, 0, 96, 64 )
 
-	-- draw shadows
-
-	spr( 139, 10.5*8, -3, 4, 4 )
-	spr( 139, 27*8, 8, 4, 4 )
-	spr( 139, 20*8, 16, 4, 4 )
-	spr( 139, 37*8, 18*8, 4, 4 )
-	spr( 139, 37*8, -1*8, 4, 4 )
+	for shadow in all( shadows ) do
+		shadow:draw()
+	end
 
 	-- draw footprints
 
@@ -1180,31 +1226,13 @@ function _draw()
 
 	-- draw hiding places.
 
-	-- sw barn
-	spr( 128, 0, 21*8, 4, 4 )
-	spr( 132, 4*8, 21*8, 3, 4 )
-	-- barn shadows
+		-- barn shadows
 	spriterect( 25, 7*8, 22*8, 7*8, 24*8 )
-
-	-- ne barn
-	spr( 196, 42*8, 0, 4, 4 )
-	spr( 200, 46*8, 0, 2, 4 )
-	-- barn shadows
 	spriterect( 25, 43*8, 4*8, 47*8, 4*8 )
 
-	-- se shed
-	spr( 202, 40*8, 10*8, 4, 4 )
-
-	-- trees
-	spr( 192, 10*8, -8, 4, 4 )
-	spr( 135, 20*8, 2*8, 4, 4 )
-	spr( 192, 26*8, 0, 4, 4 )
-	spr( 192, 14*8, 11*8, 4, 4 )
-	spr( 192, 24*8, 22*8, 4, 4 )
-	spr( 135, 37*8, 18*8, 4, 4 )
-	spr( 135, 37*8, -2*8, 4, 4 )
-	spr( 135, -1*8, 7*8, 4, 4 )
-	spr( 192, 45*8, 22*8, 4, 4 )
+	for place in all( hidingplaces ) do
+		place:draw()
+	end
 
 	-- Draw the UI.
 	camera( 0, 0 )
