@@ -490,26 +490,31 @@ function player:updategates( mappos )
 
 		local horizontalgate = fget( mapsprite, 4 )
 
+		local playsound = false
+
 		if horizontalgate then
 			-- what direction are we going?
 			if self.vel.y > 0 then
 				-- down				
-				setgate( mappos, vector:new( 1, 0 ), 39, 40 )
+				playsound = setgate( mappos, vector:new( 1, 0 ), 39, 40 )
 			else
 				-- up
-				setgate( mappos, vector:new( 1, 0 ), 23, 24 )
+				playsound = setgate( mappos, vector:new( 1, 0 ), 23, 24 )
 			end
 		else
 			-- what direction are we going?
 			if self.vel.x > 0 then
 				-- right
-				setgate( mappos, vector:new( 0, 1 ), 22, 38 )
+				playsound = setgate( mappos, vector:new( 0, 1 ), 22, 38 )
 			else
 				-- left
-				setgate( mappos, vector:new( 0, 1 ), 21, 37 )
+				playsound = setgate( mappos, vector:new( 0, 1 ), 21, 37 )
 			end
 		end
 		
+		if playsound then
+			sfx( 1 )
+		end
 	end
 end
 
@@ -557,6 +562,7 @@ function chicken:update()
 
 	if self.fleedestination then
 		-- moving
+		-- TODO: sfx( bu-kah )
 		self.sprite.animation = { self.basesprite + 2 }		
 	else
 		-- still
@@ -871,7 +877,9 @@ function setgate( mappos, step, ulspriteindex, brspriteindex )
 		mset( ulmappos.x, ulmappos.y, ulspriteindex )
 		mset( brmappos.x, brmappos.y, brspriteindex )
 
-		sfx( 1 )
+		return true
+	else
+		return false
 	end
 end
 
@@ -879,6 +887,7 @@ end
 function tidymapcell( pos )
 	local sprite = mget( pos.x, pos.y )
 	
+	-- randomize grass
 	if sprite == 1 then
 		if rnd( 100 ) < 5 then
 			sprite = 53 + rnd( 4 )
@@ -887,61 +896,73 @@ function tidymapcell( pos )
 		end
 		mset( pos.x, pos.y, sprite )
 		return
-	end
-
-	if not ( sprite == 2 or sprite == 3 or sprite == 4 ) then
-		return
-	end
-
-	-- count snowy neighbors.
-
-	local offset = vector:new( 1, 0 )
-	local snowyneighbors = {}
 	
-	local grassyneighbors = {}
-	for i = 0, 3 do
-		if is_snow( pos + offset ) then
-			add( snowyneighbors, i )
-		else
-			add( grassyneighbors, i )			
+	-- randomize snow
+	elseif sprite == 2 or sprite == 3 or sprite == 4 then
+
+		-- count snowy neighbors.
+
+		local offset = vector:new( 1, 0 )
+		local snowyneighbors = {}
+		
+		local grassyneighbors = {}
+		for i = 0, 3 do
+			if is_snow( pos + offset ) then
+				add( snowyneighbors, i )
+			else
+				add( grassyneighbors, i )			
+			end
+
+			offset = offset:perpendicular()
 		end
 
-		offset = offset:perpendicular()
-	end
+		-- printh( "snowyneighbors: " .. #snowyneighbors .. ", grassy: " .. #grassyneighbors )
 
-	-- printh( "snowyneighbors: " .. #snowyneighbors .. ", grassy: " .. #grassyneighbors )
+		local newsprite = 2 + rnd( 2 )
 
-	local newsprite = 2 + rnd( 2 )
-
-	if #snowyneighbors == 0 then
-		newsprite = 10
-	elseif #snowyneighbors == 1 then
-		newsprite = 11 + 16 * snowyneighbors[ 1 ]
-	elseif #snowyneighbors == 2 then
-		if snowyneighbors[ 1 ] == 0 then
-			if snowyneighbors[ 2 ] == 1 then
-				newsprite = 12
-			elseif snowyneighbors[ 2 ] == 2 then
-				newsprite = 14
-			elseif snowyneighbors[ 2 ] == 3 then
-				newsprite = 60
+		if #snowyneighbors == 0 then
+			newsprite = 10
+		elseif #snowyneighbors == 1 then
+			newsprite = 11 + 16 * snowyneighbors[ 1 ]
+		elseif #snowyneighbors == 2 then
+			if snowyneighbors[ 1 ] == 0 then
+				if snowyneighbors[ 2 ] == 1 then
+					newsprite = 12
+				elseif snowyneighbors[ 2 ] == 2 then
+					newsprite = 14
+				elseif snowyneighbors[ 2 ] == 3 then
+					newsprite = 60
+				end
+			elseif snowyneighbors[ 1 ] == 1 then
+				if snowyneighbors[ 2 ] == 2 then
+					newsprite = 28
+				elseif snowyneighbors[ 2 ] == 3 then
+					newsprite = 30
+				end
+			else
+				newsprite = 44
 			end
-		elseif snowyneighbors[ 1 ] == 1 then
-			if snowyneighbors[ 2 ] == 2 then
-				newsprite = 28
-			elseif snowyneighbors[ 2 ] == 3 then
-				newsprite = 30
-			end
-		else
-			newsprite = 44
+
+		elseif #snowyneighbors == 3 then
+			newsprite = 13 + 16 * grassyneighbors[ 1 ]
 		end
 
-	elseif #snowyneighbors == 3 then
-		newsprite = 13 + 16 * grassyneighbors[ 1 ]
-	end
+		mset( pos.x, pos.y, newsprite )
+	
+	elseif fget( sprite, 2 ) then
+		-- reset gates
 
-	mset( pos.x, pos.y, newsprite )
+		local horizontalgate = fget( sprite, 4 )
+
+		local playsound = false
+		if horizontalgate then
+			setgate( pos, vector:new( 1, 0 ), 48, 49 )
+		else
+			setgate( pos, vector:new( 0, 1 ), 16, 32 )
+		end
+	end
 end
+
 
 function tidymap()
 	for y = 0, map_size.y do
@@ -1042,7 +1063,7 @@ end
 totalUpdates = 0
 
 hiding_seconds = 90
-seeking_seconds = 60
+seeking_seconds = 10
 
 hiding_ticks = hiding_seconds * 30
 seeking_ticks = seeking_seconds * 30
