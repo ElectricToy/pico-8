@@ -190,6 +190,7 @@ function sprite:new( x, y, width, height )
 		animation = { 0 },
 		animationindex = 1,
 		spriteflip = false,
+		visible = true,
 	}
 	return setmetatable( newobj, self )
 end
@@ -200,6 +201,8 @@ function sprite:currentsprite()
 end
 
 function sprite:draw()
+	if self.visible == false then return end
+
 	local pos = self.pos
 	local sprite = self:currentsprite()
 	spr( sprite, pos.x, pos.y, self.spriteDims.x, self.spriteDims.y, self.spriteflip )
@@ -421,6 +424,8 @@ function player:new( x, y )
 	newobj.footprintsprite = 112
 	newobj.footstep_sfx = 0
 	newobj.footstep_sfx_snowy = 2
+	newobj.covering = nil
+	newobj.enteredcoveringtime = nil
 
 	return setmetatable( newobj, self )
 end
@@ -446,10 +451,35 @@ end
 function player:update()
 	self:superclass().update( self )
 
-	local covering = find_covering_hidingplace( self.pos, self.radius )
-	if covering then
-		printh( "TODO: covered" )
+	local newcovering = find_covering_hidingplace( self.pos, self.radius )
+
+	if self.covering ~= newcovering then
+		if self.covering then
+			self:leavecovering( self.covering )
+		end
+
+		self.covering = newcovering
+
+		if self.covering then
+			self:entercovering( self.covering )
+		end
 	end
+end
+
+function player:entercovering( covering )
+	self.enteredcoveringtime = stateTicks
+end
+
+function player:leavecovering( covering )
+	self.enteredcoveringtime = nil
+end
+
+function player:currentcovering()
+	return self.covering
+end
+
+function player:secondsundercovering()
+	return self.enteredcoveringtime and ticks_to_seconds( stateTicks - self.enteredcoveringtime ) or 0
 end
 
 function player:updategates( mappos )
@@ -688,8 +718,8 @@ function initializeworld()
 	-- trees
 
 	-- TODO tree coverage radii
-	local smalltreecoverageradius = 4 * 8
-	local largetreecoverageradius = 4 * 8
+	local smalltreecoverageradius = 3 * 8
+	local largetreecoverageradius = 3 * 8
 
 	local smalltreeshadowoffset = vector:new( 1, 1 )
 	local largetreeshadowoffset = vector:new( 4, 4 )
@@ -789,6 +819,13 @@ function hidingplace:new( spriteIndex, x, y, coverageUL, coverageBR, shadowIndex
 	return setmetatable( newobj, self )
 end
 
+-- -- TODO
+-- function hidingplace:draw()
+-- 	if currentplayer == nil or self:covers( currentplayer.pos, currentplayer.radius ) == false or flicker( 16 ) then
+-- 		self:superclass().draw( self )
+-- 	end
+-- end
+
 function hidingplace:covers( pos, radius )
 	return self.pos.x + self.coverageUL.x <= pos.x and pos.x <= self.pos.x + self.coverageBR.x and
 		   self.pos.y + self.coverageUL.y <= pos.y and pos.y <= self.pos.y + self.coverageBR.y
@@ -806,6 +843,11 @@ end
 -- initial scene
 
 function is_snow( pos )
+	-- everything outside the bounds is snow.
+	if pos.x < 0 or pos.y < 0 or pos.x >= world_size.x or pos.y >= world_size.y then
+		return true
+	end
+
 	return fget( mget( pos.x, pos.y ), 3 )
 end
 
@@ -912,7 +954,7 @@ end
 -- game states
 
 function ticks_to_seconds( ticks )
-	return flr( ticks / 30 )
+	return ticks / 30
 end
 
 function printshadowed( text, x, y, color )
@@ -926,13 +968,77 @@ function drawpressxprompt()
 end
 
 function drawcountdown( countdown )
-	local totalseconds = ticks_to_seconds( countdown )
+	-- Flicker, urgency color, etc.
+	-- TODO
+
+	local totalseconds = flr( ticks_to_seconds( countdown ))
 	local minutes = flr( totalseconds / 60 )
 	local seconds = totalseconds % 60
 	printshadowed( ( minutes > 0 and minutes or "" ) .. ":" .. ( seconds < 10 and "0" or "" ) .. seconds, 56, 2, 8 )
 end
 
-hiding_seconds = 10
+function flicker( hertz )
+	if hertz == nil then
+		return true
+	end
+	return band( flr( ticks_to_seconds( totalUpdates * hertz ) ), 1 ) != 0
+end
+
+function stateannouncement( text, x )
+	printshadowed( text, x or 40, 46, 8 )
+end
+
+function promptcoveredcountdown( secondsRemaining, promptText )
+	-- TODO
+	local seconds = -flr( -secondsRemaining )
+	printshadowed( promptText .. ": " .. seconds .. "..." , 40, 20, 14 )
+end
+
+function seekerwins()
+	-- TODO
+	gotostate( "outcome" )
+end
+
+seeker_seek_cover_time_limit_seconds = 5
+hider_finish_cover_time_limit_seconds = 4
+
+lastsearchedcovering = nil
+
+function testseekerfoundhider()
+	local hidercovering = hider:currentcovering()
+
+	-- is the hider hidden?
+	if hidercovering == nil then
+		-- no. test proximity
+		if is_close( hider.pos, seeker.pos, 8 ) then
+			seekerwins()
+			return
+		end
+	else
+		-- yes. test under the same cover at the time limit.
+		local seekercovering = seeker:currentcovering()
+		if seekercovering then
+			if seekercovering ~= lastsearchedcovering and seeker:secondsundercovering() >= seeker_seek_cover_time_limit_seconds then
+				lastsearchedcovering = seekercovering
+
+				if seekercovering == hidercovering then
+					seekercovering.visible = false
+					seekerwins()
+					return
+				else
+					-- report failure here.
+					-- TODO
+				end
+			end
+		else
+			lastsearchedcovering = nil
+		end
+	end
+end
+
+totalUpdates = 0
+
+hiding_seconds = 90
 seeking_seconds = hiding_seconds
 
 hiding_ticks = hiding_seconds * 30
@@ -956,7 +1062,8 @@ gamestates[ "initial" ] =
 	end,
 
 	draw = function( self )
-	drawpressxprompt()
+		stateannouncement( "MELTING SNOW")
+		drawpressxprompt()
 	end,
 
 	endstate = function( self )
@@ -978,12 +1085,32 @@ gamestates[ "hiding" ] =
 		local remainingTicks = hiding_ticks - stateTicks
 		if remainingTicks <= 0 then
 			gotostate( "seeking_prepare" )
+			return
+		end
+
+		local hiddenseconds = hider:secondsundercovering()
+		if hiddenseconds then
+			if hiddenseconds >= hider_finish_cover_time_limit_seconds then
+				gotostate( "seeking_prepare" )
+				return
+			end
 		end
 	end,
 
 	draw = function( self )
 		local remainingTicks = hiding_ticks - stateTicks
 		drawcountdown( remainingTicks )
+
+		local hiddenseconds = hider:secondsundercovering()
+		if hiddenseconds and hiddenseconds > 0 then
+			promptcoveredcountdown( hider_finish_cover_time_limit_seconds - hiddenseconds, "HIDE?" )
+		end
+
+		-- TODO temporary
+		if ticks_to_seconds( stateTicks ) < 5 then
+			stateannouncement( "HIDE!", 50 )
+		end
+
 	end,
 	
 	endstate = function( self )
@@ -1012,6 +1139,7 @@ gamestates[ "seeking_prepare" ] =
 
 	draw = function( self )
 		drawpressxprompt()
+		stateannouncement( "READY TO SEEK?" )
 	end,
 	
 	endstate = function( self )
@@ -1020,6 +1148,8 @@ gamestates[ "seeking_prepare" ] =
 
 gamestates[ "seeking" ] = 
 {
+	coveredTimeLimit = 4,
+
 	beginstate = function( self )
 		-- music( 0 )
 
@@ -1031,11 +1161,24 @@ gamestates[ "seeking" ] =
 		if remainingTicks <= 0 then
 			gotostate( "outcome" )
 		end
+
+		testseekerfoundhider()
+
 	end,
 
 	draw = function( self )
 		local remainingTicks = seeking_ticks - stateTicks
 		drawcountdown( remainingTicks )
+
+		local coveredseconds = seeker:secondsundercovering()
+		if lastsearchedcovering ~= seeker:currentcovering() and coveredseconds > 0 then
+			promptcoveredcountdown( seeker_seek_cover_time_limit_seconds - coveredseconds, "SEARCHING" )
+		end
+
+		if ticks_to_seconds( stateTicks ) < 5 then
+			stateannouncement( "SEEK!", 50 )
+		end
+
 	end,
 	
 	endstate = function( self )
@@ -1058,6 +1201,10 @@ gamestates[ "outcome" ] =
 
 	draw = function( self )
 		drawpressxprompt()
+		stateannouncement( "GAME OVER", 45 )
+
+		-- Show outcome
+		-- TODO
 	end,
 	
 	endstate = function( self )
@@ -1185,6 +1332,8 @@ function updatecollisions()
 end
 
 function _update()
+
+	totalUpdates += 1
 
 	if currentgamestate then
 		stateTicks += 1
