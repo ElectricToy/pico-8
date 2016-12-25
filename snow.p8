@@ -724,8 +724,8 @@ function initializeworld()
 	-- trees
 
 	-- TODO tree coverage radii
-	local smalltreecoverageradius = 3 * 8
-	local largetreecoverageradius = 3 * 8
+	local smalltreecoverageradius = 3.5 * 8
+	local largetreecoverageradius = 3.5 * 8
 
 	local smalltreeshadowoffset = vector:new( 1, 1 )
 	local largetreeshadowoffset = vector:new( 4, 4 )
@@ -733,14 +733,13 @@ function initializeworld()
 	hidingplace:new( 192, 10 * 8, -1 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset  )
 	hidingplace:new( 135, 20 * 8,  2 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
 	hidingplace:new( 192, 26 * 8,  0 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
-	hidingplace:new( 192, 14 * 8, 11 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
+	hidingplace:new( 192, 14.75 * 8, 10.5 * 8, vector:new( 0, 0 ), vector:new( 4 * 8, 4 * 8 ), 139, largetreeshadowoffset )
 	hidingplace:new( 192, 24 * 8, 22 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, largetreeshadowoffset )
 	hidingplace:new( 135, 37 * 8, 18 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
 	hidingplace:new( 135, 37 * 8, -2 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
 	hidingplace:new( 135, -1 * 8,  7 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
 	hidingplace:new( 192, 45 * 8, 22 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
 
-	-- TODO barn and shed radii
 	-- sw barn
 	hidingplace:new( 128, 0 * 8, 21 * 8, vector:new( 0, 0 ), vector:new( 4 * 8, 4 * 8 ))
 	local barnpart = hidingplace:new( 132, 4 * 8, 21 * 8, vector:new( 0, 0 ), vector:new( 3 * 8, 4 * 8 ) )
@@ -752,7 +751,7 @@ function initializeworld()
 	barnpart.spriteDims = vector:new( 2, 4 )
 
 	-- se shed
-	hidingplace:new( 202, 40*8, 10*8, vector:new( 0, 0 ), vector:new( 2 * 8, 2 * 8 ))
+	hidingplace:new( 202, 40*8, 10*8, vector:new( 0, 0 ), vector:new( 3 * 8, 3 * 8 ))
 
 	-- setup the barrels
 
@@ -1020,7 +1019,7 @@ function seekerwins()
 	gotostate( "outcome" )
 end
 
-seeker_seek_cover_time_limit_seconds = 5
+seeker_seek_cover_time_limit_seconds = 4
 hider_finish_cover_time_limit_seconds = 4
 
 lastsearchedcovering = nil
@@ -1040,6 +1039,10 @@ function testseekerfoundhider()
 		local seekercovering = seeker:currentcovering()
 		if seekercovering then
 			if seekercovering ~= lastsearchedcovering and seeker:secondsundercovering() >= seeker_seek_cover_time_limit_seconds then
+				if lastsearchedcovering then
+					lastsearchedcovering.visible = true
+				end
+
 				lastsearchedcovering = seekercovering
 
 				if seekercovering == hidercovering then
@@ -1063,7 +1066,7 @@ end
 totalUpdates = 0
 
 hiding_seconds = 90
-seeking_seconds = 10
+seeking_seconds = 60
 
 hiding_ticks = hiding_seconds * 30
 seeking_ticks = seeking_seconds * 30
