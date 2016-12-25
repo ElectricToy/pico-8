@@ -725,25 +725,28 @@ function initializeworld()
 	-- trees
 
 	-- TODO tree coverage radii
-	local smalltreecoverageradius = 3.5 * 8
-	local largetreecoverageradius = 3.5 * 8
+	local smalltreecoveragebr = vector:new( 3.5 * 8, 3.5 * 8 )
+	local largetreecoveragebr = vector:new( 3.5 * 8, 3.5 * 8 )
 
 	local smalltreeshadowoffset = vector:new( 1, 1 )
 	local largetreeshadowoffset = vector:new( 4, 4 )
 
-	hidingplace:new( 192, 10 * 8, -1 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset  )
-	hidingplace:new( 135, 20 * 8,  2 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 192, 26 * 8,  0 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
-	hidingplace:new( 192, 14.75 * 8, 10.5 * 8, vector:new( 0, 0 ), vector:new( 4 * 8, 4 * 8 ), 139, largetreeshadowoffset )
-	hidingplace:new( 192, 24 * 8, 22 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, largetreeshadowoffset )
-	hidingplace:new( 135, 37 * 8, 18 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 135, 37 * 8, -2 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 135, -1 * 8,  7 * 8, vector:new( 0, 0 ), vector:new( smalltreecoverageradius, smalltreecoverageradius ), 139, smalltreeshadowoffset )
-	hidingplace:new( 192, 45 * 8, 22 * 8, vector:new( 0, 0 ), vector:new( largetreecoverageradius, largetreecoverageradius ), 139, largetreeshadowoffset )
+	hidingplace:new( 192, 10 * 8, -1 * 8, vector:new( 0, 0 ), largetreecoveragebr, 139, largetreeshadowoffset  )
+	hidingplace:new( 135, 20 * 8,  2 * 8, vector:new( 0, 0 ), smalltreecoveragebr, 139, smalltreeshadowoffset )
+	hidingplace:new( 192, 26 * 8,  0 * 8, vector:new( 0, 0 ), largetreecoveragebr, 139, largetreeshadowoffset )
+	hidingplace:new( 192, 13 * 8, 10.5 * 8, vector:new( 0, 0 ), largetreecoveragebr, 139, largetreeshadowoffset )
+	hidingplace:new( 135, 16 * 8, 11 * 8, vector:new( 0, 0 ), smalltreecoveragebr, 139, smalltreeshadowoffset )
+	hidingplace:new( 192, 24 * 8, 22 * 8, vector:new( 0, 0 ), smalltreecoveragebr, 139, largetreeshadowoffset )
+	hidingplace:new( 135, 37 * 8, 18 * 8, vector:new( 0, 0 ), smalltreecoveragebr, 139, smalltreeshadowoffset )
+	hidingplace:new( 135, 37 * 8, -2 * 8, vector:new( 0, 0 ), smalltreecoveragebr, 139, smalltreeshadowoffset )
+	hidingplace:new( 135, -1 * 8,  7 * 8, vector:new( 0, 0 ), smalltreecoveragebr, 139, smalltreeshadowoffset )
+	hidingplace:new( 192, 45 * 8, 22 * 8, vector:new( 0, 0 ), largetreecoveragebr, 139, largetreeshadowoffset )
+	hidingplace:new( 192, 29 * 8, 13 * 8, vector:new( 0, 0 ), largetreecoveragebr, 139, largetreeshadowoffset )
 
 	-- sw barn
 	local swBarn = hidingplace:new( 128, 0 * 8, 21 * 8, vector:new( 0, 0 ), vector:new( 7 * 8, 4 * 8 ))
 	swBarn.draw = function( self )
+		if self.visible == false then return end
 		for y = 0, 3 do
 			for x = 0, 6 do
 				local index = band( y, 1 ) == 0 and 128 or ( x == 6 and 130 or 129 )
@@ -756,6 +759,7 @@ function initializeworld()
 	local neBarn = hidingplace:new( 196, 42*8, 0, vector:new( 0, 0 ), vector:new( 6 * 8, 4 * 8 ) )
 
 	neBarn.draw = function( self )
+		if self.visible == false then return end
 		for y = 0, 3 do
 			for x = 0, 5 do
 				local index = band( y, 1 ) == 0 and 144 or ( x == 0 and 146 or 145 )
@@ -1029,6 +1033,7 @@ function promptcoveredcountdown( secondsRemaining, promptText )
 end
 
 function hiderwins()
+	-- todo show hider
 	winner = hider
 	gotostate( "outcome" )
 end
@@ -1038,9 +1043,6 @@ function seekerwins()
 	winner = seeker
 	gotostate( "outcome" )
 end
-
-seeker_seek_cover_time_limit_seconds = 4
-hider_finish_cover_time_limit_seconds = 4
 
 lastsearchedcovering = nil
 
@@ -1085,11 +1087,16 @@ end
 
 totalUpdates = 0
 
-hiding_seconds = 90
-seeking_seconds = 60
+-- tuning constants
+
+hiding_seconds = 60
+seeking_seconds = 45
 
 hiding_ticks = hiding_seconds * 30
 seeking_ticks = seeking_seconds * 30
+
+seeker_seek_cover_time_limit_seconds = 4
+hider_finish_cover_time_limit_seconds = 4
 
 gamestates = {}
 stateTicks = 0
