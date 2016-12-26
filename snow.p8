@@ -568,6 +568,9 @@ function chicken:update()
 		self.sprite.animation = { sprite }		
 	end
 
+
+	self.sprite.spriteflip = self.vel.x > 0
+
 end
 
 function chicken:update_ai()
