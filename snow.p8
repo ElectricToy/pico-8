@@ -727,7 +727,6 @@ function initializeworld()
 
 	-- trees
 
-	-- todo tree coverage radii
 	local smalltreecoveragebr = vector:new( 3.5 * 8, 3.5 * 8 )
 	local largetreecoveragebr = vector:new( 3.5 * 8, 3.5 * 8 )
 
@@ -848,13 +847,6 @@ function hidingplace:new( spriteindex, x, y, coverageul, coveragebr, shadowoffse
 
 	return setmetatable( newobj, self )
 end
-
--- -- todo
--- function hidingplace:draw()
--- 	if currentplayer == nil or self:covers( currentplayer.pos, currentplayer.radius ) == false or flicker( 16 ) then
--- 		self:superclass().draw( self )
--- 	end
--- end
 
 function hidingplace:covers( pos, radius )
 	return self.pos.x + self.coverageul.x <= pos.x and pos.x <= self.pos.x + self.coveragebr.x and
@@ -1035,12 +1027,20 @@ end
 
 function drawcountdown( countdown )
 	-- flicker, urgency color, etc.
-	-- todo sound
 
 	local totalseconds = flr( ticks_to_seconds( countdown ))
+
+	local shown = totalseconds > 10 or totalseconds > 5 and flicker( 2 ) or flicker( 8 )
+
+	if not shown then return end
+
+	local color = totalseconds > 10 and 11 or ( totalseconds > 5 and 9 or 8 )
+
 	local minutes = flr( totalseconds / 60 )
 	local seconds = totalseconds % 60
-	printshadowed( ( minutes > 0 and minutes or "" ) .. ":" .. ( seconds < 10 and "0" or "" ) .. seconds, 56, 2, 8 )
+
+
+	printshadowed( ( minutes > 0 and minutes or "" ) .. ":" .. ( seconds < 10 and "0" or "" ) .. seconds, 56, 2, color )
 end
 
 function flicker( hertz )
