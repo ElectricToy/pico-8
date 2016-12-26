@@ -1280,7 +1280,7 @@ gamestates[ "hiding_done" ] =
 	end,
 
 	update = function( self )
-		if ticks_to_seconds( stateticks ) > 1.5 then
+		if ticks_to_seconds( stateticks ) > 1.25 then
 			gotostate( "seeking_prepare" )
 		end
 	end,
@@ -1366,6 +1366,14 @@ gamestates[ "outcome" ] =
 {
 	beginstate = function( self )
 		-- music( 0 )
+
+		-- move the camera to the hider.
+		currentplayer = hider
+
+		-- uncover his covering, if any.
+		if hider:currentcovering() then
+			hider:currentcovering().visible = false
+		end
 	end,
 
 	update = function( self )
@@ -1380,7 +1388,6 @@ gamestates[ "outcome" ] =
 		stateannouncement( "game over", winner == hider and 12 or 8 )
 
 		-- show outcome
-		-- todo
 	end,
 	
 	endstate = function( self )
