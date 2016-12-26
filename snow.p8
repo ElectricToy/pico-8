@@ -1259,9 +1259,17 @@ gamestates[ "initial" ] =
 		-- draw title
 
 		drawshadowed( 0, 2, function( x, y ) 
-			spr( 72, 22 + x, 40 + y, 7, 2 )
-			spr( 104, x + 22 + ( 6 * 8 + 4 ), y + 40, 5, 2 )
+			spr( 72, 22 + x, 30 + y, 7, 2 )
+			spr( 104, x + 22 + ( 6 * 8 + 4 ), y + 30, 5, 2 )
+
 		end )
+
+		-- hide and seek
+		local left = 42
+		local top = 48
+		printshadowed( "hide", left, top, 12 )
+		printshadowed( "     &", left, top, 7 )
+		printshadowed( "       seek", left, top, 8 )
 
 		drawpressxprompt( 1 )
 	end,
