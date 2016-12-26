@@ -235,7 +235,7 @@ function body:new( x, y, radius )
 		pos = vector:new( x, y ),
 		vel = vector:new( 0, 0 ),
 		acc = vector:new( 0, 0 ),
-		mass = 1.0,	-- todo: 3.141 * radius * radius,
+		mass = 1.0,
 		radius = radius,
 		drag = 0.01,
 		color = 1,
@@ -250,7 +250,7 @@ function body:new( x, y, radius )
 		feetsnowiness = 0,
 		footstep_sfx = nil,
 		footstep_sfx_snowy = nil,
-		currentmappos = nil,				-- todo
+		currentmappos = nil,
 		collisionmask = 0xff,
 		collisionrefusalmask = 0,
 	}
@@ -553,17 +553,15 @@ function chicken:update()
 
 	self:superclass().update( self )
 
-	self:update_ai()		-- todo: really should be a controller, but inheritance didn't work for me.
+	self:update_ai()
 
 	-- update chicken animations
 
 	if self.fleedestination then
 		-- moving
-		-- todo: sfx( bu-kah )
 		self.sprite.animation = { self.basesprite + 2 }		
 	else
 		-- still
-		-- todo!!! pecking animation
 		local sprite = rnd( 100 ) < 2 and self.basesprite + 1 or self.basesprite
 		self.sprite.animation = { sprite }		
 	end
@@ -1105,19 +1103,16 @@ function stateannouncement( text, color, y )
 end
 
 function promptcoveredcountdown( secondsremaining, prompttext, color )
-	-- todo
 	local seconds = -flr( -secondsremaining )
 	printshadowed( prompttext .. ": " .. seconds .. "..." , 40, 30, color )
 end
 
 function hiderwins()
-	-- todo show hider
 	winner = hider
 	gotostate( "outcome" )
 end
 
 function seekerwins()
-	-- todo
 	winner = seeker
 	gotostate( "outcome" )
 end
