@@ -1012,9 +1012,9 @@ function printshadowed( text, x, y, color )
 	print( text, x, y, color )
 end
 
-function drawpressxprompt()
+function drawpressxprompt( playernumber )
 	local presspromptcolor = ( band( stateticks / 15, 1 ) != 0 ) and 7 or 12
-	printshadowed( "press —", 48, 78, presspromptcolor )
+	printshadowed( "p" .. playernumber .. " press —", 42, 78, presspromptcolor )
 end
 
 function drawcountdown( countdown )
@@ -1082,9 +1082,9 @@ function seekannouncement()
 	bareseekannouncement( basex, basey )
 end
 
-function stateannouncement( text, color )
+function stateannouncement( text, color, y )
 	local x = 64 - #text / 2 * 4
-	printshadowed( text, x, 46, color or 8 )
+	printshadowed( text, x, y or 46, color or 8 )
 end
 
 function promptcoveredcountdown( secondsremaining, prompttext, color )
@@ -1114,9 +1114,7 @@ function donesearching( seekercovering )
 	seeking_completion = 0
 end
 
-function updateseekercoveredsearching( seekercovering )
-
-	printh( "updateseekercoveredsearching" )
+function updateseekercoveredsearching( hidercovering, seekercovering )
 
 	-- ignore the same cover we last searched.
 	if seekercovering == lastsearchedcovering then
@@ -1140,7 +1138,10 @@ function updateseekercoveredsearching( seekercovering )
 		lastsearchedcovering = seekercovering
 		seekercovering.visible = false
 
+		printh( "might win" )
+
 		if seekercovering == hidercovering then
+			printh( "wins" )
 			seekerwins()
 		end
 
@@ -1164,7 +1165,7 @@ function updateseekersearching()
 		-- test more fully.
 		local seekercovering = seeker:currentcovering()
 		if seekercovering then
-			updateseekercoveredsearching( seekercovering )
+			updateseekercoveredsearching( hidercovering, seekercovering )
 		else
 			if lastsearchedcovering then
 				lastsearchedcovering.visible = true
@@ -1232,7 +1233,7 @@ gamestates[ "initial" ] =
 			spr( 104, x + 22 + ( 6 * 8 + 4 ), y + 40, 4, 2 )
 		end )
 
-		drawpressxprompt()
+		drawpressxprompt( 1 )
 	end,
 
 	endstate = function( self )
@@ -1323,7 +1324,7 @@ gamestates[ "seeking_prepare" ] =
 	end,
 
 	draw = function( self )
-		drawpressxprompt()
+		drawpressxprompt( 2 )
 		stateannouncement( "ready to seek?", 8 )
 	end,
 	
@@ -1388,17 +1389,27 @@ gamestates[ "outcome" ] =
 	end,
 
 	update = function( self )
-		if actionbutton() then
-			-- start the game
-			gotostate( "hiding" )
+		if stateticks > 30 * 1 then
+			if actionbutton() then
+				-- start the game
+				gotostate( "hiding" )
+			end
 		end
 	end,
 
 	draw = function( self )
-		drawpressxprompt()
-		stateannouncement( "game over", winner == hider and 12 or 8 )
+		if stateticks > 30 * 1 then
+			drawpressxprompt( 1 )
+		end
+
+		local color = winner == hider and 12 or 8
+
+		stateannouncement( "game over", color, 26 )
 
 		-- show outcome
+
+		local winner_name = winner == hider and "hider" or "seeker"
+		printshadowed( "the " .. winner_name .. " wins!", 32, 46, color )
 	end,
 	
 	endstate = function( self )
