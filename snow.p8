@@ -1010,7 +1010,7 @@ end
 
 function drawcountdown( countdown )
 	-- flicker, urgency color, etc.
-	-- todo
+	-- todo sound
 
 	local totalseconds = flr( ticks_to_seconds( countdown ))
 	local minutes = flr( totalseconds / 60 )
@@ -1100,8 +1100,51 @@ function seekerwins()
 end
 
 lastsearchedcovering = nil
+seeker_searching = false
+seeking_completion = 0
 
-function testseekerfoundhider()
+function donesearching( seekercovering )
+	seeker_searching = false
+	seeking_completion = 0
+end
+
+function updateSeekerCoveredSearching( seekercovering )
+
+	printh( "updateSeekerCoveredSearching" )
+
+	-- ignore the same cover we last searched.
+	if seekercovering == lastsearchedcovering then
+		return
+	end
+
+	seeker_searching = true
+
+	-- Update button presses for searching.
+
+	seeking_completion = clamp( seeking_completion - 0.001, 0, 1 )
+	if actionbuttonjustdown() then
+		seeking_completion = clamp( seeking_completion + 0.05, 0, 1 )
+	end
+
+	if seeking_completion >= 1.0 then
+		if lastsearchedcovering then
+			lastsearchedcovering.visible = true
+		end
+
+		lastsearchedcovering = seekercovering
+		seekercovering.visible = false
+
+		if seekercovering == hidercovering then
+			seekerwins()
+		end
+
+		donesearching()
+	end
+end
+
+function updateSeekerSearching()
+
+	-- first, if the hider isn't even hidden, just look for proximity.
 	local hidercovering = hider:currentcovering()
 
 	-- is the hider hidden?
@@ -1112,31 +1155,27 @@ function testseekerfoundhider()
 			return
 		end
 	else
-		-- yes. test under the same cover at the time limit.
+		-- test more fully.
 		local seekercovering = seeker:currentcovering()
 		if seekercovering then
-			if seekercovering ~= lastsearchedcovering and seeker:secondsundercovering() >= seeker_seek_cover_time_limit_seconds then
-				if lastsearchedcovering then
-					lastsearchedcovering.visible = true
-				end
-
-				lastsearchedcovering = seekercovering
-
-				if seekercovering == hidercovering then
-					seekercovering.visible = false
-					seekerwins()
-					return
-				else
-					-- report failure here.
-					-- todo
-				end
-			end
+			updateSeekerCoveredSearching( seekercovering )
 		else
 			if lastsearchedcovering then
 				lastsearchedcovering.visible = true
 			end
 			lastsearchedcovering = nil
 		end
+	end
+end
+
+function drawSeekerSearching()
+	if seeker_searching then
+		printshadowed( "press   to search", 30, 50, 8 )
+		printshadowed( "      —", 30, 50 + ( flicker( 4 ) and 0 or 2 ) , 8 )
+		local left = 30
+		local right = 98
+		rectfill( left, 60, left + ( right - left ) * seeking_completion, 66, 8 )
+		rect    ( left, 60, right, 66, 14 )
 	end
 end
 
@@ -1150,11 +1189,19 @@ seeking_seconds = 45
 hiding_ticks = hiding_seconds * 30
 seeking_ticks = seeking_seconds * 30
 
-seeker_seek_cover_time_limit_seconds = 4
 hider_finish_cover_time_limit_seconds = 4
 
 gamestates = {}
 stateticks = 0
+
+function actionbutton()
+	return btn( 4, 0 ) or btn( 5, 0 )
+end
+
+function actionbuttonjustdown()
+	return ( btn( 4, 0 ) and btnp( 4, 0 ) ) or
+		   ( btn( 5, 0 ) and btnp( 5, 0 ) )
+end
 
 gamestates[ "initial" ] = 
 {
@@ -1164,7 +1211,7 @@ gamestates[ "initial" ] =
 	end,
 
 	update = function( self )
-		if btn( 4, 0 ) or btn( 5, 0 ) then
+		if actionbutton() then
 			-- start the game
 			gotostate( "hiding" )
 		end
@@ -1216,7 +1263,7 @@ gamestates[ "hiding" ] =
 		end
 
 		if ticks_to_seconds( stateticks ) < 3 then
-			seekannouncement()
+			hideannouncement()
 		end
 
 	end,
@@ -1258,7 +1305,7 @@ gamestates[ "seeking_prepare" ] =
 	end,
 
 	update = function( self )
-		if btn( 4, 0 ) or btn( 5, 0 ) then
+		if actionbutton() then
 			-- start the game
 			gotostate( "seeking" )
 		end
@@ -1284,36 +1331,30 @@ gamestates[ "seeking" ] =
 	end,
 
 	update = function( self )
+		updateSeekerSearching()
+
 		local remainingticks = seeking_ticks - stateticks
 		if remainingticks <= 0 then
 			hiderwins()
 			return
 		end
-
-		testseekerfoundhider()
-
 	end,
 
 	draw = function( self )
 		local remainingticks = seeking_ticks - stateticks
 		drawcountdown( remainingticks )
 
-		local coveredseconds = seeker:secondsundercovering()
-		if lastsearchedcovering ~= seeker:currentcovering() and coveredseconds > 0 then
-			promptcoveredcountdown( seeker_seek_cover_time_limit_seconds - coveredseconds, "searching", 8 )
-		end
+		drawSeekerSearching()
 
 		-- prompt failure
 
-		if lastsearchedcovering then
+		if lastsearchedcovering then			
+			stateannouncement( "not here!", 8 )
 			lastsearchedcovering.visible = false
-			promptcoveredcountdown( 0, "not here!", 8 )
-		end
 
-		if ticks_to_seconds( stateticks ) < 3 then
-			seekannouncement()
+		elseif ticks_to_seconds( stateticks ) < 3 then
+				seekannouncement()
 		end
-
 	end,
 	
 	endstate = function( self )
@@ -1328,7 +1369,7 @@ gamestates[ "outcome" ] =
 	end,
 
 	update = function( self )
-		if btn( 4, 0 ) or btn( 5, 0 ) then
+		if actionbutton() then
 			-- start the game
 			gotostate( "hiding" )
 		end
