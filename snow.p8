@@ -813,9 +813,9 @@ function initializeworld()
 
 	for i = 1, 3 do
 		local y = ( 21 + i ) * 8
-		local baseX = 39 * 8 - ( i - 1 ) * 16 / 2
+		local basex = 39 * 8 - ( i - 1 ) * 16 / 2
 		for b = 1, i do
-			local x = baseX + b * 16
+			local x = basex + b * 16
 			barrel:new( x, y )
 		end
 	end
@@ -1180,7 +1180,7 @@ function updateseekercoveredsearching( hidercovering, seekercovering )
 	-- update button presses for searching.
 
 	seeking_completion = clamp( seeking_completion - 0.001, 0, 1 )
-	if actionbuttonjustdown() then
+	if searchbuttonjustdown() then
 		sfx( 7 )
 		seeking_completion = clamp( seeking_completion + 0.05, 0, 1 )
 	end
@@ -1232,12 +1232,13 @@ end
 
 function drawseekersearching()
 	if seeker_searching then
-		printshadowed( "press   to search", 30, 50, 8 )
-		printshadowed( "      —", 28, 50 + ( flicker( 4 ) and 0 or 2 ) , 8 )
+		printshadowed( "press z then x to search", 18, 50, 8 )
+		printshadowed( "      Ž" , 16, 57 + ( flicker( 4 ) and 0 or 2 ) , 8 )
+		printshadowed( "             —", 16, 57 + ( flicker( 4 ) and 2 or 0 ) , 8 )
 		local left = 30
 		local right = 98
-		rectfill( left, 60, left + ( right - left ) * seeking_completion, 66, 8 )
-		rect    ( left, 60, right, 66, 14 )
+		rectfill( left, 67, left + ( right - left ) * seeking_completion, 76, 8 )
+		rect    ( left, 67, right, 76, 14 )
 	end
 end
 
@@ -1268,15 +1269,37 @@ hider_finish_cover_time_limit_seconds = 4
 gamestates = {}
 stateticks = 0
 
-action_button_was_down = false
-action_button_down = false
+buttons_down = {
+	z = false,
+	x = false
+}
+buttons_down_last = {
+	z = false,
+	x = false
+}
+expected_action_button_key = nil
 
 function actionbutton()
-	return action_button_down
+	return buttons_down.z or buttons_down.x
 end
 
-function actionbuttonjustdown()
-	return action_button_down and not action_button_was_down
+function searchbuttonjustdown()
+	if expected_action_button_key == nil then
+		if buttons_down.z and not buttons_down_last.z then
+			expected_action_button_key = "z"
+		elseif buttons_down.x and not buttons_down_last.x then
+			expected_action_button_key = "x"
+		else
+			return false
+		end
+	end
+
+	if buttons_down[ expected_action_button_key ] and not buttons_down_last[ expected_action_button_key ] then
+		expected_action_button_key = expected_action_button_key == "z" and "x" or "z"
+		return true
+	else
+		return false
+	end
 end
 
 gamestates[ "initial" ] = 
@@ -1432,6 +1455,8 @@ gamestates[ "seeking" ] =
 		music( 15 )
 
 		sfx( 5 )
+
+		expected_action_button_key = nil
 
 		local controller = playercontroller:new( seeker )
 	end,
@@ -1644,8 +1669,10 @@ function _update()
 
 	totalupdates += 1
 
-	action_button_was_down = action_button_down
-	action_button_down = btn( 5, 0 )
+	buttons_down_last.z = buttons_down.z
+	buttons_down_last.x = buttons_down.x
+	buttons_down.z = btn( 4, 0 )
+	buttons_down.x = btn( 5, 0 )
 
 	if currentgamestate then
 		stateticks += 1
