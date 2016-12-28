@@ -563,6 +563,12 @@ function chicken:new( x, y )
 	return setmetatable( newobj, self )
 end
 
+function chicken:makefootprint( pos )
+	local footprint = sprite:new( pos.x, pos.y )
+	footprint.animation = { self.footprintsprite }
+	add( temporary_footprints, footprint )
+end
+
 function chicken:update()
 
 	self:superclass().update( self )
@@ -729,6 +735,7 @@ function clearworld()
 	currentplayer = nil
 	bodies = {}
 	footprints = {}
+	temporary_footprints = {}
 	hidingplaces = {}
 	shadows = {}
 	donesearching()
@@ -1672,6 +1679,8 @@ function _update()
 
 	totalupdates += 1
 
+	printh( "bodies: " .. #bodies .. " footprints: " .. #footprints .. " temp: " .. #temporary_footprints .. " hiding: " .. #hidingplaces .. " shadows: " .. #shadows )
+
 	buttons_down_last.z = buttons_down.z
 	buttons_down_last.x = buttons_down.x
 	buttons_down.z = btn( 4, 0 )
@@ -1704,6 +1713,21 @@ function _update()
 		end
 	end
 
+	-- remove old temporary footprints
+
+	local max_temporary_footprints = 200
+	local footprints_to_remove = #temporary_footprints - max_temporary_footprints
+
+	if footprints_to_remove > 0 then
+		local kept_footprints = {}
+
+		for i = footprints_to_remove + 1, #temporary_footprints do
+			add( kept_footprints, temporary_footprints[ i ] )
+		end
+
+		temporary_footprints = kept_footprints
+	end
+
 	-- update thecamera
 
 	if winner and hider then
@@ -1731,6 +1755,10 @@ function _draw()
 	-- draw footprints
 
 	for footprint in all( footprints ) do
+		footprint:draw()
+	end
+
+	for footprint in all( temporary_footprints ) do
 		footprint:draw()
 	end
 
