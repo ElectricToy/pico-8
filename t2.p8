@@ -1,42 +1,678 @@
 pico-8 cartridge // http://www.pico-8.com
 version 8
-__lua__
 
-for i = 1,128 do
-	print( i )
+__lua__
+-- PICO-8 3D Engine
+-- Alex Bowen
+
+-- A good chunk of the math and algorithms here
+-- actually came from ScratchPixel 2.0, which 
+-- managed to be among the top search results for
+-- every specific problem I ran across and wound
+-- up being a great resource. Link:
+-- https://www.scratchapixel.com/index.php?redirect
+
+-- SETTINGS
+wireframe=false
+filled=true
+-- END SETTINGS
+
+--CONSTANTS
+screenHeight=128
+screenWidth=128
+--END CONSTANTS
+
+-- MATH SUPPORT
+
+-- Multiplies a 3x1 mat by a 4x4 mat,
+-- assumes 3x1 is actually 4x1 with a
+-- w-value of 1
+function mult3144(m31,m44)
+    local mat={
+        (m31[1]*m44[1][1])+(m31[2]*m44[2][1])+(m31[3]*m44[3][1])+m44[4][1],
+        (m31[1]*m44[1][2])+(m31[2]*m44[2][2])+(m31[3]*m44[3][2])+m44[4][2],
+        (m31[1]*m44[1][3])+(m31[2]*m44[2][3])+(m31[3]*m44[3][3])+m44[4][3],
+        (m31[1]*m44[1][4])+(m31[2]*m44[2][4])+(m31[3]*m44[3][4])+m44[4][4]
+    }
+
+    if mat[4] != 1 and mat[4] != 0 then
+       mat[1] /= w
+       mat[2] /= w
+       mat[3] /= w
+    end
+
+    return mat
 end
 
+function add3131(m1,m2)
+    return {
+        m1[1]+m2[1],
+        m1[2]+m2[2],
+        m1[3]+m2[3]
+    }
+end
+
+function sub3131(m1,m2)
+    return {
+        m1[1]-m2[1],
+        m1[2]-m2[2],
+        m1[3]-m2[3]
+    }
+end
+
+-- Stole this from RosettaCode
+function multMat(m1,m2)
+    if #m1[1]~=#m2 then
+        return nil
+    end
+
+    local res={}
+
+    for i=1, #m1 do
+        res[i]={}
+        for j=1, #m2[1] do
+            res[i][j]=0
+            for k=1, #m2 do
+                res[i][j]=res[i][j]+m1[i][k]*m2[k][j]
+            end
+        end
+    end
+
+    return res
+end
+
+-- For some reason, there is no tan() in the
+-- standard library. *shrug*
+function tan(angle)
+    return sin(angle)/cos(angle)
+end
+
+function cross3131(v1,v2)
+    return {
+        (v1[2]*v2[3])-(v1[3]*v2[2]),
+        (v1[3]*v2[1])-(v1[1]*v2[3]),
+        (v1[1]*v2[2])-(v1[2]*v2[1])
+    }
+end
+
+function dot3131(v1,v2)
+    return (v1[1]*v2[1])+(v1[2]*v2[2])+(v1[3]*v2[3])
+end
+
+-- END MATH SUPPORT
 
 
+epsilon=0.0001
+negEpsilon=-0.0001
 
+function vetexVisible(vertex,cam)
+    local leftRight = vertex[1]>0 and vertex[1]<=screenWidth
+    local upDown = vertex[3]>0 and vertex[3]<=screenHeight
+    local distance = vertex[2]>cam.near and vertex[3]<cam.far
 
+    return leftRight and upDown and distance
+end
 
+function makeRotationMatrix(rotation)
+    local xRot={
+        {1,               0,                  0,0},
+        {0,cos(rotation[1]),-1*sin(rotation[1]),0},
+        {0,sin(rotation[1]),   cos(rotation[1]),0},
+        {0,               0,                  0,1}
+    }
+    local yRot={
+        {   cos(rotation[2]),0,sin(rotation[2]),0},
+        {                  0,1,               0,0},
+        {-1*sin(rotation[2]),0,cos(rotation[2]),0},
+        {                  0,0,               0,1}
+    }
+    local zRot={
+        {cos(rotation[3]),-1*sin(rotation[3]),0,0},
+        {sin(rotation[3]),   cos(rotation[3]),0,0},
+        {               0,                  0,1,0},
+        {               0,                  0,0,1}
+    }
 
+    local rotationMat=multMat(xRot,yRot)
+    rotationMat=multMat(rotationMat,zRot)
 
+    return rotationMat
+end
 
+function project()
+    local tanFov=abs(tan(camera.fov/2))
+    local nearPlaneW=tanFov*camera.near
+    local farPlaneW=tanFov*camera.far
+    local pixelScale=screenWidth/(nearPlaneW*2)
 
+    local perspectiveSF=(farPlaneW-nearPlaneW)/(camera.far-camera.near)
 
+    local cameraRot=makeRotationMatrix(camera.rot)
 
+    cameraTran={
+        camera.loc[1]*-1,
+        camera.loc[2]*-1,
+        camera.loc[3]*-1,
+    }
 
+    local projectedModels={}
+    local projModI=1
 
+    for mi,model in pairs(models) do
+        local projectedModel={
+            vertices={},
+            faces={}
+        }
 
+        local modelRot = makeRotationMatrix(model.rot)
+        local modelLoc = add3131(cameraTran, model.loc)
 
+        for vi,vert in pairs(model.vertices) do
+            -- rotate relative to model center
+            local vertex=mult3144(vert, modelRot)
 
+            -- translate relative to camera
+            vertex=add3131(modelLoc, vertex)
 
+            -- rotate relative to camera
+            vertex=mult3144(vertex, cameraRot)
 
+            -- perspective scaling
+            local scaleFactor=vertex[2]*perspectiveSF
+            vertex[1]/=scaleFactor
+            vertex[3]/=scaleFactor
 
+            -- screeen-space projection
+            vertex[1]*=pixelScale
+            vertex[3]*=pixelScale
+            vertex[1]+=screenWidth/2
+            vertex[3]+=screenHeight/2
 
+            projectedModel.vertices[vi]=vertex
+        end
 
+        local faceI=1
+        for fi,face in pairs(model.faces) do
+            local v1=projectedModel.vertices[face[1]]
+            local v2=projectedModel.vertices[face[2]]
+            local v3=projectedModel.vertices[face[3]]
+
+            -- Note:: Normals here are not really correct.
+            -- They are just being rotated with the rest of the model.
+            -- This does not take into account any perspective skewing
+            -- or, in the future, vertex transformations. This should
+            -- be good enough for back-face culling, though. The main
+            -- problem it has is flat planes facing cardinal directions.
+
+            local normal=mult3144(model.normals[fi],modelRot)
+            normal=mult3144(normal,cameraRot)
+
+            if normal[2] <= 0 and(vetexVisible(v1,camera) or vetexVisible(v2,camera) or vetexVisible(v3,camera)) then
+                projectedModel.faces[faceI]=face
+                faceI+=1
+            end
+        end
+
+        projectedModels[projModI]=projectedModel
+        projModI+=1
+    end
+
+    return projectedModels
+end
+
+function drawWirePolygon(v1,v2,v3,col)
+    -- Note, z at this point is the negative screen-y coordinate
+    line(v1[1],screenHeight-1-v1[3],v2[1],screenHeight-1-v2[3],col)
+    line(v2[1],screenHeight-1-v2[3],v3[1],screenHeight-1-v3[3],col)
+    line(v3[1],screenHeight-1-v3[3],v1[1],screenHeight-1-v1[3],col)
+end
+
+function draw_span( leftX, rightX, row, color )
+    assert( rightX >= leftX )
+    line( flr( leftX ), row, flr( rightX ), row, color )
+end
+
+function draw_spans( leftX, rightX, startY, endY, leftStepX, rigtStepX, color )
+    assert( endY >= startY )
+    for row = flr( startY ), flr( endY ) do
+        if row >= screenHeight then
+            break
+        end        
+        if row >= 0 then
+            draw_span( leftX, rightX, row, color )
+        end
+        leftX += leftStepX
+        rightX += rigtStepX
+    end
+
+    return leftX, rightX
+end
+
+function draw_triangle( face, v1, v2, v3 )
+
+    -- For convenience, store the vertex components in nicer names.
+
+    v1.x = v1[ 1 ]
+    v1.y = v1[ 2 ]
+    v1.z = v1[ 3 ]
+    v2.x = v2[ 1 ]
+    v2.y = v2[ 2 ]
+    v2.z = v2[ 3 ]
+    v3.x = v3[ 1 ]
+    v3.y = v3[ 2 ]
+    v3.z = v3[ 3 ]
+
+    -- Find the topmost vertex. "Topmost" means highest Y in clip space.
+
+    local topmost = v1.y < v2.y and v1 or v2
+    topmost = topmost.y < v3.y and topmost or v3
+
+    -- Given this topmost, identify the two "limbs" to either side. Initially "left" and "right" are speculative.
+
+    local leftmost = topmost == v1 and v2 or v1
+    local rigtmost = topmost == v1 and v3 or ( topmost == v2 and v3 or v2 )
+
+    -- Ensure that leftmost and rigtmost are actually in the right order.
+
+    if leftmost.x > rigtmost.x then
+        local temp = leftmost
+        leftmost = rigtmost
+        rigtmost = temp
+    end
+
+    assert( rigtmost.x >= leftmost.x )
+
+    -- Lastly, find the bottommost vertex
+
+    local bottommost = leftmost.y > rigtmost.y and leftmost or rigtmost
+
+    -- We now have a graph of sorts from the top vertex to the bottom vertex via the left and right vertices.
+    -- Calculate the major "stepping" values, and handle any degenerate cases.
+
+    local leftStepX = 0
+    local rigtStepX = 0
+
+    local leftDeltaY = leftmost.y - topmost.y
+    local rigtDeltaY = rigtmost.y - topmost.y
+    if leftDeltaY <= 0 or rigtDeltaY <= 0 then
+        -- Degenerate: left point is at same Y level as top
+        -- TODO
+        return
+    end
+
+    assert( leftDeltaY > 0 )
+    assert( rigtDeltaY > 0 )
+
+    leftStepX = ( leftmost.x - topmost.x ) / leftDeltaY
+    rigtStepX = ( rigtmost.x - topmost.x ) / rigtDeltaY
+
+    -- Fill from the top to the higher of left or right.
+
+    local topLimb = leftmost.y < rigtmost.y and leftmost or rigtmost
+    local targetY = topLimb.y
+
+    local color=face[4] -- TODO Textures    
+    local leftX, rightX = draw_spans( topmost.x, topmost.x, topmost.y, targetY, leftStepX, rigtStepX, color )
+
+    -- Fill from this Y value downward to the next limb.
+
+    -- TODO Trying to get the above working first.
+    -- if topLimb == leftmost then
+    --     local leftDeltaY = bottommost.y - leftmost.y
+
+    --     if leftDeltaY <= 0 then
+    --         -- Degenerate: left point is at same Y level as bottom
+    --         -- TODO
+    --         return
+    --     end
+
+    --     leftX = leftmost.x
+    --     leftStepX = ( bottommost.x - leftX ) / leftDeltaY
+
+    -- else
+    --     local rigtDeltaY = bottommost.y - rigtmost.y
+
+    --     if rigtDeltaY <= 0 then
+    --         -- Degenerate: right point is at same Y level as bottom
+    --         -- TODO
+    --         return
+    --     end
+
+    --     rightX = rigtmost.x
+    --     rigtStepX = ( bottommost.x - rightX ) / rigtDeltaY
+    -- end
+
+    -- assert( leftX <= rightX )
+    -- draw_spans( leftX, rightX, targetY, bottommost.y, leftStepX, rigtStepX, color )
+
+end
+
+function draw_triangle_original( face, v1, v2, v3 )
+    local zBuf = zBuffer
+    local sub=sub3131
+
+    local v11=v1[1]
+    local v12=v1[2]
+    local v13=v1[3]
+
+    local minX = min( v1)
+
+    local minX=v1[1]
+    if v2[1]<minX then
+        minX=v2[1]
+    end
+    if v3[1]<minX then
+        minX=v3[1]
+    end
+    if minX<1 then
+        minX=1
+    end
+    minX=flr(minX)
+
+    local maxX=v1[1]
+    if v2[1]>maxX then
+        maxX=v2[1]
+    end
+    if v3[1]>maxX then
+        maxX=v3[1]
+    end
+    if maxX>screenWidth then
+        maxX=screenWidth-1
+    end
+    maxX=-flr(-maxX)
+
+    local minZ=v1[3]
+    if v2[3]<minZ then
+        minZ=v2[3]
+    end
+    if v3[3]<minZ then
+        minZ=v3[3]
+    end
+    if minZ<1 then
+        minZ=1
+    end
+    minZ=flr(minZ)
+
+    local maxZ=v1[3]
+    if v2[3]>maxZ then
+        maxZ=v2[3]
+    end
+    if v3[3]>maxZ then
+        maxZ=v3[3]
+    end
+    if maxZ>screenHeight then
+        maxZ=screenHeight-1
+    end
+    maxZ=-flr(-maxZ)
+
+    local color=face[4]
+
+    local e1=sub(v2,v1)
+    local e11=e1[1]
+    local e12=e1[2]
+    local e13=e1[3]
+
+    local e2=sub(v3,v1)
+    local e21=e2[1]
+    local e22=e2[2]
+    local e23=e2[3]
+
+    for row=minZ,maxZ,1 do
+        for col=minX,maxX,1 do
+            local hit=false
+
+-- This is basically Moller-Trombore stolen and ported this from Wikipedia.
+-- https://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+-- It used to be a function, then I moved it all inline for performance reasons.
+
+            repeat
+                local h1=e23
+                local h2=0
+                local h3=-e21
+
+                a=(e11*h1)+(e13*h3)
+
+                if a>negEpsilon and a<epsilon then
+                    break
+                end
+
+                f=1/a
+
+                s1=col-v11
+                s2=1-v12
+                s3=row-v13
+
+                u = f*((s1*h1)+(s3*h3))
+
+                if u<0 or u>1 then
+                    break
+                end
+
+                q1=(s2*e13)-(s3*e12)
+                q2=(s3*e11)-(s1*e13)
+                q3=(s1*e12)-(s2*e11)
+
+                v=f*((0*q1)+(1*q2)+(0*q3))
+                if v<0 or (u+v)>1 then
+                    break
+                end
+
+                t=f*((e21*q1)+(e22*q2)+(e23*q3))
+                -- I don't care too much about facing....yet
+                if t<0 then t=-t end
+                if t>epsilon then
+                    hit=true
+                end
+            until true
+
+            if hit and t < zBuf[col][row] then
+                zBuf[col][row]=t
+                local finalcolor = color
+                if finalcolor == 16 then
+                    local tx=flr(u*8)
+                    local ty=flr(v*8)
+                    finalcolor=sget(tx,ty)
+                end
+
+                if finalcolor == 17 then
+                    local tx=7-flr(u*8)
+                    local ty=7-flr(v*8)
+                    finalcolor=sget(tx,ty)
+                end
+
+                pset(col,screenHeight-1-row,finalcolor)
+            end
+        end
+    end
+
+end
+
+function draw3D()
+    local projectedModels = project()
+
+    --This is pretty bad. Make it better.
+    if filled then
+
+        local u=0
+        local v=0
+        local t=0
+        local h1=0
+        local h2=0
+        local h3=0
+        local a=0
+        local f=0
+        local s1=0
+        local s2=0
+        local s3=0
+        local q1=0
+        local q2=0
+        local q3=0
+
+        -- Clear the zBuffer
+        local zBuf = zBuffer
+        for col=1,screenWidth,1 do
+            for row=1,screenHeight,1 do
+                zBuf[col][row]=150
+            end
+        end
+
+        for mi,model in pairs(projectedModels) do
+            for fi,face in pairs(model.faces) do
+                draw_triangle( face, model.vertices[ face[ 1 ] ], model.vertices[ face[ 2 ] ], model.vertices[ face[ 3 ] ] )
+            end
+        end
+    end
+
+    if wireframe then
+        for _,model in pairs(projectedModels) do
+            for _,face in pairs(model.faces) do
+                drawWirePolygon(model.vertices[face[1]],model.vertices[face[2]],model.vertices[face[3]],face[4])
+            end
+        end
+    end
+end
+
+models = {
+    {
+        vertices={
+            {-5,-5, 0},
+            {-5, 5, 0},
+            { 5, 5, 0},
+            { 5,-5, 0},
+            { 0, 0,10},
+        },
+        faces={
+            {1,5,2,10},
+            {2,5,3,11},
+            {3,5,4,12},
+            {4,5,1,13},
+            {1,2,3,14},
+            {3,4,1,15},
+        },
+        normals={
+            {-1, 0, 0,},
+            { 0, 1, 0,},
+            { 1, 0, 0,},
+            { 0,-1, 0,},
+            { 0, 0,-1,},
+            { 0, 0,-1,},
+        },
+        loc={0,30,0},
+        rot={0,0,0}
+    },
+    {
+        vertices={
+            {-5,-5, 0},
+            {-5, 5, 0},
+            { 5, 5, 0},
+            { 5,-5, 0},
+            {-5,-5,10},
+            {-5, 5,10},
+            { 5, 5,10},
+            { 5,-5,10},
+        },
+        faces={
+            {1,2,3, 1}, --bottom
+            {3,4,1, 2}, --
+            {5,6,7, 3}, --top
+            {7,8,5, 4}, --
+            {5,8,1,16}, --front
+            {4,1,8,17}, --
+            {6,5,1, 7}, --left
+            {1,2,6, 8}, --
+            {2,3,7, 9}, --back
+            {7,6,2,10}, --
+            {3,4,8,12}, --right
+            {8,7,3,12}, --
+        },
+        normals={
+            { 0, 0,-1},
+            { 0, 0,-1},
+            { 0, 0, 1},
+            { 0, 0, 1},
+            { 0,-1, 0},
+            { 0,-1, 0},
+            {-1, 0, 0},
+            {-1, 0, 0},
+            { 0, 1, 0},
+            { 0, 1, 0},
+            { 1, 0, 0},
+            { 1, 0, 0},
+        },
+        loc={20,30,0},
+        rot={0,0,0}
+    }
+}
+
+camera={
+    loc={0,-15,15},
+    rot={0,0,.05},
+    fov=60/360,
+    near=1,
+    far=100
+}
+
+zBuffer={}
+for col=1,screenWidth,1 do
+    zBuffer[col]={}
+    for row=1,screenHeight,1 do
+        zBuffer[col][row]=150
+    end
+end
+
+function _update60()
+    models[1].rot[3]=(models[1].rot[3]+0.005)%1
+    models[2].rot[3]=(models[2].rot[3]+0.0025)%1
+
+    local moveVector={0,0,0}
+
+    rotSpeed = .005
+    moveSpeed=.2
+
+    if btn(0) then
+        camera.rot[3] = (camera.rot[3]-rotSpeed%1)
+    end
+    if btn(1) then
+        camera.rot[3] = (camera.rot[3]+rotSpeed%1)
+    end
+    if btn(2) then
+        moveVector[2]=moveSpeed
+    end
+    if btn(3) then
+        moveVector[2]=moveSpeed*-1
+    end
+    if btn(4) then
+        moveVector[1]=moveSpeed*-1
+    end
+    if btn(5) then
+        moveVector[1]=moveSpeed
+    end
+
+    local viewRot=makeRotationMatrix({0,0,camera.rot[3]*-1})
+    camera.loc=add3131(camera.loc,mult3144(moveVector,viewRot))
+
+    if btnp(5,1) then
+        wireframe=not wireframe
+        filled=not filled
+    end
+end
+
+function _draw()
+    cls()
+    draw3D()
+end
+
+draw3D()
 
 __gfx__
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ccc11111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+cc177111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+c17cc711000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+17c07c11000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+17c0071c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+117771cc000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+11111ccc000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+1111cccc000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

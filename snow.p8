@@ -34,9 +34,10 @@ function inheritsfrom( baseclass )
 
         local cur_class = new_class
 
-        while ( nil ~= cur_class ) and ( false == b_isa ) do
+        while nil ~= cur_class do
             if cur_class == theclass then
                 b_isa = true
+                break
             else
                 cur_class = cur_class:superclass()
             end
