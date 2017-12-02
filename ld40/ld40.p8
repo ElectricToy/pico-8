@@ -123,6 +123,18 @@ function vector:perpendicular()
     return vector:new( -self.y, self.x )
 end
 
+function vector:component( index )
+    return index ~= 0 and self.y or self.x
+end
+
+function vector:set_component( index, value )
+    if index ~= 0 then
+        self.y = value
+    else
+        self.x = value
+    end
+end
+
 -- math
 
 function randinrange( min, max )
@@ -138,6 +150,10 @@ end
 function clamp( x, least, greatest )
     assert( greatest >= least )
     return min( greatest, max( least, x ))
+end
+
+function sign( x )
+    return x > 0 and 1 or ( x < 0 and -1 or 0 )
 end
 
 function is_close( a, b, maxdist )
@@ -172,7 +188,7 @@ end
 -- physics
 
 local body = inheritsfrom( nil )
-local max_body_speed = 10
+local max_body_speed = 5
 local max_body_speed_squared = max_body_speed * max_body_speed
 
 function body:new( x, y, radius )
@@ -186,6 +202,7 @@ function body:new( x, y, radius )
         mass = 1.0,
         radius = radius,
         drag = 0.02,
+        restitution = 0.95,
     }
 
     return setmetatable( newobj, self )
@@ -216,28 +233,69 @@ function body:update()
 end
 
 function body:shouldcollidewithmapsprite( mapsprite )
-    return fget( mapsprite, 0x8 )
+    return fget( mapsprite, 7 )
 end
 
-function body:updateworldcollision()
+function body:resolve_rect_collision( rectul, rectbr )
+    -- find the collision normal
+
+    -- debug_print( '' .. rectul.x .. ',' .. rectul.y .. ':' .. rectbr.x .. ',' .. rectbr.y )
+
+    local rectcenter = ( rectul + rectbr ) * vector:new( 0.5, 0.5 )
+    local delta = self.pos - rectcenter
+
+    if delta:manhattanlength() == 0 then return end
+
+    local normal_axis = abs( delta.x ) > abs( delta.y ) and 0 or 1
+    local axial_dist = delta:component( normal_axis )
+    local normal_sign = sign( axial_dist )
+    local normal = vector:new( 0, 0 )
+    normal:set_component( normal_axis, normal_sign )
+
+    -- don't act if we're already going this way
+
+    if normal:dot( self.vel ) > 0 then return end
+
+    -- move the body back out
+    local penetration = abs( axial_dist - ( 4 + self.radius ))
+    -- self.pos += normal * vector:new( penetration, penetration )
+    self.vel:set_component( normal_axis, self.vel:component( normal_axis ) * -self.restitution )
+end
+
+function body:resolve_map_collision( levelmapx, levelmapy )
+    self:resolve_rect_collision( 
+        vector:new( ( levelmapx + 0 ) * 8, ( levelmapy + 0 ) * 8 ), 
+        vector:new( ( levelmapx + 1 ) * 8, ( levelmapy + 1 ) * 8 ))
+end
+
+function body:updateworldcollision( level )
 
     local center = self.pos
     local offset = vector:new( self.radius, 0 )
 
-    for i = 0, 3 do
-        local corner = center + offset
+    -- find the four corners in map space.
+    local left = flr(( center.x - self.radius ) / 8 )
+    local top  = flr(( center.y - self.radius ) / 8 )
+    local right= flr(( center.x + self.radius ) / 8 )
+    local bot  = flr(( center.y + self.radius ) / 8 )
 
-        local mapsprite = mapatworld( corner )
-        if self:shouldcollidewithmapsprite( mapsprite ) then
+    local stepx = sign( self.vel.x )
+    local stepy = sign( self.vel.y )
 
-            -- colliding. move out.
+    local startx = stepx > 0 and left or right
+    local endx = stepx > 0 and right or left
+    local starty = stepy > 0 and top or bot
+    local endy = stepy > 0 and bot or top
 
-            self.pos = self.pos - offset
+    for y = starty, endy, stepy do
+        for x = startx, endx, stepx do
+            local global_map_location = level:maplocaltoglobal( vector:new( x, y ))
 
-            -- todo bounce
+            local mapsprite = mget( global_map_location.x, global_map_location.y )
+            if self:shouldcollidewithmapsprite( mapsprite ) then
+                self:resolve_map_collision( x, y )
+            end
         end
-
-        offset = offset:perpendicular()
     end
 
 end
@@ -389,11 +447,15 @@ function level:eachbody( apply )
     end
 end
 
+function level:maplocaltoglobal( pos )
+    return pos + self.mapul
+end
+
 function level:updatecollisions()
 
     -- body-to-world collision
     self:eachbody( function( body )
-        body:updateworldcollision()
+        body:updateworldcollision( self )
     end )
 
     -- body-to-body collision
@@ -448,14 +510,14 @@ function create_level0()
 
     local cue_ball = body:new( 5*8, 9*8, 4 )
     local cue_ball_vis = ballvis:new( cue_ball, 6 )
-
-    local target_ball = body:new( 13*8, 4*8, 4 )
-    local target_ball_vis = ballvis:new( target_ball, 1 )
-
-    cue_ball:addimpulse( vector:new( 1.2, -1.5 ))
-
     newlevel:add_body( cue_ball, cue_ball_vis )
-    newlevel:add_body( target_ball, target_ball_vis )
+
+    -- local target_ball = body:new( 13*8, 4*8, 4 )
+    -- local target_ball_vis = ballvis:new( target_ball, 1 )
+    -- newlevel:add_body( target_ball, target_ball_vis )
+
+    cue_ball:addimpulse( vector:new( 5, -1.5 ))
+
 
     return newlevel
 end
