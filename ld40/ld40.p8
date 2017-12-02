@@ -205,7 +205,7 @@ function body:new( x, y, radius )
         acc = vector:new( 0, 0 ),
         mass = 1.0,
         radius = radius,
-        drag = 0.02,
+        drag = 0.015,
         restitution = 0.95,
     }
 
@@ -272,6 +272,30 @@ function body:resolve_map_collision( levelmapx, levelmapy )
         vector:new( ( levelmapx + 1 ) * 8, ( levelmapy + 1 ) * 8 ))
 end
 
+function axial_step( left, right, top, bot, vel, fn )
+    local stepx = sign_no_zero( vel.x )
+    local stepy = sign_no_zero( vel.y )
+
+    local startx = stepx > 0 and left or right
+    local endx = stepx > 0 and right or left
+    local starty = stepy > 0 and top or bot
+    local endy = stepy > 0 and bot or top
+
+    if abs( vel.x ) > abs( vel.y ) then
+        for y = starty, endy, stepy do
+            for x = startx, endx, stepx do
+                fn( x, y )
+            end
+        end
+    else
+        for x = startx, endx, stepx do
+            for y = starty, endy, stepy do
+                fn( x, y )
+            end
+        end
+    end
+end
+
 function body:updateworldcollision( level )
 
     local center = self.pos
@@ -283,24 +307,14 @@ function body:updateworldcollision( level )
     local right= flr(( center.x + self.radius ) / 8 )
     local bot  = flr(( center.y + self.radius ) / 8 )
 
-    local stepx = sign_no_zero( self.vel.x )
-    local stepy = sign_no_zero( self.vel.y )
+    axial_step( left, right, top, bot, self.vel, function( x, y )
+        local global_map_location = level:maplocaltoglobal( vector:new( x, y ))
 
-    local startx = stepx > 0 and left or right
-    local endx = stepx > 0 and right or left
-    local starty = stepy > 0 and top or bot
-    local endy = stepy > 0 and bot or top
-
-    for y = starty, endy, stepy do
-        for x = startx, endx, stepx do
-            local global_map_location = level:maplocaltoglobal( vector:new( x, y ))
-
-            local mapsprite = mget( global_map_location.x, global_map_location.y )
-            if self:shouldcollidewithmapsprite( mapsprite ) then
-                self:resolve_map_collision( x, y )
-            end
+        local mapsprite = mget( global_map_location.x, global_map_location.y )
+        if self:shouldcollidewithmapsprite( mapsprite ) then
+            self:resolve_map_collision( x, y )
         end
-    end
+    end)
 
 end
 
