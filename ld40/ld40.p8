@@ -22,8 +22,20 @@ function rel_color( base, change )
     elseif change > 0 then
         return rel_color( brighten_table[base+1], change - 1 )
     else
-        return rel_color(   darken_table[base+1], change - 1 )
+        return rel_color(   darken_table[base+1], change + 1 )
     end
+end
+
+function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
+    for i = 0,15 do
+        pal( i, rel_color( i, -darkness ))
+    end
+
+    fn( x + offsetx, y + offsety )
+
+    pal()
+
+    fn( x, y )
 end
 
 -- object oriented infrastructure. see http://lua-users.org/wiki/inheritancetutorial
@@ -373,7 +385,10 @@ function ballvis:draw()
     local p = self.body.pos
     local r = self.body.radius
 
-    circfill( p.x, p.y, r, self.basecolor )
+    draw_shadowed( p.x, p.y, r/4*0.8, r/4, 2, function( x, y)
+        circfill( x, y, r, self.basecolor )
+    end )
+
     circfill( p.x - 0.1*r, p.y - 0.15*r, r * 0.75, rel_color( self.basecolor, 1 ))
     circfill( p.x - 0.2*r, p.y - 0.4*r, r * 0.25, rel_color( self.basecolor, 2 ))
 end
@@ -548,12 +563,13 @@ function create_level0()
     local cue_ball = body:new( 5*8, 9*8, 4 )
     local cue_ball_vis = ballvis:new( cue_ball, 6 )
     newlevel:add_body( cue_ball, cue_ball_vis )
-    cue_ball:addimpulse( vector:new( 5, -1.5 ))
+    cue_ball:addimpulse( vector:new( randinrange(-5,5), randinrange(-5,5) ))
 
     for i = 1,5 do
         local target_ball = body:new( randinrange(2,12)*8, randinrange(2,12)*8, randinrange(1,6) )
         local target_ball_vis = ballvis:new( target_ball, flr(randinrange(0,16)) )
         newlevel:add_body( target_ball, target_ball_vis )
+        target_ball:addimpulse( vector:new( randinrange(-5,5), randinrange(-5,5) ))
     end
 
 
