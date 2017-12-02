@@ -254,3 +254,63 @@ Play -> Difficulty, name, etc. -> Game
 
 
 12:55 AM Time for bed.
+8:34 AM Sat UP!
+
+8:50 AM Starting over.
+
+Sadly, I've realized I'm just not that motivated about this game. I personally am, but it's the wrong venue for the right game. No one will care about this game. For LD40 I need to make one that is simple, fun to work on, fun to play, and appealing.
+
+-------------------------
+
+Okay, so what are some other ideas? With or without the theme?
+
+8:52 Thinking, running errands.
+
+10:28 Back from errands. Not overwhelmingly inspired.
+
+Heavy on particles. Pixel sand interesting. Grayscale with bright accents interesting.
+
+Explosive pool. Like miniature golf but with explosives of various kinds.
+
+A few levels, bespoke. Elements: barriers. Slopes? Water? Hole.
+
+Props: Balls, non-destructible and destructible. Chunks. Barrels. Cue ball is explosive; target ball isn't. Player is physically there, so avoiding self-destruction is important. Triggered timed explosive is the main component. So:
+
+Ball
+    radius
+    min trigger force
+    explosion delay
+    explosive power
+    explosion num chunks range
+
+Particles for soot, scorch, and fire etc.
+
+Are we dropping a ball in a hole? Or blowing something up? If something, what? If a hole, is it adequate to get anything into the hole or not, and if not, how do you reject incorrect things?
+
+If we can think of a non-repulsive thing to blow up, let's plan on that. Could let the player choose from various options, but it's work. What is truly good to blow up? Not much.
+
+Yeah, no, let's make it a hole, and only the target ball belongs there. Other things can fall in there but they invalidate the level. "(ball) only"
+
+Cells can have slope, incl diagonal, showed with shading.
+
+Interface: move character. Press X to "strike" the ball. Move character again. Camera keeps ball and character in view (preference to character).
+
+Subsequent tries remember and show last try (or start you there).
+
+So, tasks:
+
+10:48
+
+* Ball rendering and physics
+* Level rendering and physics
+* Striking interface
+* Hole/goal
+* Explosive physics
+* Level restart etc.
+* SFX
+* Music
+* Title screen
+* Corporeal player sprite, movement, interface, death, etc. (lower priority)
+
+10:50 DMV
+
