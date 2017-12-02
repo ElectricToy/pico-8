@@ -7,6 +7,15 @@ __lua__
 
 -- general utilities
 
+debug_text = ''
+function debug_print( text )
+    debug_text = text
+end
+
+function del_index( table, index )
+    del( table, table[ index ])
+end
+
 -- object oriented infrastructure. see http://lua-users.org/wiki/inheritancetutorial
 
 function inheritsfrom( baseclass )
@@ -210,14 +219,30 @@ function view:move_selection( move )
     end
 end
 
+function view:execute_selection()
+    if not self.selected_child then
+        return self
+    end
+
+    return self.selected_child
+end
+
+function view:update()
+    for child in all(self.children) do
+        child:update()
+    end
+end
+
 function view:draw( offset )
     local base = offset + self.origin
 
     -- draw the background
-    fillp( self.pattern )
-    local background_color = bor( self.bgcolor, shl( self.pattern and self.patterncolor or 0, 4 ))
-    rectfill( base.x, base.y, base.x + self.size.x - 1, base.y + self.size.y - 1, background_color )
-    fillp()
+    if self.bgcolor then
+        fillp( self.pattern )
+        local background_color = bor( self.bgcolor, shl( self.pattern and self.patterncolor or 0, 4 ))
+        rectfill( base.x, base.y, base.x + self.size.x - 1, base.y + self.size.y - 1, background_color )
+        fillp()
+    end
 
     -- draw the border
     local border_color = self.is_selected and self.selectedborder or self.border
@@ -259,7 +284,20 @@ local MAIN_SUBVIEW_WIDTH = 42
 local window = view:new( 0,0,128,128 )
 window.border = nil
 
-local focus_host = window
+local focus_stack = { window }
+function focus_host()
+    return focus_stack[ #focus_stack ]
+end
+function focus_push( host )
+    if host and focus_host() ~= host then
+        add( focus_stack, host )
+    end
+end
+function focus_pop()
+    if #focus_stack > 1 then
+        del_index( focus_stack, #focus_stack )
+    end
+end
 
 local status_bar = view:new( 0, 0, 128, STATUS_BAR_HEIGHT )
 status_bar.is_selectable = true
@@ -297,6 +335,15 @@ possessions_view.text = "stuff"
 possessions_view.bgcolor = 1
 
 
+-- debugging
+local debug_view = view:new( 0, 0, 128, 16 )
+add( window.children, debug_view )
+debug_view.bgcolor = nil
+debug_view.border = nil
+debug_view.text_color = 8
+debug_view.textalignment = "right"
+
+
 -- updating
 
 function _update60()
@@ -314,13 +361,24 @@ function _update60()
         selection_move.y = 1
     end
 
-    focus_host:move_selection( selection_move )
+    focus_host():move_selection( selection_move )
+
+    if btnp(5) then -- X
+        focus_push( focus_host():execute_selection() )
+    end
+    if btnp(4) then -- Z
+        focus_pop()
+    end
+
+    window:update()
 end
 
 -- drawing
 function _draw()
     cls()
+    debug_view.text = debug_text    
     window:draw( vector:new( 0, 0 ))
+
 end
 
 
