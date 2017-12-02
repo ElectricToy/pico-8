@@ -156,6 +156,10 @@ function sign( x )
     return x > 0 and 1 or ( x < 0 and -1 or 0 )
 end
 
+function sign_no_zero( x )
+    return x >= 0 and 1 or -1
+end
+
 function is_close( a, b, maxdist )
     local delta = b - a
 
@@ -188,7 +192,7 @@ end
 -- physics
 
 local body = inheritsfrom( nil )
-local max_body_speed = 5
+local max_body_speed = 3
 local max_body_speed_squared = max_body_speed * max_body_speed
 
 function body:new( x, y, radius )
@@ -279,8 +283,8 @@ function body:updateworldcollision( level )
     local right= flr(( center.x + self.radius ) / 8 )
     local bot  = flr(( center.y + self.radius ) / 8 )
 
-    local stepx = sign( self.vel.x )
-    local stepy = sign( self.vel.y )
+    local stepx = sign_no_zero( self.vel.x )
+    local stepy = sign_no_zero( self.vel.y )
 
     local startx = stepx > 0 and left or right
     local endx = stepx > 0 and right or left
@@ -511,12 +515,13 @@ function create_level0()
     local cue_ball = body:new( 5*8, 9*8, 4 )
     local cue_ball_vis = ballvis:new( cue_ball, 6 )
     newlevel:add_body( cue_ball, cue_ball_vis )
-
-    -- local target_ball = body:new( 13*8, 4*8, 4 )
-    -- local target_ball_vis = ballvis:new( target_ball, 1 )
-    -- newlevel:add_body( target_ball, target_ball_vis )
-
     cue_ball:addimpulse( vector:new( 5, -1.5 ))
+
+    for i = 1,5 do
+        local target_ball = body:new( randinrange(2,12)*8, randinrange(2,12)*8, randinrange(1,6) )
+        local target_ball_vis = ballvis:new( target_ball, 1 )
+        newlevel:add_body( target_ball, target_ball_vis )
+    end
 
 
     return newlevel
