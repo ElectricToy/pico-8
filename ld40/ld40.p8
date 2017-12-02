@@ -150,8 +150,8 @@ function view:new(x,y,w,h)
         pattern = 0,
         patterncolor = 0,
         border = 6,
-        border_inset = 2,
-        margin = 4,
+        border_inset = 1,
+        margin = 3,
         highlightedborder = 7,
         is_highlighted = false,
         children = {},
@@ -166,18 +166,20 @@ function view:draw( offset )
     local base = offset + self.origin
 
     -- draw the background
-    fillp( pattern )
+    fillp( self.pattern )
     local background_color = bor( self.bgcolor, shl( self.pattern and self.patterncolor or 0, 4 ))
-    rectfill( base.x, base.y, base.x + self.size.x, base.y + self.size.y, background_color )
+    rectfill( base.x, base.y, base.x + self.size.x - 1, base.y + self.size.y - 1, background_color )
     fillp()
 
     -- draw the border
     local border_color = self.is_highlighted and self.highlightedborder or self.border
-    rect( base.x + self.border_inset, 
-          base.y + self.border_inset, 
-          base.x + self.size.x - self.border_inset - 1, 
-          base.y + self.size.y - self.border_inset - 1, 
-          border_color )
+    if border_color then
+        rect( base.x + self.border_inset, 
+              base.y + self.border_inset, 
+              base.x + self.size.x - self.border_inset - 1, 
+              base.y + self.size.y - self.border_inset - 1, 
+              border_color )
+    end
 
     -- draw any text
     local view_span_width = self.size.x - (( self.border_inset + self.margin ) * 2)
@@ -203,9 +205,42 @@ end
 -->8
 -- ui setup
 
+local STATUS_BAR_HEIGHT = 8
+local HELP_BAR_HEIGHT = 8
+local MAIN_SUBVIEW_WIDTH = 42
+
 local window = view:new( 0,0,128,128 )
-window.text = "four score and seven years ago"
-window.textalignment = "center"
+window.border = nil
+
+local status_bar = view:new( 0, 0, 128, STATUS_BAR_HEIGHT )
+status_bar.border = nil
+status_bar.border_inset = 0
+status_bar.margin = 2
+status_bar.bgcolor = 13
+-- status_bar.pattern = 0b1010010110100101
+-- status_bar.patterncolor = 1
+add( window.children, status_bar )
+
+local help_bar = view:new( 0, 128 - HELP_BAR_HEIGHT, 128, HELP_BAR_HEIGHT )
+help_bar.bgcolor = 5
+help_bar.border = nil
+help_bar.border_inset = 0
+help_bar.margin = 2
+
+add( window.children, help_bar )
+
+local family_view = view:new( 0, STATUS_BAR_HEIGHT, MAIN_SUBVIEW_WIDTH, 128 - ( STATUS_BAR_HEIGHT + HELP_BAR_HEIGHT ))
+add( window.children, family_view )
+family_view.text = "family"
+
+local accounts_view = view:new( MAIN_SUBVIEW_WIDTH + 1, STATUS_BAR_HEIGHT, MAIN_SUBVIEW_WIDTH, 128 - ( STATUS_BAR_HEIGHT + HELP_BAR_HEIGHT ))
+add( window.children, accounts_view )
+accounts_view.text = "accounts"
+
+local possessions_view = view:new( 128 - MAIN_SUBVIEW_WIDTH, STATUS_BAR_HEIGHT, MAIN_SUBVIEW_WIDTH, 128 - ( STATUS_BAR_HEIGHT + HELP_BAR_HEIGHT ))
+add( window.children, possessions_view )
+possessions_view.text = "stuff"
+
 
 -->8
 -- updating
