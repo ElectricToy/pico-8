@@ -402,7 +402,8 @@ function level:new()
         visualizations = {},
         mapul = vector:new( 0, 0 ),
         mapbr = vector:new( 6, 4 ),
-        tidied = false
+        tidied = false,
+        paused = true,
     }
     return setmetatable( newobj, self )
 end
@@ -525,6 +526,8 @@ function level:update()
         self:tidy()
     end
 
+    if self.paused then return end
+
     self:eachbody( function( body )
         body:update()
     end )
@@ -555,6 +558,73 @@ function level:draw()
     end
 end
 
+local shooter = {
+    active = true,
+    angle = 0,
+    dist = 20,
+    power = 0.05,
+}
+function shooter:attach( level, ball )
+    self.active = true
+    self.level = level
+    self.ball = ball
+    level.paused = true
+end
+
+function shooter:update()
+    if not self.active then return end
+
+    local rot_speed = 0.01
+    local length_speed = 1
+
+    if btn(0) then
+        self.angle += rot_speed
+    end
+    if btn(1) then
+        self.angle -= rot_speed
+    end
+    if btn(2) then
+        self.dist -= length_speed
+    end
+    if btn(3) then
+        self.dist += length_speed
+    end
+
+    self.dist = clamp( self.dist, self.ball.radius + 4, 40 )
+
+    if btnp(4) then
+        self:shoot()
+    end
+end
+
+function shooter:delta()
+    return vector:new( sin( self.angle ) * self.dist, cos( self.angle ) * self.dist )
+end
+
+function shooter:impulse()
+    return self:delta() * -vector:new( self.power, self.power )
+end
+
+function shooter:position()
+    return self.ball.pos + self:delta()
+end
+
+function shooter:shoot()
+    self.level.paused = false
+    self.active = false
+
+    self.ball:addimpulse( self:impulse() )
+end
+
+function shooter:draw()
+    if not self.active then return end
+
+    local pos = self:position()
+
+    line( pos.x, pos.y, self.ball.pos.x, self.ball.pos.y, 5 )
+end
+
+-- levels
 function create_level0()
 
     local newlevel = level:new()
@@ -563,15 +633,12 @@ function create_level0()
     local cue_ball = body:new( 5*8, 9*8, 4 )
     local cue_ball_vis = ballvis:new( cue_ball, 6 )
     newlevel:add_body( cue_ball, cue_ball_vis )
-    cue_ball:addimpulse( vector:new( randinrange(-5,5), randinrange(-5,5) ))
 
-    for i = 1,5 do
-        local target_ball = body:new( randinrange(2,12)*8, randinrange(2,12)*8, randinrange(1,6) )
-        local target_ball_vis = ballvis:new( target_ball, flr(randinrange(0,16)) )
-        newlevel:add_body( target_ball, target_ball_vis )
-        target_ball:addimpulse( vector:new( randinrange(-5,5), randinrange(-5,5) ))
-    end
+    local target_ball = body:new( 13*8, 4*8, 4 )
+    local target_ball_vis = ballvis:new( target_ball, 8 )
+    newlevel:add_body( target_ball, target_ball_vis )
 
+    shooter:attach( newlevel, cue_ball )
 
     return newlevel
 end
@@ -580,6 +647,7 @@ local current_level = create_level0()
 
 -- update 
 function _update60()
+    shooter:update()
     current_level:update()
 end
 
@@ -588,6 +656,8 @@ function _draw()
     cls()
 
     current_level:draw()
+
+    shooter:draw()
 
     -- debug text
     print( debug_text, 8, 8, 8 )
