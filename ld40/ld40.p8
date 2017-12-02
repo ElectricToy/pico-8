@@ -568,11 +568,14 @@ function shooter:attach( level, ball )
     self.active = true
     self.level = level
     self.ball = ball
+    self.updates = 0
     level.paused = true
 end
 
 function shooter:update()
     if not self.active then return end
+
+    self.updates += 1
 
     local rot_speed = 0.01
     local length_speed = 1
@@ -590,7 +593,7 @@ function shooter:update()
         self.dist += length_speed
     end
 
-    self.dist = clamp( self.dist, self.ball.radius + 4, 40 )
+    self.dist = clamp( self.dist, self.ball.radius + 6, 40 )
 
     if btnp(4) then
         self:shoot()
@@ -619,9 +622,32 @@ end
 function shooter:draw()
     if not self.active then return end
 
+    local ballpos = self.ball.pos
     local pos = self:position()
+    local delt = self:delta()
+    local normal = delt:normal()
 
-    line( pos.x, pos.y, self.ball.pos.x, self.ball.pos.y, 5 )
+    local circle_size = self.ball.radius + 3
+    circ( ballpos.x, ballpos.y, circle_size, 5 )
+
+    local dest = ballpos + normal * vector:new( circle_size, circle_size )
+    local dist = (dest - pos):length()
+
+    -- draw dashed line
+    local step = 3
+    local step2 = step*2
+    for i = wrap( self.updates * 0.2, 0, step2 ),dist,step2 do
+
+        local p = pos - normal * vector:new( i, i )
+
+        local adjustedstep = min( i + step, dist - 1)
+
+        local j = adjustedstep
+
+        local q = pos - normal * vector:new( j, j )
+
+        line( p.x, p.y, q.x, q.y, 5 )
+    end
 end
 
 -- levels
