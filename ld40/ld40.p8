@@ -256,6 +256,12 @@ function body:update()
         self.vel = self.vel:normal() * vector:new( max_body_speed, max_body_speed )
     end
 
+    -- cut off minimal velocity
+    local min_velocity = 0.01
+    if self.vel:manhattanlength() < min_velocity then
+        self.vel = vector:new( 0, 0 )
+    end
+
     self.pos = self.pos + self.vel
 
     self.acc.x = 0
@@ -653,7 +659,7 @@ function shooter:draw()
 
         local p = pos - normal * vector:new( i, i )
 
-        local adjustedstep = min( i + step, dist - 1)
+        local adjustedstep = min( i + step, dist - 1 )
 
         local j = adjustedstep
 

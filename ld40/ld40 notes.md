@@ -315,3 +315,8 @@ So, tasks:
 10:50 DMV
 
 1:22 PM Lunch
+
+4:13 PM Fun, but starting to get tired. Taking a break.
+
+4:51 PM. Back! I've got maybe half an hour before the CE Christmas party.
+
