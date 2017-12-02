@@ -221,10 +221,11 @@ local body = inheritsfrom( nil )
 local max_body_speed = 3
 local max_body_speed_squared = max_body_speed * max_body_speed
 
-function body:new( x, y, radius )
+function body:new( level, x, y, radius )
     assert( radius >= 0 )
 
     local newobj = { 
+        level = level,
         alive = true,
         pos = vector:new( x, y ),
         vel = vector:new( 0, 0 ),
@@ -233,7 +234,10 @@ function body:new( x, y, radius )
         radius = radius,
         drag = 0.015,
         restitution = 0.95,
+        explosion_power = 200
     }
+
+    add( level.bodies, newobj )
 
     return setmetatable( newobj, self )
 end
@@ -304,6 +308,19 @@ function body:resolve_map_collision( levelmapx, levelmapy )
         vector:new( ( levelmapx + 1 ) * 8, ( levelmapy + 1 ) * 8 ))
 end
 
+function body:explode()
+    -- apply a force to all other bodies
+    self.level:apply_explosion_force( self.pos, self.explosion_power )
+
+    self.alive = false
+
+    -- create chunks
+
+    -- create particles
+
+    -- create scorch marks
+end
+
 function axial_step( left, right, top, bot, vel, fn )
     local stepx = sign_no_zero( vel.x )
     local stepy = sign_no_zero( vel.y )
@@ -360,10 +377,13 @@ end
 
 local vis = inheritsfrom( nil )
 
-function vis:new( body )
+function vis:new( level, body )
     local newobj = { 
         body = body,
     }
+
+    add( level.visualizations, newobj )
+
     return setmetatable( newobj, self )
 end
 
@@ -377,8 +397,8 @@ end
 
 local ballvis = inheritsfrom( vis )
 
-function ballvis:new( body, basecolor )
-    local newobj = vis:new( body )
+function ballvis:new( level, body, basecolor )
+    local newobj = vis:new( level, body )
     newobj.basecolor = basecolor
     return setmetatable( newobj, self )
 end
@@ -412,14 +432,6 @@ function level:new()
         paused = true,
     }
     return setmetatable( newobj, self )
-end
-
-function level:add_body( body, visualization )
-    add( self.bodies, body )
-
-    if visualization then
-        add( self.visualizations, visualization )
-    end
 end
 
 function level:tidy_cell( x, y )
@@ -508,6 +520,20 @@ end
 
 function level:maplocaltoglobal( pos )
     return pos + self.mapul
+end
+
+function level:apply_explosion_force( pos, power )
+    self:eachbody( function( body ) 
+        local delta = body.pos - pos
+        local distsquared = delta:lengthsquared()
+        if distsquared == 0 then return end
+
+        local normal = delta:normal()
+
+        local adjustedpower = power / distsquared
+
+        body:addimpulse( normal * vector:new( adjustedpower, adjustedpower ) )
+    end )
 end
 
 function level:updatecollisions()
@@ -679,13 +705,11 @@ function create_level0()
     local newlevel = level:new()
     newlevel.mapbr = vector:new(16,14)
 
-    local cue_ball = body:new( 5*8, 9*8, 4 )
-    local cue_ball_vis = ballvis:new( cue_ball, 6 )
-    newlevel:add_body( cue_ball, cue_ball_vis )
+    local cue_ball = body:new( newlevel, 5*8, 9*8, 4 )
+    local cue_ball_vis = ballvis:new( newlevel, cue_ball, 6 )
 
-    local target_ball = body:new( 13*8, 4*8, 4 )
-    local target_ball_vis = ballvis:new( target_ball, 8 )
-    newlevel:add_body( target_ball, target_ball_vis )
+    local target_ball = body:new( newlevel, 13*8, 4*8, 4 )
+    local target_ball_vis = ballvis:new( newlevel, target_ball, 8 )
 
     shooter:attach( newlevel, cue_ball )
 
@@ -696,8 +720,16 @@ local current_level = create_level0()
 
 -- update 
 function _update60()
+
+    -- todo debugging
+
+    if btnp(5) then
+        current_level.bodies[1]:explode()
+    end
+
     shooter:update()
     current_level:update()
+
 end
 
 -- draw
