@@ -51,7 +51,6 @@ function inheritsfrom( baseclass )
     return new_class
 end
 
--->8
 -- vector class
 
 vector = inheritsfrom( nil )
@@ -119,7 +118,6 @@ function vector:perpendicular()
 	return vector:new( -self.y, self.x )
 end
 
--->8
 -- math
 
 function randinrange( min, max )
@@ -137,7 +135,6 @@ function clamp( x, least, greatest )
 	return min( greatest, max( least, x ))
 end
 
--->8
 -- ui system
 
 view = inheritsfrom( nil )
@@ -152,14 +149,65 @@ function view:new(x,y,w,h)
         border = 6,
         border_inset = 1,
         margin = 3,
-        highlightedborder = 7,
-        is_highlighted = false,
+        selectedborder = 7,
+        is_selectable = false,
+        is_selected = false,
         children = {},
         text = "",
         textcolor = 6,
         textalignment = "left",
+        selected_child = nil
     }
     return setmetatable( newobj, self )
+end
+
+function view:select( child )
+    if self.selected_child then
+        self.selected_child.is_selected = false
+    end
+    self.selected_child = child
+    child.is_selected = true
+end
+
+function view:move_selection( move )
+    if #self.children == 0 then
+        return
+    end
+    if move.x == 0 and move.y == 0 then
+        return
+    end
+
+    local selected = self.selected_child
+    if not selected then
+        self:select( self.children[1] )
+        return
+    end
+
+    local selected = self.selected_child
+    
+    -- which other child is nearest along the line from this one?
+    local best_score = nil
+    local best_child = nil
+    for child in all(self.children) do
+        if child.is_selectable and selected ~= child then
+            local delta = child.origin - selected.origin
+            local dist = delta:length()
+            if dist > 0 then
+                local normal = delta / vector:new( dist, dist )
+                local accuracy = normal:dot( move )
+                local score = accuracy / dist
+
+                if not best_score or score > best_score then
+                    best_score = score
+                    best_child = child
+                end
+            end
+        end
+    end
+
+    if best_child then
+        self:select( best_child )
+    end
 end
 
 function view:draw( offset )
@@ -172,7 +220,7 @@ function view:draw( offset )
     fillp()
 
     -- draw the border
-    local border_color = self.is_highlighted and self.highlightedborder or self.border
+    local border_color = self.is_selected and self.selectedborder or self.border
     if border_color then
         rect( base.x + self.border_inset, 
               base.y + self.border_inset, 
@@ -202,7 +250,6 @@ function view:draw( offset )
     end
 end
 
--->8
 -- ui setup
 
 local STATUS_BAR_HEIGHT = 8
@@ -212,13 +259,15 @@ local MAIN_SUBVIEW_WIDTH = 42
 local window = view:new( 0,0,128,128 )
 window.border = nil
 
+local focus_host = window
+
 local status_bar = view:new( 0, 0, 128, STATUS_BAR_HEIGHT )
-status_bar.border = nil
+status_bar.is_selectable = true
 status_bar.border_inset = 0
 status_bar.margin = 2
-status_bar.bgcolor = 13
+status_bar.bgcolor = 4
 -- status_bar.pattern = 0b1010010110100101
--- status_bar.patterncolor = 1
+-- status_bar.patterncolor = 0
 add( window.children, status_bar )
 
 local help_bar = view:new( 0, 128 - HELP_BAR_HEIGHT, 128, HELP_BAR_HEIGHT )
@@ -230,22 +279,44 @@ help_bar.margin = 2
 add( window.children, help_bar )
 
 local family_view = view:new( 0, STATUS_BAR_HEIGHT, MAIN_SUBVIEW_WIDTH, 128 - ( STATUS_BAR_HEIGHT + HELP_BAR_HEIGHT ))
+family_view.is_selectable = true
 add( window.children, family_view )
 family_view.text = "family"
+family_view.bgcolor = 2
 
 local accounts_view = view:new( MAIN_SUBVIEW_WIDTH + 1, STATUS_BAR_HEIGHT, MAIN_SUBVIEW_WIDTH, 128 - ( STATUS_BAR_HEIGHT + HELP_BAR_HEIGHT ))
+accounts_view.is_selectable = true
 add( window.children, accounts_view )
 accounts_view.text = "accounts"
+accounts_view.bgcolor = 3
 
 local possessions_view = view:new( 128 - MAIN_SUBVIEW_WIDTH, STATUS_BAR_HEIGHT, MAIN_SUBVIEW_WIDTH, 128 - ( STATUS_BAR_HEIGHT + HELP_BAR_HEIGHT ))
+possessions_view.is_selectable = true
 add( window.children, possessions_view )
 possessions_view.text = "stuff"
+possessions_view.bgcolor = 1
 
 
--->8
 -- updating
 
--->8
+function _update60()
+    local selection_move = vector:new(0,0)
+    if btnp(0) then  -- left
+        selection_move.x = -1
+    end
+    if btnp(1) then  -- right
+        selection_move.x = 1
+    end
+    if btnp(2) then  -- up
+        selection_move.y = -1
+    end
+    if btnp(3) then  -- down
+        selection_move.y = 1
+    end
+
+    focus_host:move_selection( selection_move )
+end
+
 -- drawing
 function _draw()
     cls()
