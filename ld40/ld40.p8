@@ -140,6 +140,25 @@ function clamp( x, least, greatest )
     return min( greatest, max( least, x ))
 end
 
+function is_close( a, b, maxdist )
+    local delta = b - a
+
+    local manhattanlength = delta:manhattanlength()
+    if manhattanlength > maxdist * 1.8 then     -- adding a fudge factor to account for diagonals.
+        return false
+    end
+
+    if manhattanlength > 180 then
+        printh( "objects may be close but we don't have the numeric precision to decide. ignoring." )
+        return false
+    end
+
+    local distsquared = delta:lengthsquared()
+
+    return distsquared <= maxdist * maxdist
+end
+
+
 function worldtomap( worldpos )
     local pos = worldpos / vector:new( 8, 8 )
     return vector:new( flr( pos.x ), flr( pos.y ))
@@ -153,6 +172,8 @@ end
 -- physics
 
 local body = inheritsfrom( nil )
+local max_body_speed = 10
+local max_body_speed_squared = max_body_speed * max_body_speed
 
 function body:new( x, y, radius )
     assert( radius >= 0 )
@@ -164,7 +185,7 @@ function body:new( x, y, radius )
         acc = vector:new( 0, 0 ),
         mass = 1.0,
         radius = radius,
-        drag = 0.05,
+        drag = 0.02,
     }
 
     return setmetatable( newobj, self )
@@ -182,6 +203,12 @@ function body:update()
 
     self.acc = self.acc - self.vel * vector:new( drag, drag )
     self.vel = self.vel + self.acc
+
+    -- clamp velocity to a maximum
+    if self.vel:lengthsquared() > max_body_speed_squared then
+        self.vel = self.vel:normal() * vector:new( max_body_speed, max_body_speed )
+    end
+
     self.pos = self.pos + self.vel
 
     self.acc.x = 0
@@ -291,24 +318,117 @@ function level:tidy()
     end
 end
 
+function collidebodies( a, b )
+    -- overlapping?
+
+    local minoverlapdistance = a.radius + b.radius
+
+    if is_close( b.pos, a.pos, minoverlapdistance ) == false then
+        return
+    end
+
+    -- overlapping. resolve collision.
+
+    local totalmass = a.mass + b.mass
+
+    if totalmass <= 0 then
+        -- both immoveable. nothing to do.
+        return
+    end
+
+    local massproportiona = a.mass / totalmass
+    local massproportionb = 1.0 - massproportiona
+
+    if a.mass <= 0 then
+        massproportiona = 1
+        massproportionb = 0
+    elseif b.mass <= 0 then
+        massproportiona = 0
+        massproportionb = 1
+    end
+
+    local delta = b.pos - a.pos
+    local dist = delta:length()
+
+    -- degenerate?
+    if dist <= 0 then
+        return true
+    end
+
+    local overlapdistance = minoverlapdistance - dist
+
+    local normal = delta:normal()
+
+    -- already moving apart?
+
+    -- if a.vel:dot( b.vel ) > 0 then
+    --  return
+    -- end
+
+    -- reposition to not overlap.
+
+    local adjustmentdist = overlapdistance + 1
+
+    a.pos = a.pos - normal * vector:new( adjustmentdist * massproportionb, adjustmentdist * massproportionb )
+    b.pos = b.pos + normal * vector:new( adjustmentdist * massproportiona, adjustmentdist * massproportiona )
+
+    -- impulse to bounce velocity.
+
+    local force = a.vel:dot( normal ) * a.mass + b.vel:dot( -normal ) * b.mass
+
+    a:addimpulse( normal * vector:new( -force, -force ))
+    b:addimpulse( normal * vector:new(  force,  force ))
+
+end
+
+function level:eachbody( apply )
+    for body in all( self.bodies ) do
+        if body.alive then
+            apply( body )
+        end
+    end
+end
+
+function level:updatecollisions()
+
+    -- body-to-world collision
+    self:eachbody( function( body )
+        body:updateworldcollision()
+    end )
+
+    -- body-to-body collision
+
+    for i = 1, #self.bodies - 1 do
+        for j = i + 1, #self.bodies do
+            collidebodies( self.bodies[ i ], self.bodies[ j ] )
+        end
+    end
+end
+
 function level:update()
     if not self.tidied then
         self.tidied = true
         self:tidy()
     end
 
+    self:eachbody( function( body )
+        body:update()
+    end )
+
+    for iteration = 1,1 do
+        self:updatecollisions()
+    end
+
+    -- remove dead bodies
     for body in all( self.bodies ) do
         body:update()
         if not body.alive then
             del( self.bodies, body )
         end
-    end
+    end    
 end
 
 function level:draw()
-    -- position the camera
-    -- todo
-
     -- draw the map
     map( self.mapul.x, self.mapul.y, 0, 0, self.mapbr.x - self.mapul.x, self.mapbr.y - self.mapul.y )
 
@@ -326,12 +446,16 @@ function create_level0()
     local newlevel = level:new()
     newlevel.mapbr = vector:new(16,14)
 
-    local cue_ball = body:new( 32, 24, 4 )
+    local cue_ball = body:new( 5*8, 9*8, 4 )
     local cue_ball_vis = ballvis:new( cue_ball, 6 )
 
-    cue_ball:addimpulse( vector:new( 1, 0.5 ))
+    local target_ball = body:new( 13*8, 4*8, 4 )
+    local target_ball_vis = ballvis:new( target_ball, 1 )
+
+    cue_ball:addimpulse( vector:new( 1.2, -1.5 ))
 
     newlevel:add_body( cue_ball, cue_ball_vis )
+    newlevel:add_body( target_ball, target_ball_vis )
 
     return newlevel
 end
