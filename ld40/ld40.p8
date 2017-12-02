@@ -5,8 +5,6 @@ __lua__
 -- by jeff wofford 
 -- http://www.electrictoy.co
 
-
--->8
 -- general utilities
 
 -- object oriented infrastructure. see http://lua-users.org/wiki/inheritancetutorial
@@ -53,7 +51,7 @@ function inheritsfrom( baseclass )
     return new_class
 end
 
-
+-->8
 -- vector class
 
 vector = inheritsfrom( nil )
@@ -121,7 +119,8 @@ function vector:perpendicular()
 	return vector:new( -self.y, self.x )
 end
 
--- utilities 
+-->8
+-- math
 
 function randinrange( min, max )
 	assert( max >= min )
@@ -137,6 +136,87 @@ function clamp( x, least, greatest )
 	assert( greatest >= least )
 	return min( greatest, max( least, x ))
 end
+
+-->8
+-- ui system
+
+view = inheritsfrom( nil )
+
+function view:new(x,y,w,h)
+    local newobj = { 
+        origin = vector:new( x, y ),
+        size = vector:new( w, h ),
+        bgcolor = 1,
+        pattern = 0,
+        patterncolor = 0,
+        border = 6,
+        border_inset = 2,
+        margin = 4,
+        highlightedborder = 7,
+        is_highlighted = false,
+        children = {},
+        text = "",
+        textcolor = 6,
+        textalignment = "left",
+    }
+    return setmetatable( newobj, self )
+end
+
+function view:draw( offset )
+    local base = offset + self.origin
+
+    -- draw the background
+    fillp( pattern )
+    local background_color = bor( self.bgcolor, shl( self.pattern and self.patterncolor or 0, 4 ))
+    rectfill( base.x, base.y, base.x + self.size.x, base.y + self.size.y, background_color )
+    fillp()
+
+    -- draw the border
+    local border_color = self.is_highlighted and self.highlightedborder or self.border
+    rect( base.x + self.border_inset, 
+          base.y + self.border_inset, 
+          base.x + self.size.x - self.border_inset - 1, 
+          base.y + self.size.y - self.border_inset - 1, 
+          border_color )
+
+    -- draw any text
+    local view_span_width = self.size.x - (( self.border_inset + self.margin ) * 2)
+    local text_pixel_width = #self.text * 4
+    local text_offset_x = 0
+    if self.textalignment == "center" then
+        text_offset_x = view_span_width / 2 - text_pixel_width / 2
+    elseif self.textalignment == "right" then
+        text_offset_x = view_span_width - text_pixel_width
+    end
+
+    print( self.text, 
+           base.x + self.border_inset + self.margin + text_offset_x,
+           base.y + self.border_inset + self.margin,
+           self.textcolor )
+
+    -- draw children
+    for child in all(self.children) do
+        child:draw( base )
+    end
+end
+
+-->8
+-- ui setup
+
+local window = view:new( 0,0,128,128 )
+window.text = "four score and seven years ago"
+window.textalignment = "center"
+
+-->8
+-- updating
+
+-->8
+-- drawing
+function _draw()
+    cls()
+    window:draw( vector:new( 0, 0 ))
+end
+
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
