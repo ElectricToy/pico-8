@@ -150,10 +150,198 @@ function mapatworld( worldpos )
     return mget( mappos.x, mappos.y )
 end
 
--- classes
+-- physics
+
+local body = inheritsfrom( nil )
+
+function body:new( x, y, radius )
+    assert( radius >= 0 )
+
+    local newobj = { 
+        alive = true,
+        pos = vector:new( x, y ),
+        vel = vector:new( 0, 0 ),
+        acc = vector:new( 0, 0 ),
+        mass = 1.0,
+        radius = radius,
+        drag = 0.05,
+    }
+
+    return setmetatable( newobj, self )
+end
+
+function body:currentdrag()
+    -- local grounddrag = is_water( worldtomap( self.pos )) and 0.25 or 0
+    -- return clamp( self.drag + grounddrag, 0, 1 )
+    return self.drag        -- todo
+end
+
+function body:update()
+
+    local drag = self:currentdrag()
+
+    self.acc = self.acc - self.vel * vector:new( drag, drag )
+    self.vel = self.vel + self.acc
+    self.pos = self.pos + self.vel
+
+    self.acc.x = 0
+    self.acc.y = 0
+end
+
+function body:shouldcollidewithmapsprite( mapsprite )
+    return fget( mapsprite, 0x8 )
+end
+
+function body:updateworldcollision()
+
+    local center = self.pos
+    local offset = vector:new( self.radius, 0 )
+
+    for i = 0, 3 do
+        local corner = center + offset
+
+        local mapsprite = mapatworld( corner )
+        if self:shouldcollidewithmapsprite( mapsprite ) then
+
+            -- colliding. move out.
+
+            self.pos = self.pos - offset
+
+            -- todo bounce
+        end
+
+        offset = offset:perpendicular()
+    end
+
+end
+
+function body:addimpulse( impulse )
+    if self.mass > 0 then
+        self.acc = self.acc + impulse / vector:new( self.mass, self.mass )
+    end
+end
+
+-- rendering
+
+local vis = inheritsfrom( nil )
+
+function vis:new( body )
+    local newobj = { 
+        body = body,
+    }
+    return setmetatable( newobj, self )
+end
+
+function vis:alive()
+    return self.body and self.body.alive
+end
+
+function vis:draw()
+    if not self:alive() then return end
+end
+
+local ballvis = inheritsfrom( vis )
+
+function ballvis:new( body, basecolor )
+    local newobj = vis:new( body )
+    newobj.basecolor = basecolor
+    return setmetatable( newobj, self )
+end
+
+function ballvis:draw()
+    if not self:alive() then return end
+
+    self:superclass().draw( self )
+
+    circfill( self.body.pos.x, self.body.pos.y, self.body.radius, self.basecolor )
+end
 
 
+-- init
+local level = inheritsfrom( nil )
+function level:new()
+    local newobj = { 
+        bodies = {},
+        visualizations = {},
+        mapul = vector:new( 0, 0 ),
+        mapbr = vector:new( 6, 4 ),
+        tidied = false
+    }
+    return setmetatable( newobj, self )
+end
 
+function level:add_body( body, visualization )
+    add( self.bodies, body )
+
+    if visualization then
+        add( self.visualizations, visualization )
+    end
+end
+
+function level:tidy_cell( x, y )
+    local cell_sprite_index = mget( x, y )
+    -- todo
+end
+
+function level:tidy()
+    for y = self.mapul.y, self.mapbr.y do
+        for x = self.mapul.x, self.mapbr.x do
+            self:tidy_cell( x, y )
+        end
+    end
+end
+
+function level:update()
+    if not self.tidied then
+        self.tidied = true
+        self:tidy()
+    end
+
+    for body in all( self.bodies ) do
+        body:update()
+        if not body.alive then
+            del( self.bodies, body )
+        end
+    end
+end
+
+function level:draw()
+    -- position the camera
+    -- todo
+
+    -- draw the map
+    map( self.mapul.x, self.mapul.y, 0, 0, self.mapbr.x - self.mapul.x, self.mapbr.y - self.mapul.y )
+
+    -- draw visualizations
+    for visualization in all( self.visualizations ) do
+        if not visualization:alive() then
+            del( self.visualizations, visualization )
+        end
+        visualization:draw()
+    end
+end
+
+function create_level0()
+
+    local newlevel = level:new()
+    newlevel.mapbr = vector:new(16,14)
+
+    local cue_ball = body:new( 32, 24, 4 )
+    local cue_ball_vis = ballvis:new( cue_ball, 6 )
+
+    cue_ball:addimpulse( vector:new( 1, 0.5 ))
+
+    newlevel:add_body( cue_ball, cue_ball_vis )
+
+    return newlevel
+end
+
+local current_level = create_level0()
+
+-- update 
+function _update60()
+    current_level:update()
+end
 
 -- draw
 function _draw()
@@ -308,8 +496,8 @@ __map__
 553d3d3d3d3d3d3d3d3d713d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d3d3d3d3d713d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d3d3d3d3d713d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d10113d3d3d3d3d713d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d20213d3d3d3d3d713d6e6f3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d3d713d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d3d713d6e6f3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d3d3d3d3d713d7e7f3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d3d3d3d3d713d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 544444444444444444445444444444543d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
