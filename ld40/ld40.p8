@@ -152,6 +152,7 @@ function view:new(x,y,w,h)
     local newobj = { 
         origin = vector:new( x, y ),
         size = vector:new( w, h ),
+        visible = true,
         bgcolor = 1,
         pattern = 0,
         patterncolor = 0,
@@ -224,7 +225,11 @@ function view:execute_selection()
         return self
     end
 
-    return self.selected_child
+    return self.selected_child:execute()
+end
+
+function view:execute()
+    return self
 end
 
 function view:update()
@@ -234,6 +239,8 @@ function view:update()
 end
 
 function view:draw( offset )
+    if not self.visible then return end
+
     local base = offset + self.origin
 
     -- draw the background
@@ -281,8 +288,26 @@ local status_bar_height = 12
 local help_bar_height = 8
 local main_subview_width = 42
 
+local window = view:new( 0,0,128,128 )
+window.border = nil
+
+local focus_stack = { window }
+function focus_host()
+    return focus_stack[ #focus_stack ]
+end
+function focus_push( host )
+    if host and focus_host() ~= host then
+        add( focus_stack, host )
+    end
+end
+function focus_pop()
+    if #focus_stack > 1 then
+        del_index( focus_stack, #focus_stack )
+    end
+end
 
 local statusbar = inheritsfrom( view )
+local statusview = inheritsfrom( view )
 
 function statusbar:new()
     local newobj = view:new( 0, 0, 128, status_bar_height )
@@ -323,31 +348,35 @@ function statusbar:draw(offset)
     -- draw age
     spr( 1, thex, they )
     print( "64", thex + text_step_x, they + text_step_y, 6 )
-
 end
 
-local window = view:new( 0,0,128,128 )
-window.border = nil
+-- statusview
 
-local focus_stack = { window }
-function focus_host()
-    return focus_stack[ #focus_stack ]
+function statusview:new()
+    local newobj = view:new( 0, 0, 128, 128 )
+    newobj.visible = false
+    newobj.is_selectable = false
+    newobj.bgcolor = 5
+
+    return setmetatable( newobj, self )
 end
-function focus_push( host )
-    if host and focus_host() ~= host then
-        add( focus_stack, host )
-    end
-end
-function focus_pop()
-    if #focus_stack > 1 then
-        del_index( focus_stack, #focus_stack )
-    end
-end
+
+-- ui object creation
 
 local status_bar = statusbar:new()
+local help_bar = view:new( 0, 128 - help_bar_height, 128, help_bar_height )
+local family_view = view:new( 0, status_bar_height, main_subview_width, 128 - ( status_bar_height + help_bar_height ))
+local accounts_view = view:new( main_subview_width + 1, status_bar_height, main_subview_width, 128 - ( status_bar_height + help_bar_height ))
+local possessions_view = view:new( 128 - main_subview_width, status_bar_height, main_subview_width, 128 - ( status_bar_height + help_bar_height ))
+local status_view = statusview:new()
+
+
+function statusbar:execute()
+    status_view.visible = true
+    return status_view
+end
 add( window.children, status_bar )
 
-local help_bar = view:new( 0, 128 - help_bar_height, 128, help_bar_height )
 help_bar.bgcolor = 5
 help_bar.border = nil
 help_bar.border_inset = 0
@@ -355,27 +384,25 @@ help_bar.margin = 2
 
 add( window.children, help_bar )
 
-local family_view = view:new( 0, status_bar_height, main_subview_width, 128 - ( status_bar_height + help_bar_height ))
 family_view.is_selectable = true
 add( window.children, family_view )
 family_view.text = "family"
 family_view.bgcolor = 2
 
-local accounts_view = view:new( main_subview_width + 1, status_bar_height, main_subview_width, 128 - ( status_bar_height + help_bar_height ))
 accounts_view.is_selectable = true
 add( window.children, accounts_view )
 accounts_view.text = "accounts"
 accounts_view.bgcolor = 3
 
-local possessions_view = view:new( 128 - main_subview_width, status_bar_height, main_subview_width, 128 - ( status_bar_height + help_bar_height ))
 possessions_view.is_selectable = true
 add( window.children, possessions_view )
 possessions_view.text = "stuff"
 possessions_view.bgcolor = 1
 
+add( window.children, status_view )
 
 -- debugging
-local debug_view = view:new( 0, 0, 128, 16 )
+local debug_view = view:new( 0, 8, 128, 16 )
 add( window.children, debug_view )
 debug_view.bgcolor = nil
 debug_view.border = nil
