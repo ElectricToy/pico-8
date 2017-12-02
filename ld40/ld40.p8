@@ -12,6 +12,20 @@ function del_index( table, index )
     del( table, table[ index ])
 end
 
+function rel_color( base, change )
+    local brighten_table = { 5, 13, 8, 11, 8, 6, 7, 7, 14, 10, 7, 7, 6, 12, 15, 7 }
+
+    local darken_table = { 0, 0, 0, 0, 0, 0, 5, 6, 2, 4, 9, 3, 13, 1, 8, 14 }
+
+    if change == 0 then 
+        return base
+    elseif change > 0 then
+        return rel_color( brighten_table[base+1], change - 1 )
+    else
+        return rel_color(   darken_table[base+1], change - 1 )
+    end
+end
+
 -- object oriented infrastructure. see http://lua-users.org/wiki/inheritancetutorial
 
 function inheritsfrom( baseclass )
@@ -356,7 +370,12 @@ function ballvis:draw()
 
     self:superclass().draw( self )
 
-    circfill( self.body.pos.x, self.body.pos.y, self.body.radius, self.basecolor )
+    local p = self.body.pos
+    local r = self.body.radius
+
+    circfill( p.x, p.y, r, self.basecolor )
+    circfill( p.x - 0.1*r, p.y - 0.15*r, r * 0.75, rel_color( self.basecolor, 1 ))
+    circfill( p.x - 0.2*r, p.y - 0.4*r, r * 0.25, rel_color( self.basecolor, 2 ))
 end
 
 
@@ -533,7 +552,7 @@ function create_level0()
 
     for i = 1,5 do
         local target_ball = body:new( randinrange(2,12)*8, randinrange(2,12)*8, randinrange(1,6) )
-        local target_ball_vis = ballvis:new( target_ball, 1 )
+        local target_ball_vis = ballvis:new( target_ball, flr(randinrange(0,16)) )
         newlevel:add_body( target_ball, target_ball_vis )
     end
 
