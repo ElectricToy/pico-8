@@ -558,11 +558,15 @@ function level:draw()
     end
 end
 
+local default_rot_speed = 0.001
+
 local shooter = {
     active = true,
     angle = 0,
     dist = 20,
     power = 0.05,
+    rot_speed = default_rot_speed,
+    rot_acc = 0.0004,
 }
 function shooter:attach( level, ball )
     self.active = true
@@ -577,20 +581,29 @@ function shooter:update()
 
     self.updates += 1
 
-    local rot_speed = 0.01
     local length_speed = 1
 
+    local angle_delta = 0
+
     if btn(0) then
-        self.angle += rot_speed
+        angle_delta = self.rot_speed
     end
     if btn(1) then
-        self.angle -= rot_speed
+        angle_delta = -self.rot_speed
     end
     if btn(2) then
         self.dist -= length_speed
     end
     if btn(3) then
         self.dist += length_speed
+    end
+
+    if angle_delta == 0 then
+        self.rot_speed = default_rot_speed
+    else
+        self.angle += angle_delta
+        self.rot_speed += self.rot_acc
+        self.rot_speed = clamp( self.rot_speed, 0, 0.01 )
     end
 
     self.dist = clamp( self.dist, self.ball.radius + 6, 40 )
@@ -648,6 +661,10 @@ function shooter:draw()
 
         line( p.x, p.y, q.x, q.y, 5 )
     end
+
+    circfill( pos.x, pos.y, 2, 5 )
+    circfill( pos.x, pos.y, 1, 6 )
+
 end
 
 -- levels
