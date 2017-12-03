@@ -314,6 +314,7 @@ So, tasks:
 * SFX DONE
     - hiss
     - clack
+* Hint text
 * Levels
 * Music
 * Title screen
