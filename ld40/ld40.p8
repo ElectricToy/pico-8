@@ -252,6 +252,10 @@ function body:new( level, x, y, radius )
         shadowed_amount = 0,
         lerp_to_shadowed_amount = nil,
         explosion_sfx = 3,
+
+        min_impulse_for_trigger = nil,
+        trigger_time = nil,
+        trigger_explosion_delay = 2,
     }
 
     add( level.bodies, newobj )
@@ -267,6 +271,12 @@ end
 
 function body:local_map_pos()
     return worldtomap( self.pos )
+end
+
+function body:trigger()
+    if not self.alive then return end
+    if self.trigger_time ~= nil then return end
+    self.trigger_time = self.level:time()
 end
 
 function body:be_swallowed_by_hole( local_map_location, mapsprite )
@@ -303,6 +313,8 @@ end
 
 function body:update()
 
+    if not self.alive then return end
+
     if self.lerp_to_shadowed_amount then
         self.shadowed_amount = lerp( self.shadowed_amount, self.lerp_to_shadowed_amount, 0.01 )
     end
@@ -330,9 +342,16 @@ function body:update()
         self.acc.y = 0
 
         self:detect_hole_collision()
+
+        -- update trigger
+        if self.trigger_time ~= nil and 
+            ( self.level:time() - self.trigger_time > self.trigger_explosion_delay ) then
+            self:explode()
+        end
+
     else
         if self.lerp_to_location then
-            self.pos = self.pos:lerp( self.lerp_to_location, 0.05 )
+            self.pos = self.pos:lerp( self.lerp_to_location, 0.1 )
         end
     end
 end
@@ -501,6 +520,8 @@ function body:resolve_map_collision( levelmapx, levelmapy )
 end
 
 function body:explode()
+    if not self.alive then return end
+
     -- apply a force to all other bodies
     self.level:apply_explosion_force( self.pos, self.explosion_power )
 
@@ -575,6 +596,10 @@ end
 function body:addimpulse( impulse )
     if self.mass > 0 then
         self.acc = self.acc + impulse / vector:new( self.mass, self.mass )
+
+        if self.min_impulse_for_trigger ~= nil and impulse:length() > self.min_impulse_for_trigger then
+            self:trigger()
+        end
     end
 end
 
@@ -582,9 +607,10 @@ end
 
 local vis = inheritsfrom( nil )
 
-function vis:new( level, body )
+function vis:new( level, body, offset )
     local newobj = { 
         body = body,
+        offset = offset
     }
 
     add( level.visualizations, newobj )
@@ -613,7 +639,7 @@ function ballvis:draw()
 
     local base_color_offset = flr( self.body.shadowed_amount )
 
-    local p = self.body.pos
+    local p = self.body.pos + ( self.offset or vector:new( 0 ))
     local r = self.body.radius
 
     draw_shadowed( p.x, p.y, r/4*0.8, r/4, 2, function( x, y)
@@ -935,87 +961,6 @@ function level:draw()
     end
 end
 
--- spritevis
-local spritevis = inheritsfrom( vis )
-function spritevis:new( level, body, sprite_frames, size )
-    local newobj = vis:new( level, body )
-    newobj.sprite_size = size or 1
-    newobj.sprite_frames = sprite_frames
-    newobj.frame = 1
-    newobj.frame_rate_hz = 4
-    return setmetatable( newobj, self )
-end
-
-function spritevis:current_frame()
-    return self.sprite_frames[ self.frame ]
-end
-
-function spritevis:draw()
-    if not self:alive() then return end
-
-    local sprite = self:current_frame()
-
-    if not sprite then return end
-
-    local p = self.body.pos
-    local ul = p - vector:new( self.sprite_size * 8 * 0.5 )
-
-    draw_shadowed( ul.x, ul.y, 0, 1, 1, function( x, y )
-        spr( sprite, x, y, self.sprite_size, self.sprite_size )
-    end )
-end
-
--- barrelvis
-local barrelvis = inheritsfrom( spritevis )
-function barrelvis:new( level, body )
-    local newobj = spritevis:new( level, body, { 4 }, 2 )
-    return setmetatable( newobj, self )
-end
-
--- barrel
-local barrel = inheritsfrom( body )
-function barrel:new( level, x, y )
-    local newobj = body:new( level, x, y, 0 )
-    newobj.drag = 0.05
-
-    barrelvis:new( level, newobj )
-
-    return setmetatable( newobj, self )
-end    
-
--- particle
-
-local particle = inheritsfrom( body )
-function particle:new( level, x, y )
-    local newobj = body:new( level, x, y, 0 )
-    newobj.drag = 0.05
-    newobj.does_collide_bodies = false
-    newobj.does_collide_map = true
-    return setmetatable( newobj, self )
-end
-
-local particle_vis = inheritsfrom( vis )
-function particle_vis:new( level, body, color )
-    local newobj = vis:new( level, body )
-    newobj.color = color
-    return setmetatable( newobj, self )
-end
-
-function particle_vis:draw()
-    if not self:alive() then return end
-    pset( self.body.pos.x, self.body.pos.y, self.basecolor )
-    -- circfill( self.body.pos.x, self.body.pos.y, 0.5, self.basecolor )
-    -- local x = flr( self.body.pos.x )
-    -- local y = flr( self.body.pos.y )
-    -- rectfill( x, y, x+0.5, y+0.5, self.basecolor )
-end
-
-local explosion_particle_vis = inheritsfrom( particle_vis )
-function explosion_particle_vis:new( level, body )
-    local newobj = particle_vis:new( level, body, 5 )
-    return setmetatable( newobj, self )
-end
-
 -- shooter
 
 local default_rot_speed = 0.001
@@ -1127,24 +1072,158 @@ function shooter:draw()
 
 end
 
+-- spritevis
+local spritevis = inheritsfrom( vis )
+function spritevis:new( level, body, sprite_frames, size )
+    local newobj = vis:new( level, body )
+    newobj.sprite_size = size or 1
+    newobj.sprite_frames = sprite_frames
+    newobj.frame = 1
+    newobj.frame_rate_hz = 8
+    newobj.last_frame_change_time = nil
+    return setmetatable( newobj, self )
+end
+
+function spritevis:current_frame()
+    return self.sprite_frames[ self.frame ]
+end
+
+function spritevis:draw()
+    if not self:alive() then return end
+
+    -- time to change frames?
+    local now = self.body.level:time()
+
+    if self.last_frame_change_time == nil then
+        self.last_frame_change_time = now
+    end        
+
+    if now >= self.last_frame_change_time + ( 1.0 / self.frame_rate_hz ) then
+        self.frame += 1
+        self.frame = wrap( self.frame, 1, #self.sprite_frames + 1 )
+        self.last_frame_change_time = now
+    end
+
+    local sprite = self:current_frame()
+
+    if not sprite then return end
+
+    local p = self.body.pos + ( self.offset or vector:new( 0 ))
+    local ul = p - vector:new( self.sprite_size * 8 * 0.5 )
+
+    draw_shadowed( ul.x, ul.y, 0, 1, 1, function( x, y )
+        spr( sprite, x, y, self.sprite_size, self.sprite_size )
+    end )
+end
+
+-- particle
+
+local particle = inheritsfrom( body )
+function particle:new( level, x, y )
+    local newobj = body:new( level, x, y, 0 )
+    newobj.drag = 0.05
+    newobj.does_collide_bodies = false
+    newobj.does_collide_map = true
+    return setmetatable( newobj, self )
+end
+
+local particle_vis = inheritsfrom( vis )
+function particle_vis:new( level, body, color )
+    local newobj = vis:new( level, body )
+    newobj.color = color
+    return setmetatable( newobj, self )
+end
+
+function particle_vis:draw()
+    if not self:alive() then return end
+    pset( self.body.pos.x, self.body.pos.y, self.basecolor )
+    -- circfill( self.body.pos.x, self.body.pos.y, 0.5, self.basecolor )
+    -- local x = flr( self.body.pos.x )
+    -- local y = flr( self.body.pos.y )
+    -- rectfill( x, y, x+0.5, y+0.5, self.basecolor )
+end
+
+local explosion_particle_vis = inheritsfrom( particle_vis )
+function explosion_particle_vis:new( level, body )
+    local newobj = particle_vis:new( level, body, 5 )
+    return setmetatable( newobj, self )
+end
+
+-- flamevis
+local flamevis = inheritsfrom( spritevis )
+function flamevis:new( level, body )
+    local newobj = spritevis:new( level, body, { 6, 8 }, 2 )
+    newobj.offset = vector:new( 0, -8 )
+    return setmetatable( newobj, self )
+end
+
+function flamevis:draw()
+    if not self:alive() then return end
+    if self.body.trigger_time == nil then return end
+
+    self:superclass().draw(self)
+end
+
+-- barrelvis
+local barrelvis = inheritsfrom( spritevis )
+function barrelvis:new( level, body )
+    local newobj = spritevis:new( level, body, { 4 }, 2 )
+    newobj.flame = flamevis:new( level, body )
+    return setmetatable( newobj, self )
+end
+
+-- barrel
+local barrel = inheritsfrom( body )
+function barrel:new( level, x, y )
+    local newobj = body:new( level, x, y, 0 )
+    newobj.drag = 0.05
+    newobj.radius = 8
+    newobj.min_impulse_for_trigger = 0.25
+    newobj.explosion_power = 1000
+    newobj.explosion_sfx = 1
+    newobj.explosion_particle_class = particle
+    newobj.explosion_particle_vis_class = explosion_particle_vis
+
+    barrelvis:new( level, newobj )
+
+    return setmetatable( newobj, self )
+end    
+
+-- cueball
+local cueball = inheritsfrom( body )
+function cueball:new( level, x, y )
+    local newobj = body:new( level, x, y, 4 )
+    ballvis:new( level, newobj, 6 )
+
+    newobj.min_impulse_for_trigger = nil
+    newobj.explosion_particle_class = particle
+    newobj.explosion_particle_vis_class = explosion_particle_vis
+    newobj.explosion_sfx = 2
+
+    shooter:attach( level, newobj )
+
+    return setmetatable( newobj, self )
+end
+
+-- targetball
+local targetball = inheritsfrom( body )
+function targetball:new( level, x, y )
+    local newobj = body:new( level, x, y, 4 )
+    ballvis:new( level, newobj, 8 )
+
+    newobj.min_impulse_for_trigger = nil
+    newobj.is_target = true
+    return setmetatable( newobj, self )
+end
+
 -- levels
 local level_creation_fns = {
     function()
         -- level1
         local newlevel = level:new( vector:new( 0, 0 ))
 
-        local cue_ball = body:new( newlevel, 5*8, 9*8, 4 )
-        local cue_ball_vis = ballvis:new( newlevel, cue_ball, 6 )
-
-        cue_ball.explosion_particle_class = particle
-        cue_ball.explosion_particle_vis_class = explosion_particle_vis
-        cue_ball.explosion_sfx = 2
-
-        local target_ball = body:new( newlevel, 13*8, 4*8, 4 )
-        local target_ball_vis = ballvis:new( newlevel, target_ball, 8 )
-        target_ball.is_target = true
-
-        shooter:attach( newlevel, cue_ball )
+        cueball:new( newlevel, 5*8, 9*8 )
+        targetball:new( newlevel, 13*8, 4*8 )
 
         return newlevel
     end,
@@ -1154,20 +1233,9 @@ local level_creation_fns = {
         -- level2
         local newlevel = level:new( vector:new( 16, 0 ))
         
-        local cue_ball = body:new( newlevel, 6*8, 10*8, 4 )
-        local cue_ball_vis = ballvis:new( newlevel, cue_ball, 6 )
-
-        cue_ball.explosion_particle_class = particle
-        cue_ball.explosion_particle_vis_class = explosion_particle_vis
-        cue_ball.explosion_sfx = 2
-
-        local target_ball = body:new( newlevel, 12.5*8, 6*8, 4 )
-        local target_ball_vis = ballvis:new( newlevel, target_ball, 8 )
-        target_ball.is_target = true
-
+        cueball:new( newlevel, 6*8, 10*8, 4 )
+        targetball:new( newlevel, 12.5*8, 6*8, 4 )
         barrel:new( newlevel, 8.5*8, 3.5*8 )
-
-        shooter:attach( newlevel, cue_ball )
 
         return newlevel
     end
@@ -1369,7 +1437,7 @@ __map__
 3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 __sfx__
 000100001007011050160401602016000160000000000000210000000021000170002200016000160001600000000000002205016020160201601000000000000000000000210001600019020160101601016010
-00040000206501f6501e6501e6501b65018650126500b650066500465002640016300162001610016100161000600006000060000600006000060000600006000060000600006000060000600006000060000600
+00030000346701f650156400c64009630076300563004620026200162001610016100161001610016100161001610016000160001600016000060000600006000060000600006000060000600006000060000600
 000200002d6502b6502765025650226501f6501c650166500d6500465001640016300162001610016100161000600006000060000600006000060000600006000060000600006000060000600006000060000600
 000100003b6503665030650256501a650166500d65008650056500365001640016300162001610016100161000600006000060000600006000060000600006000060000600006000060000600006000060000600
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
