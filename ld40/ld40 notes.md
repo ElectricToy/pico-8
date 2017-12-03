@@ -301,15 +301,24 @@ So, tasks:
 
 10:48
 
-* Ball rendering and physics
-* Level rendering and physics
-* Striking interface
-* Hole/goal
-* Explosive physics
+* Ball rendering and physics DONE
+* Level rendering and physics DONE
+* Striking interface DONE
+* Hole/goal DONE
+* Explosive physics DONE
+* Explosive timing and display
+* Explosive triggers
+* Prototype Levels
+* Gradients
+* Explosion chunks.
+* Barrels
 * Level restart etc.
+* Levels
 * SFX
 * Music
 * Title screen
+* Things you *shouldn't* break.
+* Nicer explosions, scorch marks
 * Corporeal player sprite, movement, interface, death, etc. (lower priority)
 
 10:50 DMV
@@ -328,3 +337,6 @@ So, tasks:
 
 9:33 AM Sun morning. Up and at 'em.
 
+10:56 AM DMV
+
+11:02 AM Back.
