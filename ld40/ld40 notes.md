@@ -315,13 +315,13 @@ So, tasks:
     - hiss
     - clack
 * Hint text DONE
-* Pigs, level fail
+* Pigs, level fail DONE
+* Things you *shouldn't* break (for theme, mainly). DONE
 * Levels
 * Music
 * Title screen
 * Nicer explosions, scorch marks
 * Level fail when wrong ball in hole
-* Things you *shouldn't* break (for theme, mainly).
 * Corporeal player sprite, movement, interface, death, etc. (lower priority)
 * Explosion chunks.
 * Gradients KILLED
