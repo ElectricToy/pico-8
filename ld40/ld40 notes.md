@@ -323,3 +323,8 @@ So, tasks:
 5:30 time for the party
 
 11:00 PM sharp. Back from the party. Very good party.
+
+11:26 PM Worn out. Hitting the hay.
+
+9:33 AM Sun morning. Up and at 'em.
+

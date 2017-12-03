@@ -161,6 +161,10 @@ function vector:set_component( index, value )
     end
 end
 
+function vector:lerp( to, alpha )
+    return vector:new( lerp( self.x, to.x, alpha ), lerp( self.y, to.y, alpha ))
+end
+
 -- math
 
 function randinrange( min, max )
@@ -176,6 +180,10 @@ end
 function clamp( x, least, greatest )
     assert( greatest >= least )
     return min( greatest, max( least, x ))
+end
+
+function lerp( a, b, alpha )
+    return a + (( b - a ) * alpha )
 end
 
 function sign( x )
@@ -204,15 +212,12 @@ function is_close( a, b, maxdist )
     return distsquared <= maxdist * maxdist
 end
 
-
-function worldtomap( worldpos )
-    local pos = worldpos / vector:new( 8, 8 )
-    return vector:new( flr( pos.x ), flr( pos.y ))
+function maptoworld( mappos )
+    return mappos * vector:new( 8, 8 )
 end
 
-function mapatworld( worldpos )
-    local mappos = worldtomap( worldpos )
-    return mget( mappos.x, mappos.y )
+function worldtomap( pos )
+    return vector:new( flr( pos.x / 8 ), flr( pos.y / 8 ))
 end
 
 -- physics
@@ -237,8 +242,15 @@ function body:new( level, x, y, radius )
         does_collide_map = true,
         restitution = 0.95,
         explosion_power = 200,
+        min_explosion_particles = 20,
+        max_explosion_particles = 20,
         explosion_particle_class = nil,
         explosion_particle_vis_class = nil,
+        is_target = false,
+        want_dynamics = true,
+        lerp_to_location = nil,
+        shadowed_amount = 0,
+        lerp_to_shadowed_amount = nil,
     }
 
     add( level.bodies, newobj )
@@ -252,33 +264,84 @@ function body:currentdrag()
     return self.drag        -- todo
 end
 
+function body:local_map_pos()
+    return worldtomap( self.pos )
+end
+
+function body:be_swallowed_by_hole( local_map_location, mapsprite )
+    local hole_center_per_sprite_index = {}
+    hole_center_per_sprite_index[ 110 ] = vector:new( 1, 1 )
+    hole_center_per_sprite_index[ 111 ] = vector:new( 0, 1 )
+    hole_center_per_sprite_index[ 126 ] = vector:new( 1, 0 )
+    hole_center_per_sprite_index[ 127 ] = vector:new( 0, 0 )
+
+    local hole_center_offset = hole_center_per_sprite_index[ mapsprite ]
+    local hole_center = local_map_location + hole_center_offset
+
+    self.want_dynamics = false
+    self.lerp_to_location = maptoworld( hole_center ) + vector:new( 0, 1 )
+    self.lerp_to_shadowed_amount = -3
+end
+
+function body:detect_hole_collision()
+    if not self.is_target then return end
+
+    local local_map_location = self:local_map_pos()
+    local global_map_location = self.level:maplocaltoglobal( local_map_location )
+    local mapsprite = mget( global_map_location.x, global_map_location.y )
+
+    if fget( mapsprite, 6 ) then
+        -- todo
+        self:be_swallowed_by_hole( local_map_location, mapsprite )
+    end
+end
+
 function body:update()
 
-    local drag = self:currentdrag()
-
-    self.acc = self.acc - self.vel * vector:new( drag, drag )
-    self.vel = self.vel + self.acc
-
-    -- clamp velocity to a maximum
-    if self.vel:lengthsquared() > max_body_speed_squared then
-        self.vel = self.vel:normal() * vector:new( max_body_speed, max_body_speed )
+    if self.lerp_to_shadowed_amount then
+        self.shadowed_amount = lerp( self.shadowed_amount, self.lerp_to_shadowed_amount, 0.01 )
     end
 
-    -- cut off minimal velocity
-    local min_velocity = 0.01
-    if self.vel:manhattanlength() < min_velocity then
-        self.vel = vector:new( 0, 0 )
+    if self.want_dynamics then
+        local drag = self:currentdrag()
+
+        self.acc = self.acc - self.vel * vector:new( drag, drag )
+        self.vel = self.vel + self.acc
+
+        -- clamp velocity to a maximum
+        if self.vel:lengthsquared() > max_body_speed_squared then
+            self.vel = self.vel:normal() * vector:new( max_body_speed, max_body_speed )
+        end
+
+        -- cut off minimal velocity
+        local min_velocity = 0.01
+        if self.vel:manhattanlength() < min_velocity then
+            self.vel = vector:new( 0, 0 )
+        end
+
+        self.pos = self.pos + self.vel
+
+        self.acc.x = 0
+        self.acc.y = 0
+
+        self:detect_hole_collision()
+    else
+        if self.lerp_to_location then
+            self.pos = self.pos:lerp( self.lerp_to_location, 0.05 )
+        end
     end
-
-    self.pos = self.pos + self.vel
-
-    self.acc.x = 0
-    self.acc.y = 0
 end
 
 function body:shouldcollidewithmapsprite( mapsprite )
     return fget( mapsprite, 7 )
 end
+
+-- function collision_normal_simple( a, b )
+-- end
+
+-- function collision_normal_with_velocity( a, b )
+-- end
+
 
 function body:resolve_rect_collision( rectul, rectbr )
     -- find the collision normal
@@ -322,7 +385,8 @@ function body:explode()
 
     -- create particles
     if self.explosion_particle_class and self.explosion_particle_vis_class then
-        self.level:create_bodies( 20, 
+        self.level:create_bodies( 
+            randinrange( self.min_explosion_particles, self.max_explosion_particles ), 
             self.pos, 
             self.explosion_particle_class, 
             self.explosion_particle_vis_class, 
@@ -419,15 +483,17 @@ end
 function ballvis:draw()
     if not self:alive() then return end
 
+    local base_color_offset = flr( self.body.shadowed_amount )
+
     local p = self.body.pos
     local r = self.body.radius
 
     draw_shadowed( p.x, p.y, r/4*0.8, r/4, 2, function( x, y)
-        circfill( x, y, r, self.basecolor )
+        circfill( x, y, r, rel_color( self.basecolor, base_color_offset ))
     end )
 
-    circfill( p.x - 0.1*r, p.y - 0.15*r, r * 0.75, rel_color( self.basecolor, 1 ))
-    circfill( p.x - 0.2*r, p.y - 0.4*r, r * 0.25, rel_color( self.basecolor, 2 ))
+    circfill( p.x - 0.1*r, p.y - 0.15*r, r * 0.75, rel_color( self.basecolor, base_color_offset + 1 ))
+    circfill( p.x - 0.2*r, p.y - 0.4*r, r * 0.25, rel_color( self.basecolor, base_color_offset + 2 ))
 end
 
 
@@ -777,6 +843,7 @@ function create_level0()
 
     local target_ball = body:new( newlevel, 13*8, 4*8, 4 )
     local target_ball_vis = ballvis:new( newlevel, target_ball, 8 )
+    target_ball.is_target = true
 
     shooter:attach( newlevel, cue_ball )
 
