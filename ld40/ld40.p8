@@ -718,72 +718,8 @@ function level:tidy_barrier_cell( localcellpos )
     mset( global_map_location.x, global_map_location.y, desiredsprite )
 end
 
-function level:tidy_grass_cell( localcellpos )
-    -- todo
-end
-
-function level:tidy_cell( localcellpos )    
-    local mysprite = self:relative_cell_sprite( localcellpos, vector:new( 0 ))
-
-    -- show proper form of barrier cells
-    if fget( mysprite, 7 ) then
-        self:tidy_barrier_cell( localcellpos )
-    end
-    if 59 <= mysprite and mysprite <= 63 then
-        self:tidy_grass_cell( localcellpos )
-    end
-end
-
-function cell_sprite_height( cellsprite )
-    if 59 <= cellsprite and cellsprite <= 63 then
-        return cellsprite - 59
-    elseif 43 <= cellsprite and cellsprite <= 47 then
-        return cellsprite - 43
-    else
-        return nil
-    end   
-end
-
-function level:rel_cell_height( pos, dir )
-    local cellpos = pos + dir
-    self.cell_heights[ cellpos.y * self:size().x + cellpos.x ]
-end
-
--- function level:compute_cell_normal( localmappos )
---     local myheight = self:rel_cell_height( localmappos, vector:new( 0 ))
-
---     -- horizontal normal
---     local lheight = self:rel_cell_height( localmappos, vector:new( -1, 0 ))
---     local rheight = self:rel_cell_height( localmappos, vector:new(  1, 0 ))
---     local hnormal = (vector:new( 1, rheight ) - vector:new( -1, lheight )):perpendicular()
-
---     -- horizontal normal
---     local theight = self:rel_cell_height( localmappos, vector:new( 0, -1 ))
---     local bheight = self:rel_cell_height( localmappos, vector:new( 0,  1 ))
---     local vnormal = (vector:new( 1, bheight ) - vector:new( -1, theight )):perpendicular()
-
---     return (hnormal + vnormal):normal()
--- end
-
 function level:tidy()
     local levelsize = self:size()
-
-    -- -- store cell heights
-    -- for y = 0,levelsize.y do
-    --     for x = 0, levelsize.x do            
-    --         local global_map_location = self:maplocaltoglobal( vector:new( x, y ))
-    --         local height = cell_sprite_height( mget( global_map_location.x, global_map_location.y ))
-    --         self.cell_heights[ y * levelsize.x + x ] = height
-    --     end
-    -- end
-
-    -- -- compute cell normals
-    -- for y = 0,levelsize.y do
-    --     for x = 0, levelsize.x do
-    --         local normal = self:compute_cell_normal( vector:new( x, y ))
-    --         self.cell_normals[ y * levelsize.x + x ] = todo
-    --     end
-    -- end
 
     -- tidy cells
     for y = 0,levelsize.y do
