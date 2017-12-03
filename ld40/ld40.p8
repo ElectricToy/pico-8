@@ -319,6 +319,12 @@ function body:be_swallowed_by_hole( local_map_location, mapsprite )
     self.level:after_delay( 0.15, function() 
         sfx( 0 )
     end )
+
+    self.level:on_hole_scored()
+end
+
+function body:active()
+    return self.alive and ( self.vel:length() > 0.01 or self.acc:length() > 0 or self.trigger_time ~= nil )
 end
 
 function body:detect_hole_collision()
@@ -887,6 +893,32 @@ function level:draw()
     end
 end
 
+function level:on_hole_scored()
+    self.is_hole_scored = true
+    self:after_delay( 1.5, function()
+        self.is_hole_score_settled = true
+    end)
+end
+
+function level:settled_state()
+    if self.is_hole_score_settled then
+        return "won"
+    end
+
+    if self.is_hole_scored then return "undecided" end
+
+    if self.paused then return "undecided" end
+
+
+    local found_active_body = false
+
+    self:eachbody( function( body )
+        found_active_body = found_active_body or body:active()
+    end)
+
+    return found_active_body and "undecided" or "failed"
+end
+
 -- shooter
 
 local default_rot_speed = 0.001
@@ -1168,12 +1200,21 @@ local level_creation_fns = {
     end
 }
 
-function create_level( num )
+local current_level = nil
+local current_level_number = 1
+
+function goto_level( num )
     stop_all_hiss()
-    return level_creation_fns[ num ]()
+
+    if num <= #level_creation_fns then
+        current_level_number = num
+        current_level = level_creation_fns[ current_level_number ]()
+    else
+        -- end of game
+    end
 end
 
-local current_level = create_level( 2 )
+goto_level( 1 )
 
 -- update 
 function _update60()
@@ -1187,6 +1228,18 @@ function _update60()
     shooter:update()
     current_level:update()
 
+    local level_state = current_level:settled_state()
+
+    debug_print( level_state )
+
+    if level_state ~= "undecided" then
+
+        local next_level_number = current_level_number + ( level_state == "won" and 1 or 0 )
+
+        current_level:after_delay( 1.5, function() 
+            goto_level( next_level_number )
+        end)
+    end
 end
 
 -- draw

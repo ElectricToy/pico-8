@@ -312,7 +312,7 @@ So, tasks:
 * Prototype levels DONE
 * Level restart etc.
 * Levels
-* SFX
+* SFX DONE
     - hiss
     - clack
 * Music
@@ -342,3 +342,7 @@ So, tasks:
 10:56 AM DMV
 
 11:02 AM Back.
+
+2:27 PM Taking a break. Will come back to level restart/overall level flow.
+
+2:40 PM Time for overall game flow.
