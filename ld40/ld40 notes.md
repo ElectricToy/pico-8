@@ -320,3 +320,6 @@ So, tasks:
 
 4:51 PM. Back! I've got maybe half an hour before the CE Christmas party.
 
+5:30 time for the party
+
+11:00 PM sharp. Back from the party. Very good party.

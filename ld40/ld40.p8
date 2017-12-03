@@ -233,8 +233,12 @@ function body:new( level, x, y, radius )
         mass = 1.0,
         radius = radius,
         drag = 0.015,
+        does_collide_bodies = true,
+        does_collide_map = true,
         restitution = 0.95,
-        explosion_power = 200
+        explosion_power = 200,
+        explosion_particle_class = nil,
+        explosion_particle_vis_class = nil,
     }
 
     add( level.bodies, newobj )
@@ -317,6 +321,13 @@ function body:explode()
     -- create chunks
 
     -- create particles
+    if self.explosion_particle_class and self.explosion_particle_vis_class then
+        self.level:create_bodies( 20, 
+            self.pos, 
+            self.explosion_particle_class, 
+            self.explosion_particle_vis_class, 
+            0, 8 )
+    end
 
     -- create scorch marks
 end
@@ -346,6 +357,8 @@ function axial_step( left, right, top, bot, vel, fn )
 end
 
 function body:updateworldcollision( level )
+
+    if not self.does_collide_map then return end
 
     local center = self.pos
     local offset = vector:new( self.radius, 0 )
@@ -406,8 +419,6 @@ end
 function ballvis:draw()
     if not self:alive() then return end
 
-    self:superclass().draw( self )
-
     local p = self.body.pos
     local r = self.body.radius
 
@@ -448,6 +459,10 @@ function level:tidy()
 end
 
 function collidebodies( a, b )
+    -- should collide?
+
+    if not a.does_collide_bodies or not b.does_collide_bodies then return end
+
     -- overlapping?
 
     local minoverlapdistance = a.radius + b.radius
@@ -536,6 +551,20 @@ function level:apply_explosion_force( pos, power )
     end )
 end
 
+function level:create_bodies( count, pos, klass, visklass, minspeed, maxspeed )
+    for i = 1,count do
+        local body = klass:new( self, pos.x, pos.y )
+        local vis = visklass:new( self, body )
+
+        local velangle = rnd()
+        local speed = randinrange( minspeed, maxspeed )
+        local vel = vector:new(sin( velangle ), cos( velangle ))
+        vel *= vector:new( speed, speed )
+
+        body.vel = vel
+    end
+end
+
 function level:updatecollisions()
 
     -- body-to-world collision
@@ -589,6 +618,41 @@ function level:draw()
         visualization:draw()
     end
 end
+
+-- particle
+
+local particle = inheritsfrom( body )
+function particle:new( level, x, y )
+    local newobj = body:new( level, x, y, 0 )
+    newobj.drag = 0.05
+    newobj.does_collide_bodies = false
+    newobj.does_collide_map = false
+    return setmetatable( newobj, self )
+end
+
+local particle_vis = inheritsfrom( vis )
+function particle_vis:new( level, body, color )
+    local newobj = vis:new( level, body )
+    newobj.color = color
+    return setmetatable( newobj, self )
+end
+
+function particle_vis:draw()
+    if not self:alive() then return end
+    pset( self.body.pos.x, self.body.pos.y, self.basecolor )
+    -- circfill( self.body.pos.x, self.body.pos.y, 0.5, self.basecolor )
+    -- local x = flr( self.body.pos.x )
+    -- local y = flr( self.body.pos.y )
+    -- rectfill( x, y, x+0.5, y+0.5, self.basecolor )
+end
+
+local explosion_particle_vis = inheritsfrom( particle_vis )
+function explosion_particle_vis:new( level, body )
+    local newobj = particle_vis:new( level, body, 5 )
+    return setmetatable( newobj, self )
+end
+
+-- shooter
 
 local default_rot_speed = 0.001
 
@@ -707,6 +771,9 @@ function create_level0()
 
     local cue_ball = body:new( newlevel, 5*8, 9*8, 4 )
     local cue_ball_vis = ballvis:new( newlevel, cue_ball, 6 )
+
+    cue_ball.explosion_particle_class = particle
+    cue_ball.explosion_particle_vis_class = explosion_particle_vis
 
     local target_ball = body:new( newlevel, 13*8, 4*8, 4 )
     local target_ball_vis = ballvis:new( newlevel, target_ball, 8 )
