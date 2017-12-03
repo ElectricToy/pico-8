@@ -38,6 +38,26 @@ function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
     fn( x, y )
 end
 
+local hiss_hosts = {}
+
+function play_hiss( host )
+    sfx( 9, 3 )
+    add( hiss_hosts, host )    
+end
+
+function stop_hiss( host )
+    del( hiss_hosts, host )
+
+    if #hiss_hosts == 0 then
+        sfx( -1, 3 )
+    end
+end
+
+function stop_all_hiss()
+    hiss_hosts = {}
+    sfx( -1, 3 )
+end
+
 -- object oriented infrastructure. see http://lua-users.org/wiki/inheritancetutorial
 
 function inheritsfrom( baseclass )
@@ -278,6 +298,8 @@ function body:trigger()
     if not self.alive then return end
     if self.trigger_time ~= nil then return end
     self.trigger_time = self.level:time()
+
+    play_hiss( self )
 end
 
 function body:be_swallowed_by_hole( local_map_location, mapsprite )
@@ -371,115 +393,6 @@ function collision_normal_simple( delta, overlaps )
     return normal, normal_axis
 end
 
-function body:collision_normal_with_velocity( lastposition, radius, rectcenter, rectsize, delta )
-    -- local epsilon = 0.01
-
-    -- local totaldimensions = rectsize * vector:new( 0.5 ) + radius
-    
-    -- -- consider the objects at their last positions.
-    -- -- how was that overlapping this in the last position?
-    -- local deltalast = lastposition - rectcenter
-    -- local axialdistanceslast = vector:new( abs( deltalast.x ), abs( deltalast.y ))
-    
-    -- -- positive values indicate overlap.
-    -- local overlapslast = totaldimensions - axialdistanceslast
-    
-    -- if overlapslast.x > 0 then
-    -- {
-    --     -- overlapping in x.
-        
-    --     if overlapslast.y > 0 then
-    --     {
-    --         -- in the last position these objects were not clear of each other,
-    --         -- so we can't use this method.
-    --         --
-    --         -- use the "simple" method of colliding based on thinnest overlap distance.
-    --         --
-    --         return collision_normal_simple( delta )
-    --     }
-    --     else
-    --     {
-    --         -- was overlapping in x, not y. therefore the hitnormal must be vertical.
-    --         -- 
-    --         return vector:new( 0, sign( deltalast.y )), 1
-    --     }
-    -- }
-    -- else if( overlapslast.y > 0 )
-    -- {
-    --     // was overlapping in y, not x. therefore the hitnormal must be horizontal.
-    --     //
-    --     outnormalaxis = 0;
-    --     outhitnormal.set( sign( deltalast.x ), 0 );
-    -- }
-    -- else
-    -- {
-    --     // no overlap in the last position (corners were closest).
-    --     // decide which edge the objects collided on by comparing the velocity to the
-    --     // delta between their closest corners.
-    --     //
-        
-    --     vec2 deltalastsign = deltalast;
-    --     deltalastsign.x = sign( deltalastsign.x );
-    --     deltalastsign.y = sign( deltalastsign.y );
-        
-    --     const vec2 thisclosestcorner = m_lastposition + deltalastsign * m_dimensions * 0.5f;
-    --     const vec2 thatclosestcorner = rectcenter + deltalastsign.getinverse() * rectsize * 0.5f;
-        
-    --     const vec2 deltacorners = thisclosestcorner - thatclosestcorner;
-        
-    --     if( deltacorners.iszero( epsilon )) // todo arbitrary epsilon
-    --     {
-    --         // corners were basically touching--too close to call.
-    --         // use the simple method.
-    --         //
-    --         return findcollisionnormalsimple( overlaps, delta, outhitnormal, outnormalaxis );
-    --     }
-        
-    --     vec2 deltacornersperpendicular = deltacorners;
-    --     deltacornersperpendicular.quickrot90();
-        
-    --     // calculate the relative velocity of other.
-    --     //
-    --     const vec2 thisvel = m_position - m_lastposition;
-    --     const vec2 thatvel( 0, 0 );     // todo if the other object were a body, we would use its actual velocity.
-        
-    --     const vec2 thatvelrel = thatvel - thisvel;
-        
-    --     if( thatvelrel.iszero( epsilon ))   // todo arbitrary epsilon
-    --     {
-    --         // no velocity to speak of. use primitive resolution method. (this should be unusual.)
-    --         //
-    --         return findcollisionnormalsimple( overlaps, delta, outhitnormal, outnormalaxis );
-    --     }
-        
-    --     // determine how the corners moved relative to their axis of intersection.
-    --     //
-    --     const float dotproduct = deltacorners.dot( thatvelrel );
-        
-    --     outhitnormal = deltacorners;
-        
-    --     if( dotproduct > 0 )
-    --     {
-    --         outnormalaxis = outhitnormal.getmajoraxis();
-    --         outhitnormal.snaptomajoraxis();
-    --     }
-    --     else
-    --     {
-    --         outnormalaxis = outhitnormal.getminoraxis();
-    --         outhitnormal.snaptominoraxis();
-    --     }
-
-    --     outhitnormal.normalize();
-        
-    --     if( outhitnormal.iszero( epsilon ))
-    --     {
-    --         // very low velocity along the hit normal. use simple method.
-    --         //
-    --         return findcollisionnormalsimple( overlaps, delta, outhitnormal, outnormalaxis );
-    --     }
-    -- }
-end
-
 function body:find_collision_normal( rectcenter, rectsize )
 
     local delta = self.pos - rectcenter
@@ -534,6 +447,7 @@ function body:explode()
     self.level:apply_explosion_force( self.pos, self.explosion_power )
 
     self.alive = false
+    stop_hiss( self )
 
     -- create chunks
 
@@ -869,7 +783,7 @@ function collidebodies( a, b )
     a:addimpulse( normal * vector:new( -force, -force ))
     b:addimpulse( normal * vector:new(  force,  force ))
 
-    if self.make_collision_sounds then
+    if a.make_collision_sounds and b.make_collision_sounds then
         local sound = force >= 1 and 4 or force >= 0.3 and 5 or force >= 0.1 and 6
         sfx( sound )
     end
@@ -1254,7 +1168,12 @@ local level_creation_fns = {
     end
 }
 
-local current_level = level_creation_fns[2]()
+function create_level( num )
+    stop_all_hiss()
+    return level_creation_fns[ num ]()
+end
+
+local current_level = create_level( 2 )
 
 -- update 
 function _update60()
@@ -1458,7 +1377,7 @@ __sfx__
 000100001943018410284102640026400264001740016400204000040000400004000040000400004000040000400004000040000400004000040000400004000040000400004000040000400004000040000400
 00010000120500f0500b0500805004050040500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00010000120300f0200b0200801004010040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00020506166101a6101c6101a61015610136101360013600006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
