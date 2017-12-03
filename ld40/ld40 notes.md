@@ -310,17 +310,17 @@ So, tasks:
 * Explosive triggers DONE
 * Barrels DONE
 * Prototype levels DONE
-* Level restart etc.
-* Levels
+* Level restart etc. DONE
 * SFX DONE
     - hiss
     - clack
+* Levels
 * Music
 * Title screen
 * Nicer explosions, scorch marks
-* Things you *shouldn't* break.
-* Explosion chunks.
+* Things you *shouldn't* break (for theme, mainly).
 * Corporeal player sprite, movement, interface, death, etc. (lower priority)
+* Explosion chunks.
 * Gradients KILLED
 
 10:50 DMV
@@ -346,3 +346,5 @@ So, tasks:
 2:27 PM Taking a break. Will come back to level restart/overall level flow.
 
 2:40 PM Time for overall game flow.
+
+3:07 PM 
