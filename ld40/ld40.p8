@@ -87,7 +87,7 @@ end
 vector = inheritsfrom( nil )
 
 function vector:new( x, y )
-    local newobj = { x = x, y = y }
+    local newobj = { x = x, y = y ~= nil and y or x }
     return setmetatable( newobj, self )
 end
 
@@ -336,36 +336,156 @@ function body:shouldcollidewithmapsprite( mapsprite )
     return fget( mapsprite, 7 )
 end
 
--- function collision_normal_simple( a, b )
--- end
-
--- function collision_normal_with_velocity( a, b )
--- end
-
-
-function body:resolve_rect_collision( rectul, rectbr )
-    -- find the collision normal
-
-    -- debug_print( '' .. rectul.x .. ',' .. rectul.y .. ':' .. rectbr.x .. ',' .. rectbr.y )
-
-    local rectcenter = ( rectul + rectbr ) * vector:new( 0.5, 0.5 )
-    local delta = self.pos - rectcenter
-
-    if delta:manhattanlength() == 0 then return end
-
+function collision_normal_simple( delta, overlaps )
     local normal_axis = abs( delta.x ) > abs( delta.y ) and 0 or 1
     local axial_dist = delta:component( normal_axis )
     local normal_sign = sign( axial_dist )
     local normal = vector:new( 0, 0 )
     normal:set_component( normal_axis, normal_sign )
 
-    -- don't act if we're already going this way
+    return normal, normal_axis
+end
 
+function body:collision_normal_with_velocity( lastposition, radius, rectcenter, rectsize, delta )
+    -- local epsilon = 0.01
+
+    -- local totalDimensions = rectsize * vector:new( 0.5 ) + radius
+    
+    -- -- Consider the objects at their last positions.
+    -- -- How was that overlapping this in the last position?
+    -- local deltalast = lastposition - rectcenter
+    -- local axialDistancesLast = vector:new( abs( deltaLast.x ), abs( deltaLast.y ))
+    
+    -- -- Positive values indicate overlap.
+    -- local overlapsLast = totalDimensions - axialDistancesLast
+    
+    -- if overlapsLast.x > 0 then
+    -- {
+    --     -- Overlapping in X.
+        
+    --     if overlapsLast.y > 0 then
+    --     {
+    --         -- In the last position these objects were not clear of each other,
+    --         -- so we can't use this method.
+    --         --
+    --         -- Use the "simple" method of colliding based on thinnest overlap distance.
+    --         --
+    --         return collision_normal_simple( delta )
+    --     }
+    --     else
+    --     {
+    --         -- Was overlapping in x, not y. Therefore the hitNormal must be vertical.
+    --         -- 
+    --         return vector:new( 0, sign( deltalast.y )), 1
+    --     }
+    -- }
+    -- else if( overlapsLast.y > 0 )
+    -- {
+    --     // Was overlapping in y, not x. Therefore the hitNormal must be horizontal.
+    --     //
+    --     outNormalAxis = 0;
+    --     outHitNormal.set( sign( deltaLast.x ), 0 );
+    -- }
+    -- else
+    -- {
+    --     // No overlap in the last position (corners were closest).
+    --     // Decide which edge the objects collided on by comparing the velocity to the
+    --     // delta between their closest corners.
+    --     //
+        
+    --     vec2 deltaLastSign = deltaLast;
+    --     deltaLastSign.x = sign( deltaLastSign.x );
+    --     deltaLastSign.y = sign( deltaLastSign.y );
+        
+    --     const vec2 thisClosestCorner = m_lastPosition + deltaLastSign * m_dimensions * 0.5f;
+    --     const vec2 thatClosestCorner = rectCenter + deltaLastSign.getInverse() * rectSize * 0.5f;
+        
+    --     const vec2 deltaCorners = thisClosestCorner - thatClosestCorner;
+        
+    --     if( deltaCorners.isZero( EPSILON )) // TODO arbitrary epsilon
+    --     {
+    --         // Corners were basically touching--too close to call.
+    --         // Use the simple method.
+    --         //
+    --         return findCollisionNormalSimple( overlaps, delta, outHitNormal, outNormalAxis );
+    --     }
+        
+    --     vec2 deltaCornersPerpendicular = deltaCorners;
+    --     deltaCornersPerpendicular.quickRot90();
+        
+    --     // Calculate the relative velocity of other.
+    --     //
+    --     const vec2 thisVel = m_position - m_lastPosition;
+    --     const vec2 thatVel( 0, 0 );     // TODO If the other object were a body, we would use its actual velocity.
+        
+    --     const vec2 thatVelRel = thatVel - thisVel;
+        
+    --     if( thatVelRel.isZero( EPSILON ))   // TODO arbitrary epsilon
+    --     {
+    --         // No velocity to speak of. Use primitive resolution method. (This should be unusual.)
+    --         //
+    --         return findCollisionNormalSimple( overlaps, delta, outHitNormal, outNormalAxis );
+    --     }
+        
+    --     // Determine how the corners moved relative to their axis of intersection.
+    --     //
+    --     const float dotProduct = deltaCorners.dot( thatVelRel );
+        
+    --     outHitNormal = deltaCorners;
+        
+    --     if( dotProduct > 0 )
+    --     {
+    --         outNormalAxis = outHitNormal.getMajorAxis();
+    --         outHitNormal.snapToMajorAxis();
+    --     }
+    --     else
+    --     {
+    --         outNormalAxis = outHitNormal.getMinorAxis();
+    --         outHitNormal.snapToMinorAxis();
+    --     }
+
+    --     outHitNormal.normalize();
+        
+    --     if( outHitNormal.isZero( EPSILON ))
+    --     {
+    --         // Very low velocity along the hit normal. Use simple method.
+    --         //
+    --         return findCollisionNormalSimple( overlaps, delta, outHitNormal, outNormalAxis );
+    --     }
+    -- }
+end
+
+function body:find_collision_normal( rectcenter, rectsize )
+
+    local delta = self.pos - rectcenter
+
+    if delta:manhattanlength() == 0 then 
+        return delta, 0, 0
+    end
+
+    local axial_distances = vector:new( abs( delta.x ), abs( delta.y ))
+
+    local overlaps = rectsize * vector:new( 0.5 ) + vector:new( self.radius ) - axial_distances
+
+    local normal, normal_axis = collision_normal_simple( delta, overlaps )
+
+    return normal, normal_axis, overlaps:component( normal_axis ) + 0.1
+end
+
+
+function body:resolve_rect_collision( rectul, rectbr )
+    -- find the collision normal
+
+    local rectcenter = (rectul + rectbr) * vector:new( 0.5 )
+    local rectsize = rectbr - rectul 
+
+    local normal, normal_axis, adjustmentdist = self:find_collision_normal( rectcenter, rectsize )
+
+    -- don't act if we're already going this way
     if normal:dot( self.vel ) > 0 then return end
 
     -- move the body back out
-    local penetration = abs( axial_dist - ( 4 + self.radius ))
-    -- self.pos += normal * vector:new( penetration, penetration )
+    -- self.pos += normal * vector:new( adjustmentdist )
     self.vel:set_component( normal_axis, self.vel:component( normal_axis ) * -self.restitution )
 end
 
