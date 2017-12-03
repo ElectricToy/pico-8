@@ -935,6 +935,54 @@ function level:draw()
     end
 end
 
+-- spritevis
+local spritevis = inheritsfrom( vis )
+function spritevis:new( level, body, sprite_frames, size )
+    local newobj = vis:new( level, body )
+    newobj.sprite_size = size or 1
+    newobj.sprite_frames = sprite_frames
+    newobj.frame = 1
+    newobj.frame_rate_hz = 4
+    return setmetatable( newobj, self )
+end
+
+function spritevis:current_frame()
+    return self.sprite_frames[ self.frame ]
+end
+
+function spritevis:draw()
+    if not self:alive() then return end
+
+    local sprite = self:current_frame()
+
+    if not sprite then return end
+
+    local p = self.body.pos
+    local ul = p - vector:new( self.sprite_size * 8 * 0.5 )
+
+    draw_shadowed( ul.x, ul.y, 0, 1, 1, function( x, y )
+        spr( sprite, x, y, self.sprite_size, self.sprite_size )
+    end )
+end
+
+-- barrelvis
+local barrelvis = inheritsfrom( spritevis )
+function barrelvis:new( level, body )
+    local newobj = spritevis:new( level, body, { 4 }, 2 )
+    return setmetatable( newobj, self )
+end
+
+-- barrel
+local barrel = inheritsfrom( body )
+function barrel:new( level, x, y )
+    local newobj = body:new( level, x, y, 0 )
+    newobj.drag = 0.05
+
+    barrelvis:new( level, newobj )
+
+    return setmetatable( newobj, self )
+end    
+
 -- particle
 
 local particle = inheritsfrom( body )
@@ -942,7 +990,7 @@ function particle:new( level, x, y )
     local newobj = body:new( level, x, y, 0 )
     newobj.drag = 0.05
     newobj.does_collide_bodies = false
-    newobj.does_collide_map = false
+    newobj.does_collide_map = true
     return setmetatable( newobj, self )
 end
 
@@ -1082,7 +1130,7 @@ end
 -- levels
 local level_creation_fns = {
     function()
-
+        -- level1
         local newlevel = level:new( vector:new( 0, 0 ))
 
         local cue_ball = body:new( newlevel, 5*8, 9*8, 4 )
@@ -1103,6 +1151,7 @@ local level_creation_fns = {
 
     function()
 
+        -- level2
         local newlevel = level:new( vector:new( 16, 0 ))
         
         local cue_ball = body:new( newlevel, 6*8, 10*8, 4 )
@@ -1115,6 +1164,8 @@ local level_creation_fns = {
         local target_ball = body:new( newlevel, 12.5*8, 6*8, 4 )
         local target_ball_vis = ballvis:new( newlevel, target_ball, 8 )
         target_ball.is_target = true
+
+        barrel:new( newlevel, 8.5*8, 3.5*8 )
 
         shooter:attach( newlevel, cue_ball )
 
