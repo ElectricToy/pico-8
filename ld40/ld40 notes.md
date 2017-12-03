@@ -314,11 +314,13 @@ So, tasks:
 * SFX DONE
     - hiss
     - clack
-* Hint text
+* Hint text DONE
+* Pigs, level fail
 * Levels
 * Music
 * Title screen
 * Nicer explosions, scorch marks
+* Level fail when wrong ball in hole
 * Things you *shouldn't* break (for theme, mainly).
 * Corporeal player sprite, movement, interface, death, etc. (lower priority)
 * Explosion chunks.
@@ -349,3 +351,7 @@ So, tasks:
 2:40 PM Time for overall game flow.
 
 3:07 PM 
+
+4:59 PM time for breakfast!
+
+5:23 PM Time for pigs!
