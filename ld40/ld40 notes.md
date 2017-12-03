@@ -306,20 +306,22 @@ So, tasks:
 * Striking interface DONE
 * Hole/goal DONE
 * Explosive physics DONE
-* Explosive timing and display
-* Explosive triggers
-* Prototype Levels
-* Gradients
-* Explosion chunks.
-* Barrels
+* Explosive timing and display DONE
+* Explosive triggers DONE
+* Barrels DONE
+* Prototype levels DONE
 * Level restart etc.
 * Levels
 * SFX
+    - hiss
+    - clack
 * Music
 * Title screen
-* Things you *shouldn't* break.
 * Nicer explosions, scorch marks
+* Things you *shouldn't* break.
+* Explosion chunks.
 * Corporeal player sprite, movement, interface, death, etc. (lower priority)
+* Gradients KILLED
 
 10:50 DMV
 
