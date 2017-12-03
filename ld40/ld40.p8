@@ -867,12 +867,6 @@ function level:draw()
         visualization:draw()
     end
 
-    if self.paused then
-        print( '\x8e to shoot', 8, 128 - 7, 12 )
-    else
-        print( '\x97 to explode    \x8E to reset', 8, 128 - 7, 12 )
-    end
-
 end
 
 function level:on_hole_scored()
@@ -898,7 +892,7 @@ function level:settled_state()
         found_active_body = found_active_body or body:active()
     end)
 
-    return found_active_body and "undecided" or "failed"
+    return found_active_body and "undecided" or "lost"
 end
 
 -- shooter
@@ -1123,6 +1117,7 @@ function barrel:new( level, x, y )
     newobj.explosion_sfx = 1
     newobj.explosion_particle_class = particle
     newobj.explosion_particle_vis_class = explosion_particle_vis
+    newobj.mass = 1.5
 
     barrelvis:new( level, newobj )
 
@@ -1153,6 +1148,7 @@ function targetball:new( level, x, y )
 
     newobj.min_impulse_for_trigger = nil
     newobj.is_target = true
+    newobj.mass = 0.75
     return setmetatable( newobj, self )
 end
 
@@ -1280,7 +1276,22 @@ function tidy_sprites()
 end
 
 tidy_sprites()
-goto_level( 4 )
+goto_level( 1 )
+
+function confirm_winloss_state( old_level_state )
+    
+    local level_state = current_level:settled_state()
+    
+    if old_level_state == level_state then
+        local next_level_number = current_level_number + ( level_state == "won" and 1 or 0 )
+        goto_level( next_level_number )
+    else
+        -- state changed. reconfirm.
+        current_level:after_delay( 0.75, function() 
+            confirm_winloss_state( level_state )
+        end)
+    end
+end
 
 -- update 
 function _update60()
@@ -1302,11 +1313,10 @@ function _update60()
 
     local level_state = current_level:settled_state()
 
-    if level_state ~= "undecided" then
-        local next_level_number = current_level_number + ( level_state == "won" and 1 or 0 )
-
+    if not current_level.is_ending and ( level_state ~= "undecided" )then
+        current_level.is_ending = true
         current_level:after_delay( 0.75, function() 
-            goto_level( next_level_number )
+            confirm_winloss_state( level_state )
         end)
     end
 end
@@ -1315,9 +1325,22 @@ end
 function _draw()
     cls()
 
-    current_level:draw()
+    local heading = "level " .. current_level_number
+    print( heading, 64 - #heading / 2 * 5, 0, 5 )
 
+    if shooter.active then
+        print( '\x8e to shoot', 0, 128 - 6, 12 )
+    else
+        print( '\x8E to reset        \x97 to explode', 0, 128 - 6, 12 )
+    end
+
+
+    camera( 0, -8 )
+
+    current_level:draw()
     shooter:draw()
+
+    camera()
 
     -- debug text
     print( debug_text, 8, 8, 8 )
