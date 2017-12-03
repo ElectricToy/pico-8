@@ -515,7 +515,7 @@ function body:explode()
             self.pos, 
             self.explosion_particle_class, 
             self.explosion_particle_vis_class, 
-            0, 8 )
+            0, 5 )
     end
 
     -- create scorch marks
@@ -637,6 +637,8 @@ function level:new( mapul )
         paused = true,
         pending_calls = {},
         tick_count = 0,
+        cell_heights = {},
+        cell_normals = {},
     }
     return setmetatable( newobj, self )
 end
@@ -660,15 +662,133 @@ function level:update_pending_calls()
     end
 end
 
-function level:tidy_cell( x, y )
-    local cell_sprite_index = mget( x, y )
+function level:size()
+    return self.mapbr - self.mapul
+end
+
+function level:relative_cell_sprite( localcellpos, neighbordir )
+    local levelsize = self:size()
+
+    local cellpos = localcellpos + neighbordir
+    if cellpos.x < 0 or cellpos.y < 0 or cellpos.x >= levelsize.x or cellpos.y >= levelsize.y then
+        return 84 -- out of bounds is all ordinary barrier sprite
+    end
+
+    local global_map_location = self:maplocaltoglobal( cellpos )
+
+    return mget( global_map_location.x, global_map_location.y )
+end
+
+function level:tidy_barrier_cell( localcellpos )
+    local bitfield_to_sprite = {}
+
+    -- bitfield is 1 for full and 0 for empty for n, e, s, w neighbors
+    bitfield_to_sprite[ 0b0000 ] = 81
+    bitfield_to_sprite[ 0b0001 ] = 82
+    bitfield_to_sprite[ 0b0010 ] = 65
+    bitfield_to_sprite[ 0b0011 ] = 66
+    bitfield_to_sprite[ 0b0100 ] = 80
+    bitfield_to_sprite[ 0b0101 ] = 112
+    bitfield_to_sprite[ 0b0110 ] = 64
+    bitfield_to_sprite[ 0b0111 ] = 68
+    bitfield_to_sprite[ 0b1000 ] = 97
+    bitfield_to_sprite[ 0b1001 ] = 98
+    bitfield_to_sprite[ 0b1010 ] = 113
+    bitfield_to_sprite[ 0b1011 ] = 85
+    bitfield_to_sprite[ 0b1100 ] = 96
+    bitfield_to_sprite[ 0b1101 ] = 100
+    bitfield_to_sprite[ 0b1110 ] = 83
+    bitfield_to_sprite[ 0b1111 ] = 84
+
+    local nsolid = fget( self:relative_cell_sprite( localcellpos, vector:new( 0, -1 )), 7 ) and 1 or 0
+    local esolid = fget( self:relative_cell_sprite( localcellpos, vector:new( 1,  0 )), 7 ) and 1 or 0
+    local ssolid = fget( self:relative_cell_sprite( localcellpos, vector:new( 0,  1 )), 7 ) and 1 or 0
+    local wsolid = fget( self:relative_cell_sprite( localcellpos, vector:new(-1,  0 )), 7 ) and 1 or 0
+
+    local bits = 
+        bor( shl( nsolid, 3 ),
+            bor( shl( esolid, 2 ),
+                bor( shl( ssolid, 1 ),
+                    bor( shl( wsolid, 0 )))))
+
+    local desiredsprite = bitfield_to_sprite[ bits ]
+
+    local global_map_location = self:maplocaltoglobal( localcellpos )
+
+    mset( global_map_location.x, global_map_location.y, desiredsprite )
+end
+
+function level:tidy_grass_cell( localcellpos )
     -- todo
 end
 
+function level:tidy_cell( localcellpos )    
+    local mysprite = self:relative_cell_sprite( localcellpos, vector:new( 0 ))
+
+    -- show proper form of barrier cells
+    if fget( mysprite, 7 ) then
+        self:tidy_barrier_cell( localcellpos )
+    end
+    if 59 <= mysprite and mysprite <= 63 then
+        self:tidy_grass_cell( localcellpos )
+    end
+end
+
+function cell_sprite_height( cellsprite )
+    if 59 <= cellsprite and cellsprite <= 63 then
+        return cellsprite - 59
+    elseif 43 <= cellsprite and cellsprite <= 47 then
+        return cellsprite - 43
+    else
+        return nil
+    end   
+end
+
+function level:rel_cell_height( pos, dir )
+    local cellpos = pos + dir
+    self.cell_heights[ cellpos.y * self:size().x + cellpos.x ]
+end
+
+-- function level:compute_cell_normal( localmappos )
+--     local myheight = self:rel_cell_height( localmappos, vector:new( 0 ))
+
+--     -- horizontal normal
+--     local lheight = self:rel_cell_height( localmappos, vector:new( -1, 0 ))
+--     local rheight = self:rel_cell_height( localmappos, vector:new(  1, 0 ))
+--     local hnormal = (vector:new( 1, rheight ) - vector:new( -1, lheight )):perpendicular()
+
+--     -- horizontal normal
+--     local theight = self:rel_cell_height( localmappos, vector:new( 0, -1 ))
+--     local bheight = self:rel_cell_height( localmappos, vector:new( 0,  1 ))
+--     local vnormal = (vector:new( 1, bheight ) - vector:new( -1, theight )):perpendicular()
+
+--     return (hnormal + vnormal):normal()
+-- end
+
 function level:tidy()
-    for y = self.mapul.y, self.mapbr.y do
-        for x = self.mapul.x, self.mapbr.x do
-            self:tidy_cell( x, y )
+    local levelsize = self:size()
+
+    -- -- store cell heights
+    -- for y = 0,levelsize.y do
+    --     for x = 0, levelsize.x do            
+    --         local global_map_location = self:maplocaltoglobal( vector:new( x, y ))
+    --         local height = cell_sprite_height( mget( global_map_location.x, global_map_location.y ))
+    --         self.cell_heights[ y * levelsize.x + x ] = height
+    --     end
+    -- end
+
+    -- -- compute cell normals
+    -- for y = 0,levelsize.y do
+    --     for x = 0, levelsize.x do
+    --         local normal = self:compute_cell_normal( vector:new( x, y ))
+    --         self.cell_normals[ y * levelsize.x + x ] = todo
+    --     end
+    -- end
+
+    -- tidy cells
+    for y = 0,levelsize.y do
+        for x = 0, levelsize.x do
+            self:tidy_cell( vector:new( x, y ))
         end
     end
 end
@@ -774,7 +894,7 @@ function level:create_bodies( count, pos, klass, visklass, minspeed, maxspeed )
         local velangle = rnd()
         local speed = randinrange( minspeed, maxspeed )
         local vel = vector:new(sin( velangle ), cos( velangle ))
-        vel *= vector:new( speed, speed )
+        vel *= vector:new( speed )
 
         body.vel = vel
     end
