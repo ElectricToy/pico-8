@@ -279,8 +279,12 @@ function body:be_swallowed_by_hole( local_map_location, mapsprite )
     local hole_center = local_map_location + hole_center_offset
 
     self.want_dynamics = false
-    self.lerp_to_location = maptoworld( hole_center ) + vector:new( 0, 1 )
+    self.lerp_to_location = maptoworld( hole_center ) + vector:new( 0, 0.8 )
     self.lerp_to_shadowed_amount = -3
+
+    self.level:after_delay( 0.15, function() 
+        sfx( 0 )
+    end )
 end
 
 function body:detect_hole_collision()
@@ -485,7 +489,7 @@ function body:resolve_rect_collision( rectul, rectbr )
     if normal:dot( self.vel ) > 0 then return end
 
     -- move the body back out
-    -- self.pos += normal * vector:new( adjustmentdist )
+    self.pos += normal * vector:new( adjustmentdist )
     self.vel:set_component( normal_axis, self.vel:component( normal_axis ) * -self.restitution )
 end
 
@@ -627,8 +631,29 @@ function level:new()
         mapbr = vector:new( 6, 4 ),
         tidied = false,
         paused = true,
+        pending_calls = {},
+        tick_count = 0,
     }
     return setmetatable( newobj, self )
+end
+
+function level:time()
+    return self.tick_count / 60.0
+end
+
+function level:after_delay( delay, fn )
+    add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
+end
+
+function level:update_pending_calls()
+    local now = self:time()
+
+    for call in all( self.pending_calls ) do
+        if now >= call.deadline then
+            call.fn()
+            del( self.pending_calls, call )
+        end
+    end
 end
 
 function level:tidy_cell( x, y )
@@ -774,6 +799,10 @@ function level:update()
     end
 
     if self.paused then return end
+
+    self.tick_count += 1
+
+    self:update_pending_calls()
 
     self:eachbody( function( body )
         body:update()
@@ -1165,7 +1194,7 @@ __map__
 3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 __sfx__
-000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000100002707016050160401602016000160000000000000210000000021000170002200016000160001600000000000002205016020160201601000000000000000000000210001600019020160101601016010
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
