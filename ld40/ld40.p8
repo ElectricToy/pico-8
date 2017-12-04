@@ -1032,6 +1032,7 @@ function spritevis:new( level, body, sprite_frames, size )
     local newobj = vis:new( level, body )
     newobj.sprite_size = size or 1
     newobj.sprite_frames = sprite_frames
+    newobj.flipx = false
     newobj.frame = 1
     newobj.frame_rate_hz = 8
     newobj.last_frame_change_time = nil
@@ -1066,7 +1067,7 @@ function spritevis:draw()
     local ul = p - vector:new( self.sprite_size * 8 * 0.5 )
 
     draw_shadowed( ul.x, ul.y, 0, 1, 1, function( x, y )
-        spr( sprite, x, y, self.sprite_size, self.sprite_size )
+        spr( sprite, x, y, self.sprite_size, self.sprite_size, self.flipx )
     end )
 end
 
@@ -1222,6 +1223,7 @@ function cutelilpiggy:new( level, x, y )
     local newobj = body:new( level, x, y, 3.5 )
     local vis = spritevis:new( level, newobj, { 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 10, 11 }, 1 )
     vis.frame = flr( randinrange( 1, #vis.sprite_frames + 1 ))
+    vis.flipx = rnd() > 0.75
     newobj.min_impulse_for_trigger = 0.5
     newobj.trigger_explosion_delay = 0
     newobj.explosion_power = 0
@@ -1309,7 +1311,20 @@ local pig_death_messages = {
     "do not feed the animals...bombs",
     "take it easy on the piggies",
     "you meant to do that",
-    "piggicide",
+    "piggicide!",
+    "piggies don't deserve it!",
+    "ah but they're so sweet",
+    "oh but they're so innocent",
+    "that was my favorite one!",
+    "you're the monster",
+    "it just gets worse and worse",
+    "the more there are...",
+    "...the worse it gets",
+    "pigs! pigs!!",
+    "how could you?",
+    "how dare you?",
+    "sweet, sweet piggies",
+    "you sick, sick person",
 }
 
 local current_pig_death_message_num = 1
@@ -1353,7 +1368,14 @@ end
 
 tidy_sprites()
 
-game_state = "title"
+local title_level = nil
+function start_title()
+    game_state = "title"
+    title_level = level:new( vector:new( 32, 14 ))
+    title_level:tidy()
+end
+
+start_title()
 
 function start_game()
     shots_taken = 0
@@ -1364,38 +1386,46 @@ function start_game()
 end
 
 function draw_game_logo()
-    draw_shadowed( 0, 0, 0, 1, 2, function(x,y)
-        print_centered_text( "exploding golf", 20 + y, 14 )
-        print_centered_text( "with loveable piggies", 27 + y, 15 )
+    draw_shadowed( 0, 0, 0, 1, 1, function(x,y)
+        print_centered_text( "exploding golf", 26 + y, 10 )
+    end)
+    draw_shadowed( 0, 0, 0, 1, 1, function(x,y)
+        print_centered_text( "with loveable piggies", 36 + y, 15 )
     end)
 end
 
 function draw_title()
 
-    map( 32, 14, 0, 8, 16, 14 )
+    camera( 0, -8 )
+    title_level:draw()
+    camera()
 
     draw_game_logo()
 
     draw_shadowed( 0, 0, 0, 1, 2, function(x,y)
-        print_centered_text( "\x8e/\x97 play", 90 + y, 12 )
+        print_centered_text( "\x8e/\x97 play", 94 + y, 12 )
     end)
 end
 
 function update_title()
+
+    title_level:update()
+
     if btnp( 4 ) or btnp( 5 ) then
+        title_level = nil
         start_game()
     end
 end
 
 function draw_end_of_game()
     draw_game_logo()
-    draw_shadowed( 0, 0, 0, 1, 2, function(x,y)
-        print_centered_text( "you did it!", 40, 8 )
-        print_centered_text( "levels solved: " .. max_level, 54, 13 )
-        print_centered_text( "shots taken: " .. shots_taken, 61, 13 )
-        print_centered_text( "piggies accidentally killed: " .. piggies_killed, 68, 13 )
-        print_centered_text( "things exploded: " .. things_exploded, 75, 13 )
-        print_centered_text( "thanks for playing!", 89, 8 )
+    draw_shadowed( 0, 10, 0, 1, 2, function(x,y)
+        print_centered_text( "you did it!", 40 + y, 8 )
+        print_centered_text( "levels solved: " .. max_level, 54 + y, 13 )
+        print_centered_text( "shots taken: " .. shots_taken, 61 + y, 13 )
+        print_centered_text( "piggies accidentally murdered: " .. piggies_killed, 68 + y, 13 )
+        print_centered_text( "things exploded: " .. things_exploded, 75 + y, 13 )
+        print_centered_text( "thanks for playing!", 89 + y, 8 )
         print_centered_text( "\x8e/\x97 main menu", 120, 1 )
     end)
 end
@@ -1676,12 +1706,12 @@ __map__
 553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d233d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d233d233d3d3d3d023d3d3d3d3d53553d3d3d3d3d3d3d033d3d3d3d3d3d53553d3d3d233d3d3d3d3d3d3d233d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d013d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d3d3d3d033d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d233d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d3d3d3d3d3d3d3d3d3d5355723d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d033d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d6e6f3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d3d3d3d3d3d3d5355723d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d7e7f3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d727272723d3d3d3d3d53553d3d3d3d3d133d723d3d013d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d013d3d727272723d3d3d3d3d53553d3d3d6e6f3d3d723d3d3d3d3d3d53553d3d3d3d233d3d3d023d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d727272723d6e6f3d3d53553d023d7e7f3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d6e6f3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d727272723d7e7f3d3d53553d3d3d3d3d3d3d723d3d3d3d3d3d53553d3d233d3d3d3d3d3d3d3d7e7f3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d727272723d6e6f3d3d53553d023d7e7f3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d727272723d7e7f3d3d53553d3d3d3d3d3d3d723d3d3d3d3d3d53553d3d233d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d727272723d3d3d3d235355723d3d3d3d3d3d723d3d3d3d3d3d53553d3d3d3d3d3d233d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 5444444444444444724444444444445454724444444444444444444444444454544444444444444444444444444444543d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
