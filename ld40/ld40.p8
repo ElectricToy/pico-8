@@ -1299,7 +1299,7 @@ end
 -- levels
 local current_level = nil
 local current_level_number = 1
-local max_level = 1     -- todo
+local max_level = 10
 
 local pig_death_messages = {
     "don't you kill those piggies",
@@ -1426,7 +1426,7 @@ function draw_end_of_game()
         print_centered_text( "piggies accidentally murdered: " .. piggies_killed, 68 + y, 13 )
         print_centered_text( "things exploded: " .. things_exploded, 75 + y, 13 )
         print_centered_text( "thanks for playing!", 89 + y, 8 )
-        print_centered_text( "\x8e/\x97 main menu", 120, 1 )
+        print_centered_text( "\x8e/\x97 play again", 120, 1 )
     end)
 end
 

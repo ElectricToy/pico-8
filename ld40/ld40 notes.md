@@ -319,10 +319,10 @@ So, tasks:
 * Things you *shouldn't* break (for theme, mainly). DONE
 * Initial instruction text DONE
 * Levels DONE
-* Title screen
+* Title screen DONE
+* End of game. DONE
 * Music
 * Level ordering.
-* End of game.
 ----
 * Nicer explosions, scorch marks
 * Level fail when wrong ball in hole
