@@ -317,6 +317,7 @@ So, tasks:
 * Hint text DONE
 * Pigs, level fail DONE
 * Things you *shouldn't* break (for theme, mainly). DONE
+* Initial instruction text
 * Levels
 * Music
 * Title screen
