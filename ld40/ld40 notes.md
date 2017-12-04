@@ -317,10 +317,13 @@ So, tasks:
 * Hint text DONE
 * Pigs, level fail DONE
 * Things you *shouldn't* break (for theme, mainly). DONE
-* Initial instruction text
-* Levels
-* Music
+* Initial instruction text DONE
+* Levels DONE
 * Title screen
+* Music
+* Level ordering.
+* End of game.
+----
 * Nicer explosions, scorch marks
 * Level fail when wrong ball in hole
 * Corporeal player sprite, movement, interface, death, etc. (lower priority)

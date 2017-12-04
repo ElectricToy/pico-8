@@ -46,6 +46,10 @@ function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
     fn( x, y )
 end
 
+function print_centered_text( text, y, color )
+    print( text, 64 - #text / 2 * 4, y, color )
+end
+
 local hiss_hosts = {}
 
 function play_hiss( host )
@@ -460,6 +464,8 @@ end
 
 function body:explode()
     if not self.alive then return end
+
+    things_exploded += 1
 
     -- apply a force to all other bodies
     self.level:apply_explosion_force( self.pos, self.explosion_power )
@@ -981,6 +987,8 @@ function shooter:shoot()
     self.active = false
 
     self.ball:addimpulse( self:impulse() )
+
+    shots_taken += 1
 end
 
 function shooter:draw()
@@ -1220,8 +1228,7 @@ function cutelilpiggy:new( level, x, y )
     return setmetatable( newobj, self )
 end
 
-function cutelilpiggy:trigger()
-    self:superclass().trigger( self )
+function cutelilpiggy:explode()
     sfx( 10 )
 
     self.level:create_bodies( 
@@ -1230,11 +1237,11 @@ function cutelilpiggy:trigger()
         particle, 
         piggyparticlevis, 
     0, 5 )
-end
 
-function cutelilpiggy:explode()
     self.level.dead_piggy_count += 1
     self:superclass().explode( self )
+
+    piggies_killed += 1
 end
 
 function level:tidy_grass_cell( localcellpos )
@@ -1290,7 +1297,7 @@ end
 -- levels
 local current_level = nil
 local current_level_number = 1
-local max_level = 10
+local max_level = 1     -- todo
 
 local pig_death_messages = {
     "don't you kill those piggies",
@@ -1321,6 +1328,8 @@ function goto_level( num )
         current_level:tidy()
     else
         -- end of game
+        game_state = "end"
+        current_level = nil
     end
 end
 
@@ -1343,7 +1352,60 @@ function tidy_sprites()
 end
 
 tidy_sprites()
-goto_level( 10 )
+
+game_state = "title"
+
+function start_game()
+    shots_taken = 0
+    piggies_killed = 0
+    things_exploded = 0
+    game_state = "playing"
+    goto_level( 1 )
+end
+
+function draw_game_logo()
+    draw_shadowed( 0, 0, 0, 1, 2, function(x,y)
+        print_centered_text( "exploding golf", 20 + y, 14 )
+        print_centered_text( "with loveable piggies", 27 + y, 15 )
+    end)
+end
+
+function draw_title()
+
+    map( 32, 14, 0, 8, 16, 14 )
+
+    draw_game_logo()
+
+    draw_shadowed( 0, 0, 0, 1, 2, function(x,y)
+        print_centered_text( "\x8e/\x97 play", 90 + y, 12 )
+    end)
+end
+
+function update_title()
+    if btnp( 4 ) or btnp( 5 ) then
+        start_game()
+    end
+end
+
+function draw_end_of_game()
+    draw_game_logo()
+    draw_shadowed( 0, 0, 0, 1, 2, function(x,y)
+        print_centered_text( "you did it!", 40, 8 )
+        print_centered_text( "levels solved: " .. max_level, 54, 13 )
+        print_centered_text( "shots taken: " .. shots_taken, 61, 13 )
+        print_centered_text( "piggies accidentally killed: " .. piggies_killed, 68, 13 )
+        print_centered_text( "things exploded: " .. things_exploded, 75, 13 )
+        print_centered_text( "thanks for playing!", 89, 8 )
+        print_centered_text( "\x8e/\x97 main menu", 120, 1 )
+    end)
+end
+
+function update_end_of_game()
+
+    if btnp( 4 ) or btnp( 5 ) then
+        start_game()
+    end
+end
 
 function confirm_winloss_state( old_level_state, old_loss_reason )
     
@@ -1375,6 +1437,14 @@ end
 -- update 
 function _update60()
 
+    if game_state == "title" then
+        update_title()
+        return
+    elseif game_state == "end" then
+        update_end_of_game()
+        return
+    end
+
     local level_state, loss_reason = current_level:settled_state()
     -- debug_print( level_state .. ':' .. ( loss_reason or "" ) )
 
@@ -1404,8 +1474,17 @@ end
 function _draw()
     cls()
 
+    if game_state == "title" then
+        draw_title()
+        return
+    elseif game_state == "end" then
+        draw_end_of_game()
+        return
+    end
+
+
     local heading = "level " .. current_level_number .. " / " .. max_level
-    print( heading, 64 - #heading / 2 * 4, 0, 5 )
+    print_centered_text( heading, 1, 5 )
 
     local level_state, loss_reason = current_level:settled_state()
 
@@ -1427,14 +1506,14 @@ function _draw()
     if loss_reason == "killed_innocents" then
 
         local message = pig_death_messages[ current_pig_death_message_num ]
-        draw_shadowed( 64 - #message / 2 * 4, 63, 0, 1, 2, function(x,y)
-            print( message, x, y, 14 )
+        draw_shadowed( 0, 63, 0, 1, 2, function(x,y)
+            print_centered_text( message, y, 14 )
         end )
     end
 
     if current_level_number == 1 and shooter.active then
         draw_shadowed( 70, 55, 0, 1, 2, function(x,y)
-            print( "sink this ball", x, y, 8 )
+            print( "sink this ball", x, y, 14 )
         end )
     end
 
@@ -1593,17 +1672,17 @@ __map__
 5444444444444444444454444444445454444444444444444444444444444454544444444444444444444444444444545444444444444444444444444444445454444444444444444444444444444454544444444444444444444444444444545444444444444444444444444444445454444444444444444444444444444454
 5464646464646464646464646464645454646464646464646464646464646454546464646464646464646464646464543d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d233d233d3d3d3d3d3d3d3d3d3d53553d233d3d3d3d3d3d3d3d3d3d233d53553d3d3d3d3d3d3d3d3d3d3d3d233d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d6e6f3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d233d233d3d3d3d023d3d3d3d3d53553d3d3d3d3d3d3d033d3d3d3d3d3d53553d3d7e7f3d3d3d3d3d3d033d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d023d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d3d3d3d033d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d3d3d3d3d3d3d3d3d3d5355723d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d723d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d233d233d3d3d3d3d3d3d3d3d3d53553d233d3d3d3d3d3d3d3d3d3d233d53553d3d233d3d3d3d3d233d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d233d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d233d233d3d3d3d023d3d3d3d3d53553d3d3d3d3d3d3d033d3d3d3d3d3d53553d3d3d233d3d3d3d3d3d3d233d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d013d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d033d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d233d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d3d3d3d3d3d3d3d3d3d5355723d3d3d3d3d3d3d3d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 553d3d3d3d3d727272723d3d3d3d3d53553d3d3d3d3d133d723d3d013d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d013d3d727272723d3d3d3d3d53553d3d3d6e6f3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d727272723d6e6f3d3d53553d023d7e7f3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d727272723d7e7f3d3d53553d3d3d3d3d3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d013d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
-553d3d3d3d3d727272723d3d3d3d235355723d3d3d3d3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d013d3d727272723d3d3d3d3d53553d3d3d6e6f3d3d723d3d3d3d3d3d53553d3d3d3d233d3d3d023d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d727272723d6e6f3d3d53553d023d7e7f3d3d723d3d3d3d3d3d53553d3d3d3d3d3d3d3d3d3d3d6e6f3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d727272723d7e7f3d3d53553d3d3d3d3d3d3d723d3d3d3d3d3d53553d3d233d3d3d3d3d3d3d3d7e7f3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
+553d3d3d3d3d727272723d3d3d3d235355723d3d3d3d3d3d723d3d3d3d3d3d53553d3d3d3d3d3d233d3d3d3d3d3d3d533d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 5444444444444444724444444444445454724444444444444444444444444454544444444444444444444444444444543d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
 3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d
