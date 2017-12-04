@@ -321,8 +321,8 @@ So, tasks:
 * Levels DONE
 * Title screen DONE
 * End of game. DONE
-* Music
-* Level ordering.
+* Music DONE
+* Level ordering. DONE
 ----
 * Nicer explosions, scorch marks
 * Level fail when wrong ball in hole
@@ -359,3 +359,5 @@ So, tasks:
 4:59 PM time for breakfast!
 
 5:23 PM Time for pigs!
+
+9:13 PM DONE!!
