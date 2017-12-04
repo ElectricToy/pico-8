@@ -1225,15 +1225,21 @@ local cutelilpiggy = inheritsfrom( body )
 function cutelilpiggy:new( level, x, y )
     local newobj = body:new( level, x, y, 3.5 )
     local vis = spritevis:new( level, newobj, { 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 10, 11 }, 1 )
+    newobj.vis = vis
     vis.frame = flr( randinrange( 1, #vis.sprite_frames + 1 ))
     vis.flipx = rnd() > 0.75
     newobj.min_impulse_for_trigger = 0.5
     newobj.trigger_explosion_delay = 0
     newobj.explosion_power = 0
+    newobj.popped = false
     return setmetatable( newobj, self )
 end
 
 function cutelilpiggy:explode()
+    if not self.alive or self.popped then return end
+
+    self.popped = true
+
     sfx( 10 )
 
     self.level:create_bodies( 
@@ -1244,7 +1250,13 @@ function cutelilpiggy:explode()
     0, 5 )
 
     self.level.dead_piggy_count += 1
-    self:superclass().explode( self )
+
+    self.vis.sprite_frames = {12}
+    self.vis.frame = 1
+    self.want_dynamics = false
+    self.does_collide_bodies = false
+
+    things_exploded += 1
 
     piggies_killed += 1
 end
@@ -1328,6 +1340,7 @@ local pig_death_messages = {
     "how dare you?",
     "sweet, sweet piggies",
     "you sick, sick person",
+    "so adorable!",
 }
 
 local current_pig_death_message_num = 1
