@@ -5,6 +5,15 @@ __lua__
 -- by jeff and liam wofford 
 -- http://www.electrictoy.co
 
+-->8
+--liam's code
+
+-- todo
+
+-->8
+--jeff's code
+
+-- todo
 
 -->8
 -- general utilities
@@ -137,10 +146,3 @@ function clamp( x, least, greatest )
 	assert( greatest >= least )
 	return min( greatest, max( least, x ))
 end
-
--->8
---liam's code
--->8
---jeff's code
-
-
