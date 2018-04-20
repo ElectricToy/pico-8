@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
 -- todo game title here
--- by jeff wofford 
+-- by jeff and liam wofford 
 -- http://www.electrictoy.co
 
 
@@ -138,3 +138,5 @@ function clamp( x, least, greatest )
 	return min( greatest, max( least, x ))
 end
 
+-->8
+--liam's code
