@@ -6,6 +6,7 @@ __lua__
 -- http://www.electrictoy.co
 
 
+cls( 3 )
 -->8
 -- general utilities
 
