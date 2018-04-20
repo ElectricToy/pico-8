@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
 -- todo game title here
--- by jeff wofford 
+-- by jeff and liam wofford 
 -- http://www.electrictoy.co
 
 
