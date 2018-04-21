@@ -162,7 +162,7 @@ Danger/warning flashes and messages
     ~ Delay based on difficulty ~
     0:10.5 IF WEAPON: Kill creature
 0:11    Creature attack motion and strike point
-    FOR SOME CREATURES: Chance return to 0:05
+    FOR SOME CREATURES: Chance to return to 0:05
 0:12    Drops away
 
 Flash only if you _should_ jump.
@@ -188,7 +188,7 @@ Coins
 
 # Schedule
 
-## Vertical Slice
+## Vertical Slice - Tonight
 
 - Box character
 - Environment with motion
@@ -200,9 +200,25 @@ Coins
 - Owned item inventory
 - Light/dark
 
-## Expansion
+## Expansion - Saturday
 
+- Player character
+- UI details (e.g. crafting requirements, warning signs)
+- Items
+- Creatures
+- Environment art
 
+## Polish - Sunday
 
-## Polish
+- SFX
+- Music
+- Tuning
+- Extra art variations
 
+# Draw Tech
+
+Background fill
+Background tiling (e.g. mountains, clouds)
+Background sprites (e.g. trees, near hills)
+Ground tiles with platforms
+Actor sprites
