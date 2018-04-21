@@ -13,6 +13,10 @@ function debug_print( text )
     debug_text = text
 end
 
+function dither_color( base, dither )
+    return bor( base, shl( dither, 4 ))
+end
+
 function del_index( table, index )
     del( table, table[ index ])
 end
@@ -224,6 +228,8 @@ function level:draw()
     cls( 12 )
 
     -- draw background
+    fillp( 0b1010010110100101 )
+    rectfill( 0, 0, 128, 64, dither_color( 12, 13 ) )
 
     -- draw level
 
@@ -240,7 +246,7 @@ function animation:new( min, maxexclusive )
     local newobj = { 
         frames=range_to_array( min, maxexclusive ),
         current_frame=1,
-        frame_rate_hz=15,
+        frame_rate_hz=10,
     }
 
     return setmetatable( newobj, self )
@@ -310,19 +316,38 @@ function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
         spr( anim:frame(), self.pos.x, self.pos.y )
-    end    
+    end
+end
+
+--player
+
+local player = inheritsfrom( actor )
+function player:new( level )
+    local newobj = actor:new( level, 64, 64, 8, 14 )
+    newobj.animations[ 'run' ] = animation:new( 32, 37 ) 
+    newobj.current_animation_name = 'run'
+
+    newobj.leg_anim = animation:new( 48, 54 )
+    
+    return setmetatable( newobj, self )
+end
+
+function player:update( deltatime )
+    self:superclass().update( self, deltatime )
+    self.leg_anim:update( deltatime )
+end
+
+function player:draw()
+    self:superclass().draw(self)
+    spr( self.leg_anim:frame(), self.pos.x, self.pos.y + 8 )
 end
 
 -->8
 --jeff's code
 
-
 --level creation
 local current_level = level:new()
-local player = actor:new( current_level, 64, 64, 8, 14 )
-player.animations[ 'run' ] = animation:new( 48, 54 ) 
-player.current_animation_name = 'run'
-
+local current_player = player:new( current_level )
 
 --main loops
 function _update60()
