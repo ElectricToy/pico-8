@@ -193,7 +193,7 @@ Coins
 X Box character
 - Environment with motion
 X Jump button
-- Things to jump over
+X Things to jump over
 - Something to pick up (coin?)
 - Pickup button
 - Box creature
