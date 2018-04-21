@@ -13,6 +13,21 @@ function debug_print( text )
     debug_text = text
 end
 
+-- see http://lua-users.org/wiki/CopyTable
+function shallowcopy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in pairs(orig) do
+            copy[orig_key] = orig_value
+        end
+    else -- number, string, boolean, etc
+        copy = orig
+    end
+    return copy
+end
+
 function dither_color( base, dither )
     return bor( base, shl( dither, 4 ))
 end
@@ -224,18 +239,17 @@ function level:update()
 end
 
 function level:camera_position()
-    return vector:new( -64, 0 ) + vector:new( 32, 0 )
+    return vector:new( -64, -96 ) + vector:new( 32, 0 )
 end
 
 function level:draw()
 
     local cam = self:camera_position()
 
+    camera( 0, 0 )
     cls( 3 )
 
     -- draw background
-    camera( 0, cam.y )
-
     fillp( 0b1010010110100101 )
     rectfill( 0, 0, 128, 96, dither_color( 12, 13 ) )
 
@@ -282,9 +296,13 @@ function actor:new( level, x, y, wid, hgt )
         level = level,
         alive = true,
         pos = vector:new( x, y ),
+        vel = vector:new( 0, 0 ),
         collision_rect = vector:new( wid, hgt ),
         collision_planes_inc = 0,
         collision_planes_exc = 0,
+        does_collide_with_ground = true,
+        gravity_scalar = 1.0,
+        jumpforce = 4,
         animations = {},
         current_animation_name = nil,
     }
@@ -311,6 +329,17 @@ function actor:does_collide( other )
 end
 
 function actor:update( deltatime )
+
+    self.vel.y += self.gravity_scalar * 0.15
+
+    self.pos.x += self.vel.x
+    self.pos.y += self.vel.y
+
+    if self.does_collide_with_ground and self.pos.y >= 0 then
+        self.pos.y = 0
+        self.vel.y = 0
+    end
+
     local anim = self:current_animation()
     if anim ~= nil then 
         anim:update( deltatime ) 
@@ -320,6 +349,16 @@ end
 function actor:current_animation()
     if self.current_animation_name == nil then return nil end
     return self.animations[ self.current_animation_name ]
+end
+
+function actor:grounded()
+    return self.pos.y >= -0.1
+end
+
+function actor:jump( amount )
+    if not self:grounded() then return end
+
+    self.vel.y = -self.jumpforce * ( amount or 1.0 )
 end
 
 function actor:draw()
@@ -333,7 +372,7 @@ end
 
 local player = inheritsfrom( actor )
 function player:new( level )
-    local newobj = actor:new( level, 0, 96-4, 8, 14 )
+    local newobj = actor:new( level, 0, -64, 8, 14 )
     newobj.animations[ 'run' ] = animation:new( 32, 37 ) 
     newobj.current_animation_name = 'run'
     newobj.collision_planes_inc = 1
@@ -361,7 +400,26 @@ local current_level = level:new()
 local current_player = player:new( current_level )
 
 --main loops
+local buttonstates = {}
 function _update60()
+
+    function update_input()
+        local lastbuttonstates = shallowcopy( buttonstates )
+
+        for i = 0,5 do
+            buttonstates[ i ] = btn( i )
+        end
+
+        function wentdown( btn )
+            return buttonstates[ btn ] and not lastbuttonstates[ btn ]
+        end
+
+        if wentdown(4) then
+            current_player:jump()
+        end
+    end
+
+    update_input()
     current_level:update()
 end
 
@@ -371,6 +429,7 @@ function _draw()
 
     -- todo
 
+    camera( 0, 0 )
     print( debug_text, 8, 8, 8 )
 
 end
