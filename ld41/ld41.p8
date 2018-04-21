@@ -27,6 +27,18 @@ function rel_color( base, change )
     end
 end
 
+-- insertion sort
+-- see https://www.lexaloffle.com/bbs/?tid=2477
+function sort(a, compare)
+    for i=1,#a do
+        local j = i
+        while j > 1 and compare( a[j-1], a[j] ) do
+            a[j],a[j-1] = a[j-1],a[j]
+            j = j - 1
+        end
+    end
+end
+
 -- see http://lua-users.org/wiki/copytable
 function shallowcopy(orig)
     local orig_type = type(orig)
@@ -371,10 +383,14 @@ function level:update()
             del( self.actors, actor )
         end
     end    
+
+    sort( self.actors, function( a, b )
+        return a.depth < b.depth
+    end )
 end
 
 function level:camera_position()
-    return vector:new( -64, -64 ) + vector:new( self.player.pos.x, 0 )  -- todo!!!
+    return vector:new( -64, -64 ) + vector:new( self.player.pos.x + 32, 0 )
 end
 
 function level:draw()
@@ -446,6 +462,7 @@ function actor:new( level, x, y, wid, hgt )
         active = true,
         pos = vector:new( x or 0, y or x or 0 ),
         vel = vector:new( 0, 0 ),
+        depth = 0,
         offset = vector:new( 0, 0 ),
         collision_size = vector:new( wid or 0, hgt or 0 ),
         collision_planes_inc = 1,
@@ -575,6 +592,7 @@ function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
     newobj.do_dynamics = true
     newobj.want_shadow = true
+    newobj.depth = -1
     newobj.vel.x = 1    -- player run speed
     newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
     newobj.current_animation_name = 'run'
@@ -680,7 +698,7 @@ function stone:new( level, x, y )
     newobj.current_animation_name = 'idle'
     newobj.offset.x = -4
     newobj.offset.y = -6
-    newobj.collision_size.x = 14
+    newobj.collision_size.x = 16
     newobj.collision_size.y = 12
 
     return setmetatable( newobj, self )        
