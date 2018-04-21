@@ -27,6 +27,18 @@ function rel_color( base, change )
     end
 end
 
+-- insertion sort
+-- see https://www.lexaloffle.com/bbs/?tid=2477
+function sort(a, compare)
+    for i=1,#a do
+        local j = i
+        while j > 1 and compare( a[j-1], a[j] ) do
+            a[j],a[j-1] = a[j-1],a[j]
+            j = j - 1
+        end
+    end
+end
+
 -- see http://lua-users.org/wiki/copytable
 function shallowcopy(orig)
     local orig_type = type(orig)
@@ -116,7 +128,7 @@ end
 vector = inheritsfrom( nil )
 
 function vector:new( x, y )
-    local newobj = { x = x, y = y }
+    local newobj = { x = x or 0, y = y or x or 0 }
     return setmetatable( newobj, self )
 end
 
@@ -240,11 +252,67 @@ function rects_overlap( recta, rectb )
             )
     end
 
-    return  edges_overlap( recta.x, recta.x + recta.w, rectb.x, rectb.x + rectb.w )
-        and edges_overlap( recta.y, recta.y + recta.h, rectb.y, rectb.y + rectb.h )
+    return  edges_overlap( recta.l, recta.r, rectb.l, rectb.r )
+        and edges_overlap( recta.t, recta.b, rectb.t, rectb.b )
 end
 
 local shadow_y_divisor = 6
+
+-- mapsegment
+local mapsegment = inheritsfrom( nil )
+function mapsegment:new( segment_num, worldx )
+    local newobj = {
+        segment_num = segment_num,
+        worldx = worldx,
+    }
+    return setmetatable( newobj, self )
+end
+
+function mapsegment:collision_rect()
+    return { 
+        l = self.worldx,
+        r = self.worldx + 8 * 8,
+        t = -8 * 16,
+        b = 0,
+    }
+end
+
+function mapsegment:right()
+    return self:collision_rect().r
+end
+
+function mapsegment:colliding_tile( withactor )
+    local myrect = self:collision_rect()
+    local rect = withactor:collision_rect()
+    rect.l -= myrect.l
+    rect.t -= myrect.t
+    rect.r -= myrect.l
+    rect.b -= myrect.t
+
+    rect.l = flr( rect.l / 8 ) + flr( self.segment_num % 16 ) * 8
+    rect.t = flr( rect.t / 8 ) + flr( self.segment_num / 16 ) * 16
+    rect.r = flr( rect.r / 8 ) + flr( self.segment_num % 16 ) * 8
+    rect.b = flr( rect.b / 8 ) + flr( self.segment_num / 16 ) * 16
+
+    for y = rect.t, rect.b do
+        for x = rect.l, rect.r do
+            if fget( mget( x, y ), 7 ) then
+                return vector:new( myrect.l + ( x - rect.l ) * 8, myrect.t + ( y - rect.t ) * 8 )
+            end
+        end
+    end
+
+    return nil
+end
+
+function mapsegment:update()
+end
+
+function mapsegment:draw()
+    if self.segment_num > 0 then
+        mapdraw( self.segment_num % 16 * 8, flr( self.segment_num / 16 ) * 16, self.worldx, -16*8, 8, 16 )
+    end
+end
 
 -- level
 
@@ -252,6 +320,7 @@ local level = inheritsfrom( nil )
 function level:new()
     local newobj = { 
         actors = {},
+        mapsegments = {},
         ground_decorations = {},
         horizon_decorations = {},
         tick_count = 0,
@@ -267,6 +336,16 @@ end
 
 function level:after_delay( delay, fn )
     add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
+end
+
+function level:viewspan()
+    local cam = self:camera_position()
+    return cam.x, cam.x + 128
+end
+
+function level:live_actor_span()
+    local left, right = self:viewspan()
+    return left - 16, right + 32
 end
 
 function level:closest_actor( pos, filter )
@@ -313,9 +392,20 @@ function update_actor_collision( a, b )
 end
 
 function level:update_collision()
+
+    -- actor collision
     for i = 1, count(self.actors) - 1 do
         for j = i + 1, count(self.actors) do
             update_actor_collision( self.actors[ i ], self.actors[ j ])
+        end
+    end
+
+    -- mapsegment collision with player
+    for segment in all( self.mapsegments ) do
+        local collision = segment:colliding_tile( self.player )
+        if collision ~= nil then
+            self.player.pos.y -= 1  -- todo
+            self.player:landed()
         end
     end
 end
@@ -328,8 +418,9 @@ function level:update()
 
     self:update_pending_calls()
 
-    self:update_props()
-    self:update_coins()
+    self:create_props()
+    self:create_coins()
+    self:update_mapsegments()
 
     self:update_collision()
 
@@ -340,10 +431,14 @@ function level:update()
             del( self.actors, actor )
         end
     end    
+
+    sort( self.actors, function( a, b )
+        return a.depth < b.depth
+    end )
 end
 
 function level:camera_position()
-    return vector:new( -64, -96 ) + vector:new( 32 + self.player.pos.x, 0 )
+    return vector:new( -64, -64 ) + vector:new( self.player.pos.x + 32, 0 )
 end
 
 function level:draw()
@@ -356,9 +451,15 @@ function level:draw()
     camera( 0, cam.y )
 
     fillp( 0b1010010110100101 )
-    rectfill( 0, cam.y, 128, -6, dither_color( 12, 13 ) )
+    rectfill( 0, cam.y, 128, 0, dither_color( 12, 13 ) )
 
     camera( cam.x, cam.y )
+
+    -- draw mapsegments
+
+    for segment in all( self.mapsegments ) do
+        segment:draw()
+    end
 
     -- draw actors
     self:eachactor( function( actor )
@@ -415,11 +516,13 @@ function actor:new( level, x, y, wid, hgt )
         active = true,
         pos = vector:new( x or 0, y or x or 0 ),
         vel = vector:new( 0, 0 ),
+        depth = 0,
         offset = vector:new( 0, 0 ),
         collision_size = vector:new( wid or 0, hgt or 0 ),
         collision_planes_inc = 1,
         collision_planes_exc = 15,
         do_dynamics = false,
+        landed_tick = nil,
         does_collide_with_ground = true,
         gravity_scalar = 1.0,
         jumpforce = 3,
@@ -445,16 +548,23 @@ function actor:may_collide( other )
             and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
 end
 
-function actor:collision_rect()
-    return { x = self.pos.x + self.offset.x,
-             y = self.pos.y + self.offset.y,
-             w = self.collision_size.x,
-             h = self.collision_size.y }
+function actor:collision_ul()
+    return self.pos
 end
 
-function actor:center()
-    return vector:new( self.pos.x + self.offset.x + self.collision_size.x * 0.5,
-                       self.pos.y + self.offset.y + self.collision_size.y * 0.5 )
+function actor:collision_br()
+    return self:collision_ul() + self.collision_size
+end
+
+function actor:collision_center()
+    return self:collision_ul() + self.collision_size * vector:new( 0.5 )
+end
+
+function actor:collision_rect()
+    return { l = self.pos.x,
+             t = self.pos.y,
+             r = self.pos.x + self.collision_size.x,
+             b = self.pos.y + self.collision_size.y }
 end
 
 function actor:does_collide( other )
@@ -474,14 +584,16 @@ function actor:update( deltatime )
         self.pos.x += self.vel.x
         self.pos.y += self.vel.y
 
-        if self.does_collide_with_ground and self.pos.y >= 0 then
-            self.pos.y = 0
-            self.vel.y = 0
+        local footheight = self:collision_br().y
+        if self.does_collide_with_ground and footheight >= 0 then
+            self.pos.y = -self.collision_size.y
+            self:landed()
         end
     end
 
     -- die if too far left
-    if self.pos.x < self.level.player.pos.x - 96 then
+    local liveleft, liveright = self.level:live_actor_span()
+    if self.pos.x < liveleft then
         self.active = false
     end
 
@@ -497,20 +609,26 @@ function actor:current_animation()
     return self.animations[ self.current_animation_name ]
 end
 
+function actor:landed()
+    self.vel.y = max( self.y, 0 )
+    self.landed_tick = self.level.tick_count
+end
+
 function actor:grounded()
-    return self.pos.y >= -0.1
+    return self.landed_tick ~= nil
 end
 
 function actor:jump( amount )
     if not self:grounded() then return end
 
     self.vel.y = -self.jumpforce * ( amount or 1.0 )
+    self.landed_tick = nil
 end
 
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
-        local drawpos = vector:new( self.pos.x + self.offset.x, self.pos.y + self.offset.y )
+        local drawpos = self.pos + self.offset
         local frame = anim:frame()
         spr( frame.sprite, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
 
@@ -534,8 +652,8 @@ function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
     newobj.do_dynamics = true
     newobj.want_shadow = true
-    newobj.vel.x = 1
-    newobj.offset = vector:new( 0, -15 )
+    newobj.depth = -1
+    newobj.vel.x = 1    -- player run speed
     newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
     newobj.current_animation_name = 'run'
     newobj.collision_planes_exc = 0
@@ -543,7 +661,7 @@ function player:new( level )
     newobj.leg_anim = animation:new( 48, 6 )
 
     newobj.coins = 0
-    newobj.max_health = 5
+    newobj.max_health = 6
     newobj.health = newobj.max_health
 
     newobj.reach_distance = 12
@@ -599,13 +717,13 @@ end
 function player:grab()
     if self:dead() then return end
 
-    local pickup, distsqr = self.level:closest_actor( self:center(), function(actor)
+    local pickup, distsqr = self.level:closest_actor( self:collision_center(), function(actor)
         return actor.may_player_pickup
     end )
 
     if pickup ~= nil and 
         ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
-            or is_close( self:center(), pickup:center(), self.reach_distance )) then
+            or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
         pickup:on_pickedup_by( self )
     end
 end
@@ -638,9 +756,10 @@ function stone:new( level, x, y )
     local newobj = actor:new( level, x, y, 0, 0 )
     newobj.animations[ 'idle' ] = animation:new( 164, 1, 3, 2 ) 
     newobj.current_animation_name = 'idle'
-    newobj.offset.x = -3
-    newobj.offset.y = -5
-
+    newobj.offset.x = -4
+    newobj.offset.y = -6
+    newobj.collision_size.x = 16
+    newobj.collision_size.y = 12
 
     return setmetatable( newobj, self )        
 end
@@ -665,7 +784,8 @@ function coin:update( deltatime )
     self:superclass().update( self, deltatime )
 
     -- die if too far left
-    if self.pos.x < self.level.player.pos.x - 96 then
+    local liveleft, liveright = self.level:live_actor_span()
+    if self.pos.x < liveleft then
         self.active = false
     end
 end
@@ -681,21 +801,72 @@ function coin:on_pickedup_by( other )
     self:superclass().on_pickedup_by( self, other )
 end
 
-function level:update_props()
-    
+function level:create_props()    
+    local liveleft, liveright = self:live_actor_span()
     if pctchance( 1 ) then
-        stone:new( self, self.player.pos.x + 96, 0 )
+        stone:new( self, liveright - 2, -8 )
     end
 end
 
-function level:update_coins()
+function level:create_coins()
+    local liveleft, liveright = self:live_actor_span()
     if pctchance( 2 ) then
-        coin:new( self, self.player.pos.x + 96, randinrange( -48, -4 ) )
+        coin:new( self, liveright - 2, randinrange( -48, -4 ) )
     end
+end
+
+function world_to_mapsegment_cell_x( x )
+    return flr( x / (8*8) )
+end
+
+function level:update_mapsegments()
+    local left, right = self:viewspan()
+
+    -- update and remove any expired (too far left) segments
+    for segment in all( self.mapsegments ) do
+        segment:update()
+        if segment:right() < left then
+            del( self.mapsegments, segment )
+        end
+    end
+
+    -- create new segments to fill screen.
+    for worldcellx = world_to_mapsegment_cell_x( left ), world_to_mapsegment_cell_x( right ) do
+        debug_print( worldcellx )
+        if self.mapsegments[ worldcellx ] == nil then
+            self.mapsegments[ worldcellx ] = mapsegment:new( 1, worldcellx * 8*8 )
+        end
+    end
+
 end
 
 -->8
 --jeff's code
+
+--one-time setup
+
+function tidy_map()
+    for mapx = 0, 127 do
+        for mapy = 0, 32 do
+
+            -- fixup platform ends
+            function platformsprite( sprite )
+                return 132 <= sprite and sprite <= 134
+            end
+
+            local mapsprite = mget( mapx, mapy )
+            local segmentx = mapx % 8
+            local segmenty = mapy % 16
+            if platformsprite( mapsprite ) and ( segmentx == 0 or not platformsprite( mget( mapx - 1, mapy ))) then
+                mset( mapx, mapy, 133 )
+            elseif platformsprite( mapsprite ) and ( segmentx == 7 or not platformsprite( mget( mapx + 1, mapy ))) then
+                mset( mapx, mapy, 134 )
+            end
+        end
+    end
+end
+
+tidy_map()
 
 --level creation
 local current_level = level:new()
@@ -721,12 +892,27 @@ function _update60()
             return buttonstates[ btn ] and not lastbuttonstates[ btn ]
         end
 
+        function isdown( btn )
+            return buttonstates[ btn ]
+        end
+
         if wentdown(4) then
             player:jump()
         end
 
         if wentdown(5) then
             player:grab()
+        end
+
+        if false then
+            local move = 0
+            if isdown( 0 ) then
+                move += -1
+            end
+            if isdown( 1 ) then
+                move += 1
+            end
+            player.vel.x = move
         end
     end
 
@@ -766,10 +952,21 @@ function draw_ui()
 
     -- draw player health
 
-    local health_left = 124 - player.max_health * 6
-    for i = 0, player.max_health do
-        if i < player.health then
-            spr( 17, health_left + i * 6, 10 )
+    local healthstepx = 8
+    local health_left = 124 - ( player.max_health / 2 ) * healthstepx
+    local health_top = 10
+    for i = 0, player.max_health / 2 do
+        local healthx = i * healthstepx
+
+        local equivalent_health = i * 2
+
+        local sprite = 0
+
+        if equivalent_health + 1 < player.health then sprite = 1 
+        elseif equivalent_health < player.health then sprite = 2 end
+
+        if sprite > 0 then
+            spr( sprite, health_left + healthx, health_top )
         end
     end
 
@@ -791,6 +988,7 @@ function draw_ui()
     if true then
         draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
             print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
         end )
     end
 end
@@ -878,22 +1076,22 @@ __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000b000000000b00000b0000dddd0000222222220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0b3bb0000000bb3b000bb0006666ddddaa99aa990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00b3bb00000bb3b000b3b00066666666222222220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-b3b33bb000b333bb0b3b3b006666666699aa99aa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0b3bb33b0b0bbb300033b0006666666699aa99aa0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00b33b0000b33300003b000066666666aa99aa990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0b3bb300bb3bbbbb0bb5000066666666998899880000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00b3bbb000b333b00004000066666666111111110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-bb3b300000005b300000000066666666022220000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0b33bb00000bb30000000000666666662aa99a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00bb30000bb33bbb00000000666666662a9222200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0005bbb0000bb3300000000066666666292aa9810000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0005000000b35bbb0000000066666666292aa9810000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000400000000500000000000666666662a299a910000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000400000000400000000000dddd6666092889910000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0004000000004000000000000000dddd000111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000b000000000b00000b0000dddd0000222222220222222222222000000000000000000000000000000000000000000000000000000000000000000000000000
+0b3bb0000000bb3b000bb0006666ddddaa99aa992aa9aa99aa999200000000000000000000000000000000000000000000000000000000000000000000000000
+00b3bb00000bb3b000b3b00066666666222222222a92222222222220000000000000000000000000000000000000000000000000000000000000000000000000
+b3b33bb000b333bb0b3b3b006666666699aa99aa292a99aa99aaa981000000000000000000000000000000000000000000000000000000000000000000000000
+0b3bb33b0b0bbb300033b0006666666699aa99aa292a99aa99aaa981000000000000000000000000000000000000000000000000000000000000000000000000
+00b33b0000b33300003b000066666666aa99aa992a29aa99aa999a91000000000000000000000000000000000000000000000000000000000000000000000000
+0b3bb300bb3bbbbb0bb5000066666666998899880128998899888991000000000000000000000000000000000000000000000000000000000000000000000000
+00b3bbb000b333b00004000066666666111111110001111111111110000000000000000000000000000000000000000000000000000000000000000000000000
+bb3b300000005b300000000066666666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0b33bb00000bb3000000000066666666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00bb30000bb33bbb0000000066666666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0005bbb0000bb3300000000066666666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0005000000b35bbb0000000066666666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00040000000050000000000066666666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000400000000400000000000dddd6666000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0004000000004000000000000000dddd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000bbb00000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000b00000bbbbbbbb0000000004000400000004400000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000b00bb0000bb33bbb000000000044400440000044000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -913,6 +1111,20 @@ bbbbbbbbb3bbbbbb33bbbbbbbbbbb33b0000dddddddddddddd000000000000000000000000000000
 __gff__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000848484840000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 00010000146200f6200e6200f6201562016620136200c6200162018600156000e60001600221002510013000291002d1002e100100001d1001f1000d000201002110021100210002210022100221001300022100
 001000000c0530c0530c0550c0530c0530c0550c0530c0530f0530f0530f0550f0530f0530f0550f0530f05311053110531105511053110531105511053110531305313053130551305313053130551305313053

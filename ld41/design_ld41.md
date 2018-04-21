@@ -195,8 +195,8 @@ X Jump button
 X Things to jump over
 X Something to pick up (coin?)
 X Pickup button
-- Environment with motion
 - Platforms
+- Environment with motion
 - Box creature
 - Craft one item with blank rest of crafting tree
 - Owned item inventory
