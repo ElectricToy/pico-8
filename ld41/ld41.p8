@@ -371,7 +371,7 @@ end
 local animation = inheritsfrom( nil )
 function animation:new( min, maxexclusive )
     local newobj = { 
-        frames=range_to_array( min, maxexclusive ),
+        frames=range_to_array( min, maxexclusive or min + 1 ),
         current_frame=1,
         frame_rate_hz=10,
     }
@@ -403,7 +403,7 @@ function actor:new( level, x, y, wid, hgt )
         offset = vector:new( 0, -4 ),
         collision_size = vector:new( wid or 0, hgt or 0 ),
         collision_planes_inc = 0,
-        collision_planes_exc = 0,
+        collision_planes_exc = 15,
         do_dynamics = false,
         does_collide_with_ground = true,
         gravity_scalar = 1.0,
@@ -411,6 +411,7 @@ function actor:new( level, x, y, wid, hgt )
         animations = {},
         current_animation_name = nil,
         want_shadow = false,
+        damage = 1,
     }
 
     add( level.actors, newobj )
@@ -500,10 +501,6 @@ function actor:draw()
     end
 end
 
-function actor:damage()
-    return 1
-end
-
 function actor:on_pickedup_by( other )
     self.active = false    
 end
@@ -530,7 +527,7 @@ function level:update_props()
     if pctchance( 1 ) then
         local prop = decoration:new( self, self.player.pos.x + 96, 0 )
         prop.animations = {}
-        prop.animations[ 'idle' ] = animation:new( 17, 18 )
+        prop.animations[ 'idle' ] = animation:new( 17 )
         prop.current_animation_name = 'idle'
         prop.offset.x = -3
         prop.offset.y = -5
@@ -552,6 +549,7 @@ function player:new( level )
     newobj.animations[ 'run' ] = animation:new( 32, 37 ) 
     newobj.current_animation_name = 'run'
     newobj.collision_planes_inc = 1
+    newobj.collision_planes_exc = 0
 
     newobj.leg_anim = animation:new( 48, 54 )
 
@@ -638,7 +636,9 @@ function player:draw()
 end
 
 function player:on_collision( other )
-    self:take_damage( other:damage() )
+    if other.damage > 0 then
+        self:take_damage( other.damage )
+    end
 end
 
 
@@ -647,10 +647,11 @@ end
 local coin = inheritsfrom( actor )
 function coin:new( level, x, y )
     local newobj = actor:new( level, x, y, 4, 4 )
-    newobj.animations[ 'idle' ] = animation:new( 19, 20 ) 
+    newobj.animations[ 'idle' ] = animation:new( 20 ) 
     newobj.current_animation_name = 'idle'
-    newobj.collision_planes_inc = 0
+    newobj.collision_planes_inc = 1
     newobj.may_player_pickup = true
+    newobj.damage = 0
 
     newobj.value = 1
 
@@ -660,11 +661,15 @@ end
 function coin:update( deltatime )
     self:superclass().update( self, deltatime )
 
-    -- todo!!!
-    -- -- die if too far left
-    -- if self.pos.x < self.level.player.pos.x - 96 then
-    --     self.active = false
-    -- end
+    -- die if too far left
+    if self.pos.x < self.level.player.pos.x - 96 then
+        self.active = false
+    end
+end
+
+function coin:on_collision( other )
+    self:on_pickedup_by( other )
+    self:superclass().on_collision( self, other )
 end
 
 function coin:on_pickedup_by( other )
