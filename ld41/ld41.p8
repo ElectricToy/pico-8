@@ -356,7 +356,7 @@ function level:draw()
     camera( 0, cam.y )
 
     fillp( 0b1010010110100101 )
-    rectfill( 0, cam.y, 128, -6, dither_color( 12, 13 ) )
+    rectfill( 0, cam.y, 128, 0, dither_color( 12, 13 ) )
 
     camera( cam.x, cam.y )
 
@@ -543,7 +543,7 @@ function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
     newobj.do_dynamics = true
     newobj.want_shadow = true
-    -- newobj.vel.x = 1     -- todo!!!
+    newobj.vel.x = 1    -- player run speed
     newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
     newobj.current_animation_name = 'run'
     newobj.collision_planes_exc = 0
@@ -647,8 +647,8 @@ function stone:new( level, x, y )
     newobj.animations[ 'idle' ] = animation:new( 164, 1, 3, 2 ) 
     newobj.current_animation_name = 'idle'
     newobj.offset.x = -4
-    newobj.offset.y = -4
-    newobj.collision_size.x = 16
+    newobj.offset.y = -6
+    newobj.collision_size.x = 14
     newobj.collision_size.y = 12
 
     return setmetatable( newobj, self )        
@@ -693,7 +693,7 @@ end
 function level:update_props()
     
     if pctchance( 1 ) then
-        stone:new( self, self.player.pos.x + 96, 0 )
+        stone:new( self, self.player.pos.x + 96, -8 )
     end
 end
 
@@ -742,14 +742,16 @@ function _update60()
             player:grab()
         end
 
-        local move = 0
-        if isdown( 0 ) then
-            move += -1
+        if false then
+            local move = 0
+            if isdown( 0 ) then
+                move += -1
+            end
+            if isdown( 1 ) then
+                move += 1
+            end
+            player.vel.x = move
         end
-        if isdown( 1 ) then
-            move += 1
-        end
-        player.vel.x = move
     end
 
     update_input()
