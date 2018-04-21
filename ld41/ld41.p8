@@ -445,16 +445,23 @@ function actor:may_collide( other )
             and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
 end
 
-function actor:collision_rect()
-    return { x = self.pos.x + self.offset.x,
-             y = self.pos.y + self.offset.y,
-             w = self.collision_size.x,
-             h = self.collision_size.y }
+function actor:collision_ul()
+    return self.pos
 end
 
-function actor:center()
-    return vector:new( self.pos.x + self.offset.x + self.collision_size.x * 0.5,
-                       self.pos.y + self.offset.y + self.collision_size.y * 0.5 )
+function actor:collision_br()
+    return self:collision_ul() + self.collision_size
+end
+
+function actor:collision_center()
+    return self:collision_ul() + self.collision_size * 0.5
+end
+
+function actor:collision_rect()
+    return { x = self.pos.x,
+             y = self.pos.y,
+             w = self.collision_size.x,
+             h = self.collision_size.y }
 end
 
 function actor:does_collide( other )
@@ -474,8 +481,9 @@ function actor:update( deltatime )
         self.pos.x += self.vel.x
         self.pos.y += self.vel.y
 
-        if self.does_collide_with_ground and self.pos.y >= 0 then
-            self.pos.y = 0
+        local footheight = self:collision_br().y
+        if self.does_collide_with_ground and footheight >= 0 then
+            self.pos.y = -self.collision_size.y
             self.vel.y = 0
         end
     end
@@ -498,7 +506,8 @@ function actor:current_animation()
 end
 
 function actor:grounded()
-    return self.pos.y >= -0.1
+    -- todo platforms
+    return self:collision_br().y >= -0.1
 end
 
 function actor:jump( amount )
@@ -510,7 +519,7 @@ end
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
-        local drawpos = vector:new( self.pos.x + self.offset.x, self.pos.y + self.offset.y )
+        local drawpos = self.pos + self.offset
         local frame = anim:frame()
         spr( frame.sprite, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
 
@@ -534,8 +543,7 @@ function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
     newobj.do_dynamics = true
     newobj.want_shadow = true
-    newobj.vel.x = 1
-    newobj.offset = vector:new( 0, -15 )
+    -- newobj.vel.x = 1     -- todo!!!
     newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
     newobj.current_animation_name = 'run'
     newobj.collision_planes_exc = 0
@@ -543,7 +551,7 @@ function player:new( level )
     newobj.leg_anim = animation:new( 48, 6 )
 
     newobj.coins = 0
-    newobj.max_health = 5
+    newobj.max_health = 6
     newobj.health = newobj.max_health
 
     newobj.reach_distance = 12
@@ -599,13 +607,13 @@ end
 function player:grab()
     if self:dead() then return end
 
-    local pickup, distsqr = self.level:closest_actor( self:center(), function(actor)
+    local pickup, distsqr = self.level:closest_actor( self:collision_center(), function(actor)
         return actor.may_player_pickup
     end )
 
     if pickup ~= nil and 
         ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
-            or is_close( self:center(), pickup:center(), self.reach_distance )) then
+            or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
         pickup:on_pickedup_by( self )
     end
 end
@@ -638,9 +646,10 @@ function stone:new( level, x, y )
     local newobj = actor:new( level, x, y, 0, 0 )
     newobj.animations[ 'idle' ] = animation:new( 164, 1, 3, 2 ) 
     newobj.current_animation_name = 'idle'
-    newobj.offset.x = -3
-    newobj.offset.y = -5
-
+    newobj.offset.x = -4
+    newobj.offset.y = -4
+    newobj.collision_size.x = 16
+    newobj.collision_size.y = 12
 
     return setmetatable( newobj, self )        
 end
@@ -721,6 +730,10 @@ function _update60()
             return buttonstates[ btn ] and not lastbuttonstates[ btn ]
         end
 
+        function isdown( btn )
+            return buttonstates[ btn ]
+        end
+
         if wentdown(4) then
             player:jump()
         end
@@ -728,6 +741,15 @@ function _update60()
         if wentdown(5) then
             player:grab()
         end
+
+        local move = 0
+        if isdown( 0 ) then
+            move += -1
+        end
+        if isdown( 1 ) then
+            move += 1
+        end
+        player.vel.x = move
     end
 
     update_input()
@@ -766,10 +788,21 @@ function draw_ui()
 
     -- draw player health
 
-    local health_left = 124 - player.max_health * 6
-    for i = 0, player.max_health do
-        if i < player.health then
-            spr( 17, health_left + i * 6, 10 )
+    local healthstepx = 8
+    local health_left = 124 - ( player.max_health / 2 ) * healthstepx
+    local health_top = 10
+    for i = 0, player.max_health / 2 do
+        local healthx = i * healthstepx
+
+        local equivalent_health = i * 2
+
+        local sprite = 0
+
+        if equivalent_health + 1 < player.health then sprite = 1 
+        elseif equivalent_health < player.health then sprite = 2 end
+
+        if sprite > 0 then
+            spr( sprite, health_left + healthx, health_top )
         end
     end
 
