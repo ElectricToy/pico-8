@@ -310,8 +310,6 @@ function mapsegment:colliding_tile( withactor )
     rect.r = worldtomap( rect.r ) + my_mapspace_ul.x
     rect.b = worldtomap( rect.b ) + my_mapspace_ul.y
 
-    -- debug_print( rect.l .. ',' .. rect.t .. ',' .. rect.r .. ',' .. rect.b .. ' ' )
-
     for y = rect.t, rect.b do
         for x = rect.l, rect.r do
             if fget( mget( x, y ), 7 ) then
@@ -866,6 +864,7 @@ function level:update_mapsegments()
     -- create new segments to fill screen.
     for worldcellx = world_to_mapsegment_cell_x( left ), world_to_mapsegment_cell_x( right ) do
         if self.mapsegments[ worldcellx ] == nil then
+            debug_print( worldcellx )
             self.mapsegments[ worldcellx ] = mapsegment:new( 1, maptoworld( worldcellx * mapsegment_tile_size.x ) )
         end
     end
