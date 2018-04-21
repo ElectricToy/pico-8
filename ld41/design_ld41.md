@@ -195,12 +195,12 @@ X Jump button
 X Things to jump over
 X Something to pick up (coin?)
 X Pickup button
-- Platforms
-- Environment with motion
-- Box creature
+X Platforms
+- Creature
 - Craft one item with blank rest of crafting tree
 - Owned item inventory
 - Light/dark
+- Environment with motion
 
 ## Expansion - Saturday
 
@@ -212,6 +212,7 @@ X Pickup button
 
 ## Polish - Sunday
 
+- background with dithered gradient
 - SFX
 - Music
 - Tuning
