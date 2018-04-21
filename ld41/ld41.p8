@@ -459,8 +459,8 @@ end
 function level:update_collision()
 
     -- actor collision
-    for i = 1, count(self.actors) - 1 do
-        for j = i + 1, count(self.actors) do
+    for i = 1, #self.actors - 1 do
+        for j = i + 1, #self.actors do
             update_actor_collision( self.actors[ i ], self.actors[ j ])
         end
     end
@@ -486,10 +486,13 @@ function level:update()
 
     self:update_pending_calls()
 
-    -- todo!!!
-    -- self:create_props()
-    self:create_coins()
-    self:update_mapsegments()
+    self:update_creatures()
+
+    if self.player.alive then
+        self:create_props()
+        self:create_coins()
+        self:update_mapsegments()
+    end
 
     self:update_collision()
 
@@ -536,14 +539,6 @@ end
 
 -- animation
 
-local frame = inheritsfrom( nil )
-function frame:new( sprite )
-    local newobj = { 
-        sprite = sprite
-    }
-    return setmetatable( newobj, self )
-end
-
 local animation = inheritsfrom( nil )
 function animation:new( min, count, ssizex, ssizey )
     count = count or 1
@@ -553,24 +548,30 @@ function animation:new( min, count, ssizex, ssizey )
         frame_rate_hz=10,
         ssizex = ssizex or 1,
         ssizey = ssizey or ssizex or 1,
+        style = 'loop',
     }
 
     for i = 0, count - 1 do
-        newobj.frames[ i + 1 ] = frame:new( min + i * newobj.ssizex )
+        newobj.frames[ i + 1 ] = min + i * newobj.ssizex
     end
 
     return setmetatable( newobj, self )
 end
 
 function animation:update( deltatime )
-    if count( self.frames ) < 1 then return end
+    if #self.frames < 1 then return end
     self.current_frame += deltatime * self.frame_rate_hz
 end
 
 function animation:frame()
-    if count( self.frames ) < 1 then return nil end
+    if #self.frames < 1 then return nil end
 
-    local fr = wrap( self.current_frame, 1, count( self.frames ) + 1 )
+    local fr = wrap( self.current_frame, 1, #self.frames + 1 )
+
+    if self.style == 'stop' then
+        fr = clamp( self.current_frame, 1, #self.frames )
+    end
+
     return self.frames[ flr( fr ) ]
 end
 
@@ -581,6 +582,7 @@ function actor:new( level, x, y, wid, hgt )
     local newobj = { 
         level = level,
         active = true,
+        alive = true,
         pos = vector:new( x or 0, y or x or 0 ),
         vel = vector:new( 0, 0 ),
         depth = 0,
@@ -686,7 +688,7 @@ function actor:grounded()
 end
 
 function actor:jump( amount )
-    if not self:grounded() then return end
+    if self:dead() or not self:grounded() then return end
 
     self.vel.y = -self.jumpforce * ( amount or 1.0 )
     self.landed_tick = nil
@@ -697,14 +699,14 @@ function actor:draw()
     if anim ~= nil then 
         local drawpos = self.pos + self.offset
         local frame = anim:frame()
-        spr( frame.sprite, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
+        spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
 
         --draw shadow
-        if self.want_shadow then
-            draw_color_shifted( -4, function()
-                spr( frame.sprite, drawpos.x, (-drawpos.y)/shadow_y_divisor+6, anim.ssizex, anim.ssizey, false, true )
-            end )
-        end
+        -- if self.want_shadow then
+        --     draw_color_shifted( -4, function()
+        --         spr( frame, drawpos.x, (-self:collision_br().y) / shadow_y_divisor, anim.ssizex, anim.ssizey, false, true )
+        --     end )
+        -- end
     end
 end
 
@@ -719,7 +721,7 @@ function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
     newobj.do_dynamics = true
     newobj.want_shadow = true
-    newobj.depth = -1
+    newobj.depth = -100
     newobj.vel.x = 1    -- player run speed
     newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
     newobj.current_animation_name = 'run'
@@ -728,10 +730,15 @@ function player:new( level )
     newobj.leg_anim = animation:new( 48, 6 )
 
     newobj.coins = 0
-    newobj.max_health = 6
+    newobj.max_health = 1
     newobj.health = newobj.max_health
 
     newobj.reach_distance = 12
+
+    local death_anim = animation:new( 224, 7, 2, 2 )
+    death_anim.style = 'stop'
+    death_anim.frames = { 224, 226, 228, 230, 232, 234, 236 }
+    newobj.animations[ 'death' ] = death_anim
     
     return setmetatable( newobj, self )
 end
@@ -746,13 +753,16 @@ function player:update( deltatime )
 end
 
 function player:dead()
-    return self.health <= 0
+    return not self.alive
 end
 
 function player:die()
     if self:dead() then return end
 
-    -- todo
+    self.alive = false
+    self.animations[ 'death' ].current_frame = 1
+    self.current_animation_name = 'death'
+    self.vel.x = 0
     debug_print( "dead!" )
 end
 
@@ -799,14 +809,17 @@ function player:draw()
     if not self.invulnerable or flicker( self.level:time(), 8 ) then
         self:superclass().draw( self )
 
-        local legpos = self.pos + self.offset + vector:new( 0, 8 )
+        -- draw legs
+        if self.alive then
+            local legpos = self.pos + self.offset + vector:new( 0, 8 )
 
-        local leganim = self.leg_anim:frame()
-        spr( leganim.sprite, legpos.x, legpos.y )
+            local leganim = self.leg_anim:frame()
+            spr( leganim, legpos.x, legpos.y )
 
-        draw_color_shifted( -4, function()
-            spr( leganim.sprite, legpos.x, (-legpos.y)/shadow_y_divisor, 1, 1, false, true )
-        end )
+            -- draw_color_shifted( -4, function()
+            --     spr( leganim, legpos.x, (-legpos.y)/shadow_y_divisor, 1, 1, false, true )
+            -- end )
+        end
     end
 end
 
@@ -814,6 +827,17 @@ function player:on_collision( other )
     if other.damage > 0 then
         self:take_damage( other.damage )
     end
+end
+
+-- creature
+local creature = inheritsfrom( actor )
+function creature:new( level, x, y, wid, hgt )
+    local newobj = actor:new( level, x, y, wid, hgt )
+    newobj.do_dynamics = true
+    newobj.depth = -10
+    newobj.want_shadow = true
+    newobj.current_animation_name = 'run'
+    return setmetatable( newobj, self )
 end
 
 -- stone
@@ -868,7 +892,7 @@ function coin:on_pickedup_by( other )
     self:superclass().on_pickedup_by( self, other )
 end
 
-function level:create_props()    
+function level:create_props()
     local liveleft, liveright = self:live_actor_span()
     if pctchance( 1 ) then
         stone:new( self, liveright - 2, -8 )
@@ -879,6 +903,17 @@ function level:create_coins()
     local liveleft, liveright = self:live_actor_span()
     if pctchance( 2 ) then
         coin:new( self, liveright - 2, randinrange( -48, -4 ) )
+    end
+end
+
+function level:update_creatures()
+    local liveleft, liveright = self:live_actor_span()
+
+    -- create new creature if desired
+    -- todo
+    if pctchance( 0.5 ) then
+        local creat = creature:new( self, liveright - 2, -16, 16, 7 )
+        creat.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
     end
 end
 
@@ -945,59 +980,88 @@ function tidy_map()
     end
 end
 
-tidy_map()
-
 --level creation
-local current_level = level:new()
-current_level.player = player:new( current_level )
+local game_state = 'title'
+local current_level = nil
+
+function restart_world()
+    current_level = level:new()
+    current_level.player = player:new( current_level )
+
+    game_state = 'playing'
+end
 
 function player_run_distance()
     return ( current_level.player.pos.x - 0 ) / 100
 end
 
+tidy_map()
+restart_world()
+
 --main loops
 local buttonstates = {}
 function _update60()
 
-    function update_input()
-        local player = current_level.player
-        local lastbuttonstates = shallowcopy( buttonstates )
+    -- convenient button processing
 
-        for i = 0,5 do
-            buttonstates[ i ] = btn( i )
-        end
+    local lastbuttonstates = shallowcopy( buttonstates )
 
-        function wentdown( btn )
-            return buttonstates[ btn ] and not lastbuttonstates[ btn ]
-        end
+    for i = 0,5 do
+        buttonstates[ i ] = btn( i )
+    end
 
-        function isdown( btn )
-            return buttonstates[ btn ]
-        end
+    function wentdown( btn )
+        return buttonstates[ btn ] and not lastbuttonstates[ btn ]
+    end
 
-        if wentdown(4) then
-            player:jump()
-        end
+    function isdown( btn )
+        return buttonstates[ btn ]
+    end
 
-        if wentdown(5) then
-            player:grab()
-        end
+    -- update game state logic
 
-        -- manual movement
-        if false then
-            local move = 0
-            if isdown( 0 ) then
-                move += -1
+    if game_state == 'playing' then
+        function update_input()
+            local player = current_level.player
+            if wentdown(4) then
+                player:jump()
             end
-            if isdown( 1 ) then
-                move += 1
+
+            if wentdown(5) then
+                player:grab()
             end
-            player.vel.x = move
+
+            -- manual movement
+            if false then
+                local move = 0
+                if isdown( 0 ) then
+                    move += -1
+                end
+                if isdown( 1 ) then
+                    move += 1
+                end
+                player.vel.x = move
+            end
+        end
+
+
+        if current_level.player:dead() then
+            game_state = 'gameover'
+        else
+            update_input()
+        end
+
+    else -- game over, title
+
+        -- update input
+        if wentdown( 4 ) or wentdown( 5 ) then
+            restart_world()
         end
     end
 
-    update_input()
-    current_level:update()
+    if current_level ~= nil then
+        current_level:update()
+    end
 end
 
 function draw_color_shifted( shift, fn )
