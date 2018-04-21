@@ -13,6 +13,20 @@ function debug_print( text )
     debug_text = text
 end
 
+function rel_color( base, change )
+    local brighten_table = { 5, 13, 8, 11, 8, 6, 7, 7, 14, 10, 7, 7, 6, 12, 15, 7 }
+
+    local darken_table = { 0, 0, 0, 0, 0, 0, 5, 6, 2, 4, 9, 3, 13, 1, 8, 14 }
+
+    if change == 0 then 
+        return base
+    elseif change > 0 then
+        return rel_color( brighten_table[base+1], change - 1 )
+    else
+        return rel_color(   darken_table[base+1], change + 1 )
+    end
+end
+
 -- see http://lua-users.org/wiki/CopyTable
 function shallowcopy(orig)
     local orig_type = type(orig)
@@ -184,6 +198,37 @@ function clamp( x, least, greatest )
     assert( greatest >= least )
     return min( greatest, max( least, x ))
 end
+
+function lerp( a, b, alpha )
+    return a + (( b - a ) * alpha )
+end
+
+function sign( x )
+    return x > 0 and 1 or ( x < 0 and -1 or 0 )
+end
+
+function sign_no_zero( x )
+    return x >= 0 and 1 or -1
+end
+
+function is_close( a, b, maxdist )
+    local delta = b - a
+
+    local manhattanlength = delta:manhattanlength()
+    if manhattanlength > maxdist * 1.8 then     -- adding a fudge factor to account for diagonals.
+        return false
+    end
+
+    if manhattanlength > 180 then
+        printh( "objects may be close but we don't have the numeric precision to decide. ignoring." )
+        return false
+    end
+
+    local distsquared = delta:lengthsquared()
+
+    return distsquared <= maxdist * maxdist
+end
+
 -->8
 --systems
 
@@ -222,6 +267,23 @@ function level:after_delay( delay, fn )
     add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
 end
 
+function level:closest_actor( pos, filter )
+    local closest = nil
+    local closest_dist_sqr = nil
+
+    for actor in all( self.actors ) do
+        if actor.active and filter( actor ) and is_close( actor.pos, pos, 180 ) then
+            local distsqr = ( actor.pos - pos ):lengthsquared()
+            if closest_dist_sqr == nil or distsqr < closest_dist_sqr then
+                closest = actor
+                closest_dist_sqr = distsqr
+            end
+        end
+    end
+
+    return closest, closest_dist_sqr
+end
+
 function level:update_pending_calls()
     local now = self:time()
 
@@ -235,7 +297,7 @@ end
 
 function level:eachactor( apply )
     for actor in all( self.actors ) do
-        if actor.alive then
+        if actor.active then
             apply( actor )
         end
     end
@@ -265,13 +327,14 @@ function level:update()
     self:update_pending_calls()
 
     self:update_props()
+    self:update_coins()
 
     self:update_collision()
 
     -- update actors and remove dead ones
     for actor in all( self.actors ) do
         actor:update( deltatime )
-        if not actor.alive then
+        if not actor.active then
             del( self.actors, actor )
         end
     end    
@@ -332,7 +395,7 @@ local actor = inheritsfrom( nil )
 function actor:new( level, x, y, wid, hgt )
     local newobj = { 
         level = level,
-        alive = true,
+        active = true,
         pos = vector:new( x or 0, y or x or 0 ),
         vel = vector:new( 0, 0 ),
         offset = vector:new( 0, -4 ),
@@ -357,17 +420,22 @@ function actor:may_collide( other )
     -- and their exclusion planes don't
     -- so to collide with the player (plane 1) without colliding with other obstacles (plane 2)
     -- inc 1 but exc 2
-    return  self.alive
-            and other.alive
-            and band( self.collision_planes_inc, other.collision_planes_inc ) 
+    return  self.active
+            and other.active
+            and 0 ~= band( self.collision_planes_inc, other.collision_planes_inc ) 
             and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
 end
 
 function actor:collision_rect()
-    return { x = self.pos.x,
-             y = self.pos.y,
+    return { x = self.pos.x + self.offset.x,
+             y = self.pos.y + self.offset.y,
              w = self.collision_size.x,
              h = self.collision_size.y }
+end
+
+function actor:center()
+    return vector:new( self.pos.x + self.offset.x + self.collision_size.x * 0.5,
+                       self.pos.y + self.offset.y + self.collision_size.y * 0.5 )
 end
 
 function actor:does_collide( other )
@@ -425,11 +493,15 @@ function actor:damage()
     return 1
 end
 
+function actor:on_pickedup_by( other )
+    self.active = false    
+end
+
 -- decoration
 
 local decoration = inheritsfrom( actor )
-function decoration:new( level, x, y )
-    local newobj = actor:new( level, x ,y )
+function decoration:new( level, x, y, w, h )
+    local newobj = actor:new( level, x, y, w, h )
     return setmetatable( newobj, self )
 end
 
@@ -438,7 +510,7 @@ function decoration:update( deltatime )
 
     -- die if too far left
     if self.pos.x < self.level.player.pos.x - 96 then
-        self.alive = false
+        self.active = false
     end
 end
 
@@ -449,6 +521,8 @@ function level:update_props()
         prop.animations = {}
         prop.animations[ 'idle' ] = animation:new( 17, 18 )
         prop.current_animation_name = 'idle'
+        prop.offset.x = -3
+        prop.offset.y = -5
 
         -- todo
         prop.collision_planes_inc = 1
@@ -469,10 +543,17 @@ function player:new( level )
 
     newobj.leg_anim = animation:new( 48, 54 )
 
+    newobj.coins = 0
     newobj.max_health = 5
     newobj.health = newobj.max_health
+
+    newobj.reach_distance = 12
     
     return setmetatable( newobj, self )
+end
+
+function player:add_coins( amount )
+    self.coins += amount
 end
 
 function player:update( deltatime )
@@ -480,12 +561,19 @@ function player:update( deltatime )
     self.leg_anim:update( deltatime )
 end
 
+function player:dead()
+    return self.health <= 0
+end
+
 function player:die()
+    if self:dead() then return end
+
     -- todo
     debug_print( "dead!" )
 end
 
 function player:add_health( amount )
+    if self:dead() then return end
     self.health = clamp( self.health + amount, 0, self.max_health )
     if self.health == 0 then
         self:die()
@@ -493,6 +581,7 @@ function player:add_health( amount )
 end
 
 function player:start_invulnerable()
+    if self:dead() then return end
     self.invulnerable = true
     self.level:after_delay( 4.0, function()
         self.invulnerable = false
@@ -500,7 +589,7 @@ function player:start_invulnerable()
 end
 
 function player:take_damage( amount )
-    if self.invulnerable then return end
+    if self.invulnerable or self:dead() then return end
 
     self:add_health( -amount )
     if self.health > 0 then
@@ -508,8 +597,21 @@ function player:take_damage( amount )
     end
 end
 
-function player:draw()
+function player:grab()
+    if self:dead() then return end
 
+    local pickup, distsqr = self.level:closest_actor( self:center(), function(actor)
+        return actor.may_player_pickup
+    end )
+
+    if pickup ~= nil and 
+        ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
+            or is_close( self:center(), pickup:center(), self.reach_distance )) then
+        pickup:on_pickedup_by( self )
+    end
+end
+
+function player:draw()
     if not self.invulnerable or flicker( self.level:time(), 8 ) then
         self:superclass().draw( self )
         spr( self.leg_anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y + 8 )
@@ -519,6 +621,45 @@ end
 function player:on_collision( other )
     self:take_damage( other:damage() )
 end
+
+
+-- coin
+
+local coin = inheritsfrom( actor )
+function coin:new( level, x, y )
+    local newobj = actor:new( level, x, y, 4, 4 )
+    newobj.animations[ 'idle' ] = animation:new( 19, 20 ) 
+    newobj.current_animation_name = 'idle'
+    newobj.collision_planes_inc = 0
+    newobj.may_player_pickup = true
+
+    newobj.value = 1
+
+    return setmetatable( newobj, self )    
+end
+
+function coin:update( deltatime )
+    self:superclass().update( self, deltatime )
+
+    -- todo!!!
+    -- -- die if too far left
+    -- if self.pos.x < self.level.player.pos.x - 96 then
+    --     self.active = false
+    -- end
+end
+
+function coin:on_pickedup_by( other )
+    other:add_coins( self.value )
+    self.value = 0
+    self:superclass().on_pickedup_by( self, other )
+end
+
+function level:update_coins()
+    if pctchance( 2 ) then
+        coin:new( self, self.player.pos.x + 96, randinrange( -48, -4 ) )
+    end
+end
+
 
 -->8
 --jeff's code
@@ -532,6 +673,7 @@ local buttonstates = {}
 function _update60()
 
     function update_input()
+        local player = current_level.player
         local lastbuttonstates = shallowcopy( buttonstates )
 
         for i = 0,5 do
@@ -543,12 +685,36 @@ function _update60()
         end
 
         if wentdown(4) then
-            current_level.player:jump()
+            player:jump()
+        end
+
+        if wentdown(5) then
+            player:grab()
         end
     end
 
     update_input()
     current_level:update()
+end
+
+function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
+    for i = 0,15 do
+        pal( i, rel_color( i, -darkness ))
+    end
+
+    fn( x + offsetx, y + offsety )
+
+    pal()
+
+    fn( x, y )
+end
+
+function print_centered_text( text, x, y, color )
+    print( text, x - #text / 2 * 4, y, color )
+end
+
+function print_rightaligned_text( text, x, y, color )
+    print( text, x - #text * 4, y, color )
 end
 
 function draw_ui()
@@ -557,12 +723,18 @@ function draw_ui()
 
     -- draw player health
 
-    local health_left = 120 - player.max_health * 10
+    local health_left = 124 - player.max_health * 6
     for i = 0, player.max_health do
         if i < player.health then
-            spr( 17, health_left + i * 10, 10 )
+            spr( 17, health_left + i * 6, 10 )
         end
     end
+
+    -- draw player coins
+
+    draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+        print_rightaligned_text( '' .. player.coins, x, y, 10 )
+    end )
 end
 
 function _draw()
@@ -578,6 +750,7 @@ function _draw()
     draw_ui()
 
     print( debug_text, 8, 8, 8 )
+    print( '', 0, 16 )
 
 end
 
