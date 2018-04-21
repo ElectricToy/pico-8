@@ -191,20 +191,20 @@ Coins
 ## Vertical Slice - Tonight
 
 X Box character
-- Environment with motion
 X Jump button
 X Things to jump over
-- Something to pick up (coin?)
-- Pickup button
+X Something to pick up (coin?)
+X Pickup button
+- Environment with motion
+- Platforms
 - Box creature
-- platforms
 - Craft one item with blank rest of crafting tree
 - Owned item inventory
 - Light/dark
 
 ## Expansion - Saturday
 
-- Player character
+- Player character with all animations
 - UI details (e.g. crafting requirements, warning signs)
 - Items
 - Creatures

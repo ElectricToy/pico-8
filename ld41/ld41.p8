@@ -14,9 +14,9 @@ function debug_print( text )
 end
 
 function rel_color( base, change )
-    local brighten_table = { 5, 13, 8, 11, 8, 6, 7, 7, 14, 10, 7, 7, 6, 12, 15, 7 }
+    local brighten_table = { 5, 13,  8, 11,  8,  6,  7,  7, 14, 10,  7,  7,  6, 12, 15,  7 }
 
-    local darken_table = { 0, 0, 0, 0, 0, 0, 5, 6, 2, 4, 9, 3, 13, 1, 8, 14 }
+    local darken_table =   { 0,  0,  0,  0,  0,  0,  5,  6,  2,  4,  9,  3, 13,  1,  8, 14 }
 
     if change == 0 then 
         return base
@@ -244,6 +244,8 @@ function rects_overlap( recta, rectb )
         and edges_overlap( recta.y, recta.y + recta.h, rectb.y, rectb.y + rectb.h )
 end
 
+local SHADOW_Y_DIVISOR = 6
+
 -- level
 
 local level = inheritsfrom( nil )
@@ -408,6 +410,7 @@ function actor:new( level, x, y, wid, hgt )
         jumpforce = 3,
         animations = {},
         current_animation_name = nil,
+        want_shadow = false,
     }
 
     add( level.actors, newobj )
@@ -485,7 +488,15 @@ end
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
-        spr( anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y )
+        local drawpos = vector:new( self.pos.x + self.offset.x, self.pos.y + self.offset.y )
+        spr( anim:frame(), drawpos.x, drawpos.y )
+
+        --draw shadow
+        if self.want_shadow then
+            draw_color_shifted( -4, function()
+                spr( anim:frame(), drawpos.x, (-drawpos.y)/SHADOW_Y_DIVISOR+6, 1, 1, false, true )
+            end )
+        end
     end
 end
 
@@ -535,6 +546,7 @@ local player = inheritsfrom( actor )
 function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
     newobj.do_dynamics = true
+    newobj.want_shadow = true
     newobj.vel.x = 1
     newobj.offset = vector:new( 0, -15 )
     newobj.animations[ 'run' ] = animation:new( 32, 37 ) 
@@ -614,7 +626,14 @@ end
 function player:draw()
     if not self.invulnerable or flicker( self.level:time(), 8 ) then
         self:superclass().draw( self )
-        spr( self.leg_anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y + 8 )
+
+        local legpos = self.pos + self.offset + vector:new( 0, 8 )
+
+        spr( self.leg_anim:frame(), legpos.x, legpos.y )
+
+        draw_color_shifted( -4, function()
+            spr( self.leg_anim:frame(), legpos.x, (-legpos.y)/SHADOW_Y_DIVISOR, 1, 1, false, true )
+        end )
     end
 end
 
@@ -660,13 +679,16 @@ function level:update_coins()
     end
 end
 
-
 -->8
 --jeff's code
 
 --level creation
 local current_level = level:new()
 current_level.player = player:new( current_level )
+
+function player_run_distance()
+    return ( current_level.player.pos.x - 0 ) / 100
+end
 
 --main loops
 local buttonstates = {}
@@ -697,14 +719,20 @@ function _update60()
     current_level:update()
 end
 
-function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
+function draw_color_shifted( shift, fn )
     for i = 0,15 do
-        pal( i, rel_color( i, -darkness ))
+        pal( i, rel_color( i, shift ))
     end
 
-    fn( x + offsetx, y + offsety )
+    fn()
 
     pal()
+end
+
+function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
+    draw_color_shifted( -darkness, function()
+        fn( x + offsetx, y + offsety )
+    end )
 
     fn( x, y )
 end
@@ -729,6 +757,13 @@ function draw_ui()
             spr( 17, health_left + i * 6, 10 )
         end
     end
+
+    -- draw player distance
+
+    local dist = player_run_distance()
+    draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+        print_rightaligned_text( '' .. player.coins, x, y, 10 )
+    end )
 
     -- draw player coins
 
