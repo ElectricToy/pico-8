@@ -28,6 +28,10 @@ function shallowcopy(orig)
     return copy
 end
 
+function flicker( time, hertz, cutoff )
+    return ( time * hertz ) % 1 <= ( cutoff or 0.5 )
+end
+
 function dither_color( base, dither )
     return bor( base, shl( dither, 4 ))
 end
@@ -417,6 +421,10 @@ function actor:draw()
     end
 end
 
+function actor:damage()
+    return 1
+end
+
 -- decoration
 
 local decoration = inheritsfrom( actor )
@@ -460,6 +468,9 @@ function player:new( level )
     newobj.collision_planes_inc = 1
 
     newobj.leg_anim = animation:new( 48, 54 )
+
+    newobj.max_health = 5
+    newobj.health = newobj.max_health
     
     return setmetatable( newobj, self )
 end
@@ -469,13 +480,44 @@ function player:update( deltatime )
     self.leg_anim:update( deltatime )
 end
 
-function player:draw()
-    self:superclass().draw( self )
-    spr( self.leg_anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y + 8 )
+function player:die()
+    -- todo
+    debug_print( "dead!" )
 end
 
-function actor:on_collision( other )
-    -- todo
+function player:add_health( amount )
+    self.health = clamp( self.health + amount, 0, self.max_health )
+    if self.health == 0 then
+        self:die()
+    end
+end
+
+function player:start_invulnerable()
+    self.invulnerable = true
+    self.level:after_delay( 4.0, function()
+        self.invulnerable = false
+    end )
+end
+
+function player:take_damage( amount )
+    if self.invulnerable then return end
+
+    self:add_health( -amount )
+    if self.health > 0 then
+        self:start_invulnerable()
+    end
+end
+
+function player:draw()
+
+    if not self.invulnerable or flicker( self.level:time(), 8 ) then
+        self:superclass().draw( self )
+        spr( self.leg_anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y + 8 )
+    end
+end
+
+function player:on_collision( other )
+    self:take_damage( other:damage() )
 end
 
 -->8
@@ -509,6 +551,20 @@ function _update60()
     current_level:update()
 end
 
+function draw_ui()
+
+    local player = current_level.player
+
+    -- draw player health
+
+    local health_left = 120 - player.max_health * 10
+    for i = 0, player.max_health do
+        if i < player.health then
+            spr( 17, health_left + i * 10, 10 )
+        end
+    end
+end
+
 function _draw()
 
     -- world
@@ -518,6 +574,9 @@ function _draw()
     -- ui
 
     camera( 0, 0 )
+
+    draw_ui()
+
     print( debug_text, 8, 8, 8 )
 
 end
