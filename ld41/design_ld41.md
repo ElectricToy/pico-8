@@ -117,8 +117,7 @@ Controls:
 
 - jump
 - pickup
-- use item
-- arrows to craft
+- arrow keys to craft
 
 Modal: jump vs craft (quiet phases; uphill/downhill?)
 
@@ -162,7 +161,7 @@ Danger/warning flashes and messages
 0:10    Creature flash
     ~ Delay based on difficulty ~
     0:10.5 IF WEAPON: Kill creature
-0:11    Creature attack
+0:11    Creature attack motion and strike point
     FOR SOME CREATURES: Chance return to 0:05
 0:12    Drops away
 
@@ -175,3 +174,35 @@ Bat
 Condor
 Snake
 Wolf
+
+## Pickups 
+
+Coin
+Pre-crafted things
+Ingredients
+
+# End-of-Game
+
+Distance
+Coins
+
+# Schedule
+
+## Vertical Slice
+
+- Box character
+- Environment with motion
+- Jump button
+- Pickup button
+- Something to pick up (coin?)
+- Box creature
+- Craft one item with blank rest of crafting tree
+- Owned item inventory
+- Light/dark
+
+## Expansion
+
+
+
+## Polish
+
