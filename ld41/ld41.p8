@@ -244,7 +244,7 @@ function rects_overlap( recta, rectb )
         and edges_overlap( recta.y, recta.y + recta.h, rectb.y, rectb.y + rectb.h )
 end
 
-local SHADOW_Y_DIVISOR = 6
+local shadow_y_divisor = 6
 
 -- level
 
@@ -368,13 +368,28 @@ end
 
 -- animation
 
-local animation = inheritsfrom( nil )
-function animation:new( min, maxexclusive )
+local frame = inheritsfrom( nil )
+function frame:new( sprite )
     local newobj = { 
-        frames=range_to_array( min, maxexclusive or min + 1 ),
+        sprite = sprite
+    }
+    return setmetatable( newobj, self )
+end
+
+local animation = inheritsfrom( nil )
+function animation:new( min, count, ssizex, ssizey )
+    count = count or 1
+    local newobj = { 
+        frames = {},
         current_frame=1,
         frame_rate_hz=10,
+        ssizex = ssizex or 1,
+        ssizey = ssizey or ssizex or 1,
     }
+
+    for i = 0, count - 1 do
+        newobj.frames[ i + 1 ] = frame:new( min + i * newobj.ssizex )
+    end
 
     return setmetatable( newobj, self )
 end
@@ -400,9 +415,9 @@ function actor:new( level, x, y, wid, hgt )
         active = true,
         pos = vector:new( x or 0, y or x or 0 ),
         vel = vector:new( 0, 0 ),
-        offset = vector:new( 0, -4 ),
+        offset = vector:new( 0, 0 ),
         collision_size = vector:new( wid or 0, hgt or 0 ),
-        collision_planes_inc = 0,
+        collision_planes_inc = 1,
         collision_planes_exc = 15,
         do_dynamics = false,
         does_collide_with_ground = true,
@@ -465,6 +480,12 @@ function actor:update( deltatime )
         end
     end
 
+    -- die if too far left
+    if self.pos.x < self.level.player.pos.x - 96 then
+        self.active = false
+    end
+
+    -- update animation
     local anim = self:current_animation()
     if anim ~= nil then 
         anim:update( deltatime ) 
@@ -490,12 +511,13 @@ function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
         local drawpos = vector:new( self.pos.x + self.offset.x, self.pos.y + self.offset.y )
-        spr( anim:frame(), drawpos.x, drawpos.y )
+        local frame = anim:frame()
+        spr( frame.sprite, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
 
         --draw shadow
         if self.want_shadow then
             draw_color_shifted( -4, function()
-                spr( anim:frame(), drawpos.x, (-drawpos.y)/SHADOW_Y_DIVISOR+6, 1, 1, false, true )
+                spr( frame.sprite, drawpos.x, (-drawpos.y)/shadow_y_divisor+6, anim.ssizex, anim.ssizey, false, true )
             end )
         end
     end
@@ -503,38 +525,6 @@ end
 
 function actor:on_pickedup_by( other )
     self.active = false    
-end
-
--- decoration
-
-local decoration = inheritsfrom( actor )
-function decoration:new( level, x, y, w, h )
-    local newobj = actor:new( level, x, y, w, h )
-    return setmetatable( newobj, self )
-end
-
-function decoration:update( deltatime )
-    self:superclass().update( self, deltatime )
-
-    -- die if too far left
-    if self.pos.x < self.level.player.pos.x - 96 then
-        self.active = false
-    end
-end
-
-function level:update_props()
-    
-    if pctchance( 1 ) then
-        local prop = decoration:new( self, self.player.pos.x + 96, 0 )
-        prop.animations = {}
-        prop.animations[ 'idle' ] = animation:new( 17 )
-        prop.current_animation_name = 'idle'
-        prop.offset.x = -3
-        prop.offset.y = -5
-
-        -- todo
-        prop.collision_planes_inc = 1
-    end
 end
 
 --player
@@ -546,12 +536,11 @@ function player:new( level )
     newobj.want_shadow = true
     newobj.vel.x = 1
     newobj.offset = vector:new( 0, -15 )
-    newobj.animations[ 'run' ] = animation:new( 32, 37 ) 
+    newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
     newobj.current_animation_name = 'run'
-    newobj.collision_planes_inc = 1
     newobj.collision_planes_exc = 0
 
-    newobj.leg_anim = animation:new( 48, 54 )
+    newobj.leg_anim = animation:new( 48, 6 )
 
     newobj.coins = 0
     newobj.max_health = 5
@@ -627,10 +616,11 @@ function player:draw()
 
         local legpos = self.pos + self.offset + vector:new( 0, 8 )
 
-        spr( self.leg_anim:frame(), legpos.x, legpos.y )
+        local leganim = self.leg_anim:frame()
+        spr( leganim.sprite, legpos.x, legpos.y )
 
         draw_color_shifted( -4, function()
-            spr( self.leg_anim:frame(), legpos.x, (-legpos.y)/SHADOW_Y_DIVISOR, 1, 1, false, true )
+            spr( leganim.sprite, legpos.x, (-legpos.y)/shadow_y_divisor, 1, 1, false, true )
         end )
     end
 end
@@ -641,6 +631,19 @@ function player:on_collision( other )
     end
 end
 
+-- stone
+
+local stone = inheritsfrom( actor )
+function stone:new( level, x, y )
+    local newobj = actor:new( level, x, y, 0, 0 )
+    newobj.animations[ 'idle' ] = animation:new( 164, 1, 3, 2 ) 
+    newobj.current_animation_name = 'idle'
+    newobj.offset.x = -3
+    newobj.offset.y = -5
+
+
+    return setmetatable( newobj, self )        
+end
 
 -- coin
 
@@ -676,6 +679,13 @@ function coin:on_pickedup_by( other )
     other:add_coins( self.value )
     self.value = 0
     self:superclass().on_pickedup_by( self, other )
+end
+
+function level:update_props()
+    
+    if pctchance( 1 ) then
+        stone:new( self, self.player.pos.x + 96, 0 )
+    end
 end
 
 function level:update_coins()
@@ -775,6 +785,14 @@ function draw_ui()
     draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
         print_rightaligned_text( '' .. player.coins, x, y, 10 )
     end )
+
+    -- draw debug
+
+    if true then
+        draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
+            print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+        end )
+    end
 end
 
 function _draw()
