@@ -182,8 +182,16 @@ end
 -->8
 --systems
 
-function overlaps( recta, rectb )
-    return false -- todo!!!
+function rects_overlap( recta, rectb )
+    function edges_overlap( la, ra, lb, rb )
+        return not (
+                la > rb or
+                ra < lb
+            )
+    end
+
+    return  edges_overlap( recta.x, recta.x + recta.w, rectb.x, rectb.x + rectb.w )
+        and edges_overlap( recta.y, recta.y + recta.h, rectb.y, rectb.y + rectb.h )
 end
 
 -- level
@@ -228,6 +236,21 @@ function level:eachactor( apply )
     end
 end
 
+function update_actor_collision( a, b )
+    if a:does_collide( b ) then
+        a:on_collision( b )
+        b:on_collision( a )
+    end
+end
+
+function level:update_collision()
+    for i = 1, count(self.actors) - 1 do
+        for j = i + 1, count(self.actors) do
+            update_actor_collision( self.actors[ i ], self.actors[ j ])
+        end
+    end
+end
+
 function level:update()
 
     local deltatime = 1.0 / 60.0
@@ -237,6 +260,8 @@ function level:update()
     self:update_pending_calls()
 
     self:update_props()
+
+    self:update_collision()
 
     -- update actors and remove dead ones
     for actor in all( self.actors ) do
@@ -303,10 +328,10 @@ function actor:new( level, x, y, wid, hgt )
     local newobj = { 
         level = level,
         alive = true,
-        pos = vector:new( x, y ),
+        pos = vector:new( x or 0, y or x or 0 ),
         vel = vector:new( 0, 0 ),
         offset = vector:new( 0, -4 ),
-        collision_rect = vector:new( wid, hgt ),
+        collision_size = vector:new( wid or 0, hgt or 0 ),
         collision_planes_inc = 0,
         collision_planes_exc = 0,
         do_dynamics = false,
@@ -330,12 +355,23 @@ function actor:may_collide( other )
     return  self.alive
             and other.alive
             and band( self.collision_planes_inc, other.collision_planes_inc ) 
-            and not band( self.collision_planes_exc, other.collision_planes_exc )
+            and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
+end
+
+function actor:collision_rect()
+    return { x = self.pos.x,
+             y = self.pos.y,
+             w = self.collision_size.x,
+             h = self.collision_size.y }
 end
 
 function actor:does_collide( other )
     return self:may_collide( other )
-        and overlaps( self:collision_rect(), other:collision_rect() )
+        and rects_overlap( self:collision_rect(), other:collision_rect() )
+end
+
+function actor:on_collision( other )
+    -- override
 end
 
 function actor:update( deltatime )
@@ -404,6 +440,9 @@ function level:update_props()
         prop.animations = {}
         prop.animations[ 'idle' ] = animation:new( 17, 18 )
         prop.current_animation_name = 'idle'
+
+        -- todo
+        prop.collision_planes_inc = 1
     end
 end
 
@@ -432,6 +471,10 @@ end
 function player:draw()
     self:superclass().draw( self )
     spr( self.leg_anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y + 8 )
+end
+
+function actor:on_collision( other )
+    -- todo
 end
 
 -->8
