@@ -14,7 +14,19 @@ __lua__
 --liam's code
 
 -- todo
+i=48
 
+function _update()
+ i+=0.25
+ if i >= 54 then
+	 i=48
+ end
+end
+
+function _draw()
+	cls()
+	spr(i,64,64)
+end
 -->8
 -- general utilities
 
