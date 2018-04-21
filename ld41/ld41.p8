@@ -166,6 +166,10 @@ function randinrange( min, max )
     return min + rnd( max - min )
 end
 
+function pctchance( pct )
+    return rnd( 100 ) < pct
+end
+
 function wrap( x, min, maxexclusive )
     assert( maxexclusive > min )
     return min + ( x - min ) % ( maxexclusive - min )
@@ -188,8 +192,11 @@ local level = inheritsfrom( nil )
 function level:new()
     local newobj = { 
         actors = {},
+        ground_decorations = {},
+        horizon_decorations = {},
         tick_count = 0,
         pending_calls = {},
+        player = nil,
     }
     return setmetatable( newobj, self )
 end
@@ -229,6 +236,8 @@ function level:update()
 
     self:update_pending_calls()
 
+    self:update_props()
+
     -- update actors and remove dead ones
     for actor in all( self.actors ) do
         actor:update( deltatime )
@@ -239,23 +248,22 @@ function level:update()
 end
 
 function level:camera_position()
-    return vector:new( -64, -96 ) + vector:new( 32, 0 )
+    return vector:new( -64, -96 ) + vector:new( 32 + self.player.pos.x, 0 )
 end
 
 function level:draw()
 
     local cam = self:camera_position()
 
-    camera( 0, 0 )
     cls( 3 )
 
     -- draw background
+    camera( 0, cam.y )
+
     fillp( 0b1010010110100101 )
-    rectfill( 0, 0, 128, 96, dither_color( 12, 13 ) )
+    rectfill( 0, cam.y, 128, -6, dither_color( 12, 13 ) )
 
     camera( cam.x, cam.y )
-    
-    -- draw level
 
     -- draw actors
     self:eachactor( function( actor )
@@ -297,12 +305,14 @@ function actor:new( level, x, y, wid, hgt )
         alive = true,
         pos = vector:new( x, y ),
         vel = vector:new( 0, 0 ),
+        offset = vector:new( 0, -4 ),
         collision_rect = vector:new( wid, hgt ),
         collision_planes_inc = 0,
         collision_planes_exc = 0,
+        do_dynamics = false,
         does_collide_with_ground = true,
         gravity_scalar = 1.0,
-        jumpforce = 4,
+        jumpforce = 3,
         animations = {},
         current_animation_name = nil,
     }
@@ -330,14 +340,16 @@ end
 
 function actor:update( deltatime )
 
-    self.vel.y += self.gravity_scalar * 0.15
+    if self.do_dynamics then
+        self.vel.y += self.gravity_scalar * 0.125
 
-    self.pos.x += self.vel.x
-    self.pos.y += self.vel.y
+        self.pos.x += self.vel.x
+        self.pos.y += self.vel.y
 
-    if self.does_collide_with_ground and self.pos.y >= 0 then
-        self.pos.y = 0
-        self.vel.y = 0
+        if self.does_collide_with_ground and self.pos.y >= 0 then
+            self.pos.y = 0
+            self.vel.y = 0
+        end
     end
 
     local anim = self:current_animation()
@@ -364,7 +376,34 @@ end
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
-        spr( anim:frame(), self.pos.x, self.pos.y )
+        spr( anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y )
+    end
+end
+
+-- decoration
+
+local decoration = inheritsfrom( actor )
+function decoration:new( level, x, y )
+    local newobj = actor:new( level, x ,y )
+    return setmetatable( newobj, self )
+end
+
+function decoration:update( deltatime )
+    self:superclass().update( self, deltatime )
+
+    -- die if too far left
+    if self.pos.x < self.level.player.pos.x - 96 then
+        self.alive = false
+    end
+end
+
+function level:update_props()
+    
+    if pctchance( 1 ) then
+        local prop = decoration:new( self, self.player.pos.x + 96, 0 )
+        prop.animations = {}
+        prop.animations[ 'idle' ] = animation:new( 17, 18 )
+        prop.current_animation_name = 'idle'
     end
 end
 
@@ -373,6 +412,9 @@ end
 local player = inheritsfrom( actor )
 function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
+    newobj.do_dynamics = true
+    newobj.vel.x = 1
+    newobj.offset = vector:new( 0, -15 )
     newobj.animations[ 'run' ] = animation:new( 32, 37 ) 
     newobj.current_animation_name = 'run'
     newobj.collision_planes_inc = 1
@@ -389,7 +431,7 @@ end
 
 function player:draw()
     self:superclass().draw( self )
-    spr( self.leg_anim:frame(), self.pos.x, self.pos.y + 8 )
+    spr( self.leg_anim:frame(), self.pos.x + self.offset.x, self.pos.y + self.offset.y + 8 )
 end
 
 -->8
@@ -397,7 +439,7 @@ end
 
 --level creation
 local current_level = level:new()
-local current_player = player:new( current_level )
+current_level.player = player:new( current_level )
 
 --main loops
 local buttonstates = {}
@@ -415,7 +457,7 @@ function _update60()
         end
 
         if wentdown(4) then
-            current_player:jump()
+            current_level.player:jump()
         end
     end
 
@@ -425,9 +467,11 @@ end
 
 function _draw()
 
+    -- world
+
     current_level:draw()
 
-    -- todo
+    -- ui
 
     camera( 0, 0 )
     print( debug_text, 8, 8, 8 )

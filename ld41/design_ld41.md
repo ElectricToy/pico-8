@@ -190,12 +190,14 @@ Coins
 
 ## Vertical Slice - Tonight
 
-- Box character
+X Box character
 - Environment with motion
-- Jump button
-- Pickup button
+X Jump button
+- Things to jump over
 - Something to pick up (coin?)
+- Pickup button
 - Box creature
+- platforms
 - Craft one item with blank rest of crafting tree
 - Owned item inventory
 - Light/dark
