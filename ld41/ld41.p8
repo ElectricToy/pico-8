@@ -128,7 +128,7 @@ end
 vector = inheritsfrom( nil )
 
 function vector:new( x, y )
-    local newobj = { x = x, y = y }
+    local newobj = { x = x or 0, y = y or x or 0 }
     return setmetatable( newobj, self )
 end
 
@@ -252,8 +252,8 @@ function rects_overlap( recta, rectb )
             )
     end
 
-    return  edges_overlap( recta.x, recta.x + recta.w, rectb.x, rectb.x + rectb.w )
-        and edges_overlap( recta.y, recta.y + recta.h, rectb.y, rectb.y + rectb.h )
+    return  edges_overlap( recta.l, recta.r, rectb.l, rectb.r )
+        and edges_overlap( recta.t, recta.b, rectb.t, rectb.b )
 end
 
 local shadow_y_divisor = 6
@@ -268,13 +268,50 @@ function mapsegment:new( segment_num, worldx )
     return setmetatable( newobj, self )
 end
 
-function mapsegment:does_collide( withactor )
-    -- todo
-    return false
+function mapsegment:collision_rect()
+    return { 
+        l = self.worldx,
+        r = self.worldx + 8 * 8,
+        t = -8 * 16,
+        b = 0,
+    }
+end
+
+function mapsegment:right()
+    return self:collision_rect().r
+end
+
+function mapsegment:colliding_tile( withactor )
+    local myrect = self:collision_rect()
+    local rect = withactor:collision_rect()
+    rect.l -= myrect.l
+    rect.t -= myrect.t
+    rect.r -= myrect.l
+    rect.b -= myrect.t
+
+    rect.l = flr( rect.l / 8 ) + flr( self.segment_num % 16 ) * 8
+    rect.t = flr( rect.t / 8 ) + flr( self.segment_num / 16 ) * 16
+    rect.r = flr( rect.r / 8 ) + flr( self.segment_num % 16 ) * 8
+    rect.b = flr( rect.b / 8 ) + flr( self.segment_num / 16 ) * 16
+
+    for y = rect.t, rect.b do
+        for x = rect.l, rect.r do
+            if fget( mget( x, y ), 7 ) then
+                return vector:new( myrect.l + ( x - rect.l ) * 8, myrect.t + ( y - rect.t ) * 8 )
+            end
+        end
+    end
+
+    return nil
+end
+
+function mapsegment:update()
 end
 
 function mapsegment:draw()
-    mapdraw( self.segment_num % 8 * 8, flr( self.segment_num / 8 ) * 16, self.worldx, -16*7, 8, 16 )
+    if self.segment_num > 0 then
+        mapdraw( self.segment_num % 16 * 8, flr( self.segment_num / 16 ) * 16, self.worldx, -16*8, 8, 16 )
+    end
 end
 
 -- level
@@ -355,9 +392,20 @@ function update_actor_collision( a, b )
 end
 
 function level:update_collision()
+
+    -- actor collision
     for i = 1, count(self.actors) - 1 do
         for j = i + 1, count(self.actors) do
             update_actor_collision( self.actors[ i ], self.actors[ j ])
+        end
+    end
+
+    -- mapsegment collision with player
+    for segment in all( self.mapsegments ) do
+        local collision = segment:colliding_tile( self.player )
+        if collision ~= nil then
+            self.player.pos.y -= 1  -- todo
+            self.player:landed()
         end
     end
 end
@@ -406,6 +454,12 @@ function level:draw()
     rectfill( 0, cam.y, 128, 0, dither_color( 12, 13 ) )
 
     camera( cam.x, cam.y )
+
+    -- draw mapsegments
+
+    for segment in all( self.mapsegments ) do
+        segment:draw()
+    end
 
     -- draw actors
     self:eachactor( function( actor )
@@ -468,6 +522,7 @@ function actor:new( level, x, y, wid, hgt )
         collision_planes_inc = 1,
         collision_planes_exc = 15,
         do_dynamics = false,
+        landed_tick = nil,
         does_collide_with_ground = true,
         gravity_scalar = 1.0,
         jumpforce = 3,
@@ -502,14 +557,14 @@ function actor:collision_br()
 end
 
 function actor:collision_center()
-    return self:collision_ul() + self.collision_size * 0.5
+    return self:collision_ul() + self.collision_size * vector:new( 0.5 )
 end
 
 function actor:collision_rect()
-    return { x = self.pos.x,
-             y = self.pos.y,
-             w = self.collision_size.x,
-             h = self.collision_size.y }
+    return { l = self.pos.x,
+             t = self.pos.y,
+             r = self.pos.x + self.collision_size.x,
+             b = self.pos.y + self.collision_size.y }
 end
 
 function actor:does_collide( other )
@@ -532,7 +587,7 @@ function actor:update( deltatime )
         local footheight = self:collision_br().y
         if self.does_collide_with_ground and footheight >= 0 then
             self.pos.y = -self.collision_size.y
-            self.vel.y = 0
+            self:landed()
         end
     end
 
@@ -554,15 +609,20 @@ function actor:current_animation()
     return self.animations[ self.current_animation_name ]
 end
 
+function actor:landed()
+    self.vel.y = max( self.y, 0 )
+    self.landed_tick = self.level.tick_count
+end
+
 function actor:grounded()
-    -- todo platforms
-    return self:collision_br().y >= -0.1
+    return self.landed_tick ~= nil
 end
 
 function actor:jump( amount )
     if not self:grounded() then return end
 
     self.vel.y = -self.jumpforce * ( amount or 1.0 )
+    self.landed_tick = nil
 end
 
 function actor:draw()
@@ -743,7 +803,6 @@ end
 
 function level:create_props()    
     local liveleft, liveright = self:live_actor_span()
-    debug_print( liveleft .. ',' .. liveright )
     if pctchance( 1 ) then
         stone:new( self, liveright - 2, -8 )
     end
@@ -756,8 +815,29 @@ function level:create_coins()
     end
 end
 
+function world_to_mapsegment_cell_x( x )
+    return flr( x / (8*8) )
+end
+
 function level:update_mapsegments()
-    -- todo
+    local left, right = self:viewspan()
+
+    -- update and remove any expired (too far left) segments
+    for segment in all( self.mapsegments ) do
+        segment:update()
+        if segment:right() < left then
+            del( self.mapsegments, segment )
+        end
+    end
+
+    -- create new segments to fill screen.
+    for worldcellx = world_to_mapsegment_cell_x( left ), world_to_mapsegment_cell_x( right ) do
+        debug_print( worldcellx )
+        if self.mapsegments[ worldcellx ] == nil then
+            self.mapsegments[ worldcellx ] = mapsegment:new( 1, worldcellx * 8*8 )
+        end
+    end
+
 end
 
 -->8
@@ -776,10 +856,10 @@ function tidy_map()
 
             local mapsprite = mget( mapx, mapy )
             local segmentx = mapx % 8
-            local segmenty = mapy % 8
-            if platformsprite( mapsprite ) and segmentx == 0 or not platformsprite( mget( mapx - 1, mapy )) then
+            local segmenty = mapy % 16
+            if platformsprite( mapsprite ) and ( segmentx == 0 or not platformsprite( mget( mapx - 1, mapy ))) then
                 mset( mapx, mapy, 133 )
-            elseif platformsprite( mapsprite ) and segmentx == 7 or not platformsprite( mget( mapx + 1, mapy )) then
+            elseif platformsprite( mapsprite ) and ( segmentx == 7 or not platformsprite( mget( mapx + 1, mapy ))) then
                 mset( mapx, mapy, 134 )
             end
         end
@@ -908,6 +988,7 @@ function draw_ui()
     if true then
         draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
             print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
         end )
     end
 end
@@ -1027,7 +1108,11 @@ bb3b300000005b300000000066666666000000000000000000000000000000000000000000000000
 000bb33bb3333bbbb3333333bb33003000622ddddddddddddddd22dd000000000000000000000000000000000000000000000000000000000000000000000000
 00bb3bb3333bbb3333333bbbb33bb30b0666dddddddddddddddddddd000000000000000000000000000000000000000000000000000000000000000000000000
 bbbbbbbbb3bbbbbb33bbbbbbbbbbb33b0000dddddddddddddd000000000000000000000000000000000000000000000000000000000000000000000000000000
+__gff__
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000080808000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
