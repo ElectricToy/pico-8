@@ -223,14 +223,24 @@ function level:update()
     end    
 end
 
+function level:camera_position()
+    return vector:new( -64, 0 ) + vector:new( 32, 0 )
+end
+
 function level:draw()
 
-    cls( 12 )
+    local cam = self:camera_position()
+
+    cls( 3 )
 
     -- draw background
-    fillp( 0b1010010110100101 )
-    rectfill( 0, 0, 128, 64, dither_color( 12, 13 ) )
+    camera( 0, cam.y )
 
+    fillp( 0b1010010110100101 )
+    rectfill( 0, 0, 128, 96, dither_color( 12, 13 ) )
+
+    camera( cam.x, cam.y )
+    
     -- draw level
 
     -- draw actors
@@ -323,9 +333,10 @@ end
 
 local player = inheritsfrom( actor )
 function player:new( level )
-    local newobj = actor:new( level, 64, 64, 8, 14 )
+    local newobj = actor:new( level, 0, 96-4, 8, 14 )
     newobj.animations[ 'run' ] = animation:new( 32, 37 ) 
     newobj.current_animation_name = 'run'
+    newobj.collision_planes_inc = 1
 
     newobj.leg_anim = animation:new( 48, 54 )
     
@@ -338,7 +349,7 @@ function player:update( deltatime )
 end
 
 function player:draw()
-    self:superclass().draw(self)
+    self:superclass().draw( self )
     spr( self.leg_anim:frame(), self.pos.x, self.pos.y + 8 )
 end
 
@@ -355,6 +366,7 @@ function _update60()
 end
 
 function _draw()
+
     current_level:draw()
 
     -- todo
