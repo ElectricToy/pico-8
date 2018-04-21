@@ -684,7 +684,7 @@ function actor:landed()
 end
 
 function actor:grounded()
-    return self.landed_tick ~= nil
+    return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 2
 end
 
 function actor:jump( amount )
@@ -1050,12 +1050,15 @@ function _update60()
 
 
         if current_level.player:dead() then
-            game_state = 'gameover'
+            game_state = 'gameover_dying'
+            current_level:after_delay( 2.0, function()
+                game_state = 'gameover'
+            end )
         else
             update_input()
         end
 
-    else -- game over, title
+    elseif game_state == 'gameover' or game_state == 'title' then
 
         -- update input
         if wentdown( 4 ) or wentdown( 5 ) then
@@ -1096,47 +1099,66 @@ end
 
 function draw_ui()
 
-    local player = current_level.player
+    function draw_ui_playing()
+        local player = current_level.player
 
-    -- draw player health
+        -- draw player health
 
-    local healthstepx = 8
-    local health_left = 124 - ( player.max_health / 2 ) * healthstepx
-    local health_top = 10
-    for i = 0, player.max_health / 2 do
-        local healthx = i * healthstepx
+        local healthstepx = 8
+        local health_left = 124 - ( player.max_health / 2 ) * healthstepx
+        local health_top = 10
+        for i = 0, player.max_health / 2 do
+            local healthx = i * healthstepx
 
-        local equivalent_health = i * 2
+            local equivalent_health = i * 2
 
-        local sprite = 0
+            local sprite = 0
 
-        if equivalent_health + 1 < player.health then sprite = 1 
-        elseif equivalent_health < player.health then sprite = 2 end
+            if equivalent_health + 1 < player.health then sprite = 1 
+            elseif equivalent_health < player.health then sprite = 2 end
 
-        if sprite > 0 then
-            spr( sprite, health_left + healthx, health_top )
+            if sprite > 0 then
+                spr( sprite, health_left + healthx, health_top )
+            end
         end
+
+        -- draw player distance
+
+        local dist = player_run_distance()
+        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+            print_rightaligned_text( '' .. player.coins, x, y, 10 )
+        end )
+
+        -- draw player coins
+
+        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+            print_rightaligned_text( '' .. player.coins, x, y, 10 )
+        end )
     end
 
-    -- draw player distance
+    function draw_ui_title()
+        -- todo
+    end
 
-    local dist = player_run_distance()
-    draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
-        print_rightaligned_text( '' .. player.coins, x, y, 10 )
-    end )
+    function draw_ui_gameover()
+        -- todo
+    end
 
-    -- draw player coins
+    if game_state == 'playing' or game_state == 'gameover_dying' then
+        draw_ui_playing()
+    elseif game_state == 'title' then
+        draw_ui_title()
+    elseif game_state == 'gameover' then
+        draw_ui_gameover()
+    end
 
-    draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
-        print_rightaligned_text( '' .. player.coins, x, y, 10 )
-    end )
 
     -- draw debug
 
     if true then
         draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
-            print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
+            -- print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+            -- print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
         end )
     end
 end
