@@ -1157,7 +1157,7 @@ local behaviors = {}
 
 -- creature
 function creature:new( level, x )
-    local whichcreature = rand_int( 1, 2 )
+    local whichcreature = 2 --todo!!! rand_int( 1, 2 )
 
     local y = -16
     local wid = 16
@@ -1368,8 +1368,124 @@ function level:update_mapsegments()
 end
 
 -->8
---jeff's code
+--input
+local buttonstates = {}
+local lastbuttonstates = {}
+function wentdown( btn )
+    return buttonstates[ btn ] and not lastbuttonstates[ btn ]
+end
 
+function isdown( btn )
+    return buttonstates[ btn ]
+end
+
+function update_input()
+    lastbuttonstates = shallowcopy( buttonstates )
+
+    for i = 0,5 do
+        buttonstates[ i ] = btn( i )
+    end
+end
+
+-->8
+--crafting
+
+local spacing = 14
+function dest_for_child( index, parentindex )
+end
+
+local thingy = inheritsfrom( nil )
+function thingy:new( parent, sprite )
+    local newobj = {
+        parent = parent,
+        sprite = sprite,
+        children = {},
+        pos = vector:new( 0, 0 ),
+        destination = nil,
+        lerpspeed = 0.1,
+    }
+    return setmetatable( newobj, self )
+end
+
+function thingy:drawchildren( basepos )
+    for child in all( self.children ) do
+        child:draw( basepos )
+    end
+end
+
+function thingy:child_index( child )
+    for i in 1, #self.children do
+        if child == self.children[ i ] then
+            return i
+        end
+    end
+    return nil
+end
+
+function thingy:draw( basepos )
+    local selfpos = basepos + self.pos
+
+    -- draw children
+    self:drawchildren( selfpos )
+
+    -- draw self
+    spr( self.sprite, selfpos.x, selfpos.y )
+end
+
+function thingy:update()
+    if self.destination ~= nil then
+        self.pos.x = lerp( self.pos.x, self.destination.x, self.lerpspeed )
+        self.pos.y = lerp( self.pos.y, self.destination.y, self.lerpspeed )
+    end
+
+    for child in all( self.children ) do
+        child:update()
+    end    
+end
+
+function thingy:activate()
+    if #self.children == 0 then
+        -- do what we do
+        -- todo!!!
+    else
+        local myindex = self.parent:child_index( self )
+
+        self.destination = vector:new( 0, 0 )
+        for i in 1, #self.children do
+            local child = self.children[ i ]
+            child.destination = dest_for_child( i, myindex )
+        end
+    end
+end
+
+function thingy:update_input()
+
+    -- home button
+    if btnp( 3 ) and self.parent ~= nil then
+
+    end
+
+end
+
+local crafting = inheritsfrom( nil )
+function crafting:new()
+    local rootthingy = thingy:new( nil, 67 ) -- todo
+
+    local newobj = {
+        rootthingy = rootthingy,
+    }
+
+    rootthingy:activate()
+
+    return setmetatable( newobj, self )
+end
+
+function crafting:update()
+    self.rootthingy:update()
+    -- todo
+end
+
+-->8
 --one-time setup
 
 function tidy_map()
@@ -1432,24 +1548,9 @@ function level:update_creatures()
 end
 
 --main loops
-local buttonstates = {}
 function _update60()
 
-    -- convenient button processing
-
-    local lastbuttonstates = shallowcopy( buttonstates )
-
-    for i = 0,5 do
-        buttonstates[ i ] = btn( i )
-    end
-
-    function wentdown( btn )
-        return buttonstates[ btn ] and not lastbuttonstates[ btn ]
-    end
-
-    function isdown( btn )
-        return buttonstates[ btn ]
-    end
+    update_input()
 
     -- update game state logic
 
@@ -1748,6 +1849,7 @@ behaviors = {
     pounce_from_left =
         function(actor)
             local maxpounces = 3    -- todo based on level age
+            local restpos = -32
 
             local numpounces = rand_int( 1, maxpounces )
 
@@ -1759,7 +1861,7 @@ behaviors = {
             -- approach
             actor.current_animation_name = 'run'
             actor.vel.x = 1.25
-            while deltafromplayer( actor ) < -28 do
+            while deltafromplayer( actor ) < restpos do
                 yield()
             end
 
@@ -1798,7 +1900,7 @@ behaviors = {
                 
                 actor.colorshift = -1
 
-                while deltafromplayer( actor ) > -28 do
+                while deltafromplayer( actor ) > restpos do
                     yield()
                 end
             end
