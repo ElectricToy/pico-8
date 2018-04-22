@@ -294,6 +294,7 @@ end
 local mapsegment_tile_size = vector:new( 16, 16 )
 local mapsegment_tiles_across_map = 8
 local shadow_y_divisor = 6
+local max_armor = 5
 
 -- mapsegment
 local mapsegment = inheritsfrom( nil )
@@ -382,18 +383,368 @@ function mapsegment:draw()
     end
 end
 
+-- animation
+
+local animation = inheritsfrom( nil )
+function animation:new( min, count, ssizex, ssizey )
+    count = count or 1
+    local newobj = { 
+        frames = {},
+        current_frame=1,
+        frame_rate_hz=10,
+        ssizex = ssizex or 1,
+        ssizey = ssizey or ssizex or 1,
+        style = 'loop',
+        drawscalex = 1,
+        drawscaley = 1,
+    }
+
+    for i = 0, count - 1 do
+        newobj.frames[ i + 1 ] = min + i * newobj.ssizex
+    end
+
+    return setmetatable( newobj, self )
+end
+
+function animation:update( deltatime )
+    if #self.frames < 1 then return end
+    self.current_frame += deltatime * self.frame_rate_hz
+end
+
+function animation:frame()
+    if #self.frames < 1 then return nil end
+
+    local fr = wrap( self.current_frame, 1, #self.frames + 1 )
+
+    if self.style == 'stop' then
+        fr = clamp( self.current_frame, 1, #self.frames )
+    end
+
+    return self.frames[ flr( fr ) ]
+end
+
+-- actor
+
+local actor = inheritsfrom( nil )
+function actor:new( level, x, y, wid, hgt )
+    local newobj = { 
+        level = level,
+        active = true,
+        alive = true,
+        pos = vector:new( x or 0, y or x or 0 ),
+        vel = vector:new( 0, 0 ),
+        depth = 0,
+        offset = vector:new( 0, 0 ),
+        collision_size = vector:new( wid or 0, hgt or 0 ),
+        collision_planes_inc = 1,
+        collision_planes_exc = 15,
+        do_dynamics = false,
+        landed_tick = nil,
+        does_collide_with_ground = true,
+        gravity_scalar = 1.0,
+        jumpforce = 3,
+        animations = {},
+        current_animation_name = nil,
+        want_shadow = false,
+        damage = 2,
+        parallaxslide = 0,
+    }
+
+    add( level.actors, newobj )
+
+    return setmetatable( newobj, self )
+end
+
+function actor:may_collide( other )
+    -- these collide if their inclusion planes overlap
+    -- and their exclusion planes don't
+    -- so to collide with the player (plane 1) without colliding with other obstacles (plane 2)
+    -- inc 1 but exc 2
+    return  self.active
+            and other.active
+            and 0 ~= band( self.collision_planes_inc, other.collision_planes_inc ) 
+            and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
+end
+
+function actor:collision_ul()
+    return self.pos
+end
+
+function actor:collision_br()
+    return self:collision_ul() + self.collision_size
+end
+
+function actor:collision_center()
+    return self:collision_ul() + self.collision_size * vector:new( 0.5 )
+end
+
+function actor:collision_rect()
+    return { l = self.pos.x,
+             t = self.pos.y,
+             r = self.pos.x + self.collision_size.x,
+             b = self.pos.y + self.collision_size.y }
+end
+
+function actor:does_collide( other )
+    return self:may_collide( other )
+        and rects_overlap( self:collision_rect(), other:collision_rect() )
+end
+
+function actor:on_collision( other )
+    -- override
+end
+
+function actor:update( deltatime )
+
+    if self.do_dynamics then
+        self.vel.y += self.gravity_scalar * 0.125
+
+        self.pos.x += self.vel.x
+        self.pos.y += self.vel.y
+
+        local footheight = self:collision_br().y
+        if self.does_collide_with_ground and footheight >= 0 then
+            self.pos.y = -self.collision_size.y
+            self:landed()
+        end
+    end
+
+    self.pos.x += self.parallaxslide * self.level.player.vel.x
+
+    -- die if too far left
+    local liveleft, liveright = self.level:live_actor_span()
+    if self:collision_br().x + 8 < liveleft then
+        self.active = false
+    end
+
+    -- update animation
+    local anim = self:current_animation()
+    if anim ~= nil then 
+        anim:update( deltatime ) 
+    end
+end
+
+function actor:current_animation()
+    if self.current_animation_name == nil then return nil end
+    return self.animations[ self.current_animation_name ]
+end
+
+function actor:landed()
+    self.vel.y = 0
+    self.landed_tick = self.level.tick_count
+end
+
+function actor:grounded()
+    return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 2
+end
+
+function actor:jump( amount )
+    if self:dead() or not self:grounded() then return end
+
+    self.vel.y = -self.jumpforce * ( amount or 1.0 )
+    self.landed_tick = nil
+end
+
+function actor:draw()
+    local anim = self:current_animation()
+    if anim ~= nil then 
+        local drawpos = self.pos + self.offset
+        local frame = anim:frame()
+        local drawscalex = anim.drawscalex
+        local drawscaley = anim.drawscaley
+
+        if drawscalex == 1 and drawscaley == 1 then
+            spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
+        else
+            local spritesheetleft = frame % 16 * 8
+            local spritesheettop  = flr( frame / 16 ) * 8
+            local spritesheetwid = anim.ssizex * 8
+            local spritesheethgt = anim.ssizey * 8
+            sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
+                  drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8 )
+        end
+
+        --draw shadow
+        -- if self.want_shadow then
+        --     draw_color_shifted( -4, function()
+        --         spr( frame, drawpos.x, (-self:collision_br().y) / shadow_y_divisor, anim.ssizex, anim.ssizey, false, true )
+        --     end )
+        -- end
+    end
+end
+
+function actor:on_pickedup_by( other )
+    self.active = false    
+end
+
+--player
+
+local player = inheritsfrom( actor )
+function player:new( level )
+    local newobj = actor:new( level, 0, -64, 8, 14 )
+    newobj.do_dynamics = true
+    newobj.want_shadow = true
+    newobj.depth = -100
+    newobj.vel.x = 1    -- player run speed
+    newobj.animations[ 'run' ] = animation:new( 32, 6, 1, 2 ) 
+    newobj.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 ) 
+    newobj.current_animation_name = 'run'
+    newobj.collision_planes_exc = 0
+
+    newobj.coins = 0
+    newobj.max_health = 10
+    newobj.health = newobj.max_health
+
+    newobj.reach_distance = 12
+
+    newobj.armor = 0
+    newobj.armorflicker = false
+
+    local death_anim = animation:new( 224, 7, 2, 2 )
+    death_anim.style = 'stop'
+
+    -- death frames
+    death_anim.frames = { 224, 226, 228, 230, 230, 230, 230, 230, 232, 232, 232, 232, 232, 232, 232, 234, 236 }
+    newobj.animations[ 'death' ] = death_anim
+    
+    return setmetatable( newobj, self )
+end
+
+function player:add_coins( amount )
+    self.coins += amount
+end
+
+function player:update( deltatime )
+    self:superclass().update( self, deltatime )
+
+    -- sync anims
+    if self.current_animation_name ~= 'run' then
+        self.animations[ 'run' ]:update( deltatime )
+    end
+
+    local frame = self.animations[ 'run' ].current_frame
+    self.animations[ 'run_armor' ].current_frame = frame
+end
+
+function player:dead()
+    return not self.alive
+end
+
+function player:die()
+    if self:dead() then return end
+
+    self.alive = false
+    self.animations[ 'death' ].current_frame = 1
+    self.current_animation_name = 'death'
+    self.vel.x = 0
+    debug_print( "dead!" )
+end
+
+function player:add_health( amount )
+    if self:dead() then return end
+    self.health = clamp( self.health + amount, 0, self.max_health )
+    if self.health == 0 then
+        self:die()
+    end
+end
+
+function player:start_invulnerable()
+    if self:dead() then return end
+    self.invulnerable = true
+    self.level:after_delay( 4.0, function()
+        self.invulnerable = false
+    end )
+end
+
+function player:take_damage( amount )
+    if self.invulnerable or self:dead() then return end
+
+    if amount <= 0 then return end
+
+    if self.armor > 0 then
+        amount = 1
+
+        self:start_invulnerable()
+        self.armor -= 1
+
+        self.armorflicker = self.armor == 0
+
+        if self.armorflicker then
+            self.level:after_delay( 4, function()
+                self.armorflicker = false
+            end)
+        end
+    end    
+
+    self:add_health( -amount )
+    if self.health > 0 then
+        self:start_invulnerable()
+    end
+end
+
+function player:grab()
+    if self:dead() then return end
+
+    local pickup, distsqr = self.level:closest_actor( self:collision_center(), function(actor)
+        return actor.may_player_pickup
+    end )
+
+    if pickup ~= nil and 
+        ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
+            or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
+        pickup:on_pickedup_by( self )
+    end
+end
+
+function player:draw()
+    if not self.invulnerable or self.armorflicker or flicker( self.level:time(), 8 ) then
+
+        if not self:dead() then
+            self.current_animation_name = 
+                ( self.armor > 0 or ( self.armorflicker and flicker( self.level:time(), 6 ))) and 'run_armor' or 'run'
+        end
+
+        self:superclass().draw( self )
+    end
+end
+
+function player:on_collision( other )
+    if other.damage > 0 then
+        self:take_damage( other.damage )
+    end
+end
+
+-- pickups
+local pickup = inheritsfrom( actor )
+function pickup:new( level, x, animframe, fn_on_pickup )
+    local newobj = actor:new( level, x, -16, 6, 6 )
+    newobj.animations[ 'idle' ] = animation:new( animframe ) 
+    newobj.current_animation_name = 'idle'
+    newobj.collision_planes_inc = 1
+    newobj.may_player_pickup = true
+    newobj.damage = 0
+    newobj.fn_on_pickup = fn_on_pickup
+
+    return setmetatable( newobj, self )    
+end
+
+function pickup:on_pickedup_by( other )
+    self.fn_on_pickup( self, other )
+    self:superclass().on_pickedup_by( self, other )
+end
+
 -- level
 
 local level = inheritsfrom( nil )
 function level:new()
-    local newobj = { 
+    local newobj = {
         actors = {},
         mapsegments = {},
         ground_decorations = {},
         horizon_decorations = {},
         tick_count = 0,
         pending_calls = {},
-        player = nil,
+        player = player:new( self ),
     }
     return setmetatable( newobj, self )
 end
@@ -527,6 +878,15 @@ function nibblerot( bits, offset )
     return band( bits, 0b1111 )             -- 00001100
 end
 
+function level:timeofday()
+    return 0.5 + sin( self:time() / 50 ) * 0.5
+end
+
+function level:categoricaltimeofday()
+    local thetime = self:timeofday()
+    return thetime < 0.7 and 1 or ( thetime < 0.9 and 2 or 3 )
+end
+
 function level:draw()
 
     local cam = self:camera_position()
@@ -579,18 +939,66 @@ function level:draw()
     end
 
     -- grass
-    cls( 12 )
+    cls( 1 )
 
-    local grassscrolloffsetx = -( self.player.pos.x % 4 )
-    fillstripseries(  0, 16, 0, 4, dither_color( 3, 11 ), grassscrolloffsetx )
-    fillstripseries( 16, 8,  1, 0, dither_color( 3, 11 ), grassscrolloffsetx )
-    fillstripseries( 24, 8,  1, 0, dither_color( 0, 3 ), grassscrolloffsetx )
+    local thetime = self:timeofday()
+    local categoricaltime = self:categoricaltimeofday()
+
+    function drawgrass()
+        camera( 0, cam.y )
+
+        -- matrix: grasscolors[ categoricaltime ][ darklevel ]
+        local grasscolors = {
+            {
+                3, 11, 11
+            },
+            {
+                3, 3, 11
+            },
+            {
+                0, 3, 3
+            },
+        }
+
+        local gc = grasscolors[ categoricaltime ]
+
+        local grassscrolloffsetx = -( self.player.pos.x % 4 )
+        fillstripseries(  0, 16, 0, 1, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
+        fillstripseries( 16, 8,  1, 0, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
+        fillstripseries( 24, 8,  1, 0, dither_color( gc[1], gc[2] ), grassscrolloffsetx )
+    end
 
     -- sky
-    --fillstripseries( -88, 8, 0, 1, dither_color( 12, 7 ) )
-    --fillstripseries( -80, 8, 0, 1, dither_color( 7, 12 ) )
-    
 
+    local skycolors = {
+        {
+            1, 13, 12, 12
+        },
+        {
+            0, 1, 9, 13
+        },
+        {
+            0, 1, 13, 1
+        },
+    }
+
+    local sc = skycolors[ categoricaltime ]
+    fillstripseries( -96, 32, 0, 1, dither_color( sc[4], sc[3] ) )
+    fillstripseries( -64,  8, 0, 1, dither_color( sc[3], sc[4] ) )
+    fillstripseries( -56, 32, 0, 1, dither_color( sc[4], sc[2] ) )
+    fillstripseries( -32, 32, 0, 1, dither_color( sc[2], sc[1] ) )
+
+    camera( cam.x, cam.y )
+
+    -- draw behind-grass actors
+    self:eachactor( function( actor )
+        if actor.depth > 0 then
+            actor:draw()
+        end
+    end )
+
+    drawgrass()
+ 
     camera( cam.x, cam.y )
 
     -- draw mapsegments
@@ -599,302 +1007,12 @@ function level:draw()
         segment:draw()
     end
 
-    -- draw actors
+    -- draw in-front-of-grass actors
     self:eachactor( function( actor )
-        actor:draw()
-    end )
-end
-
--- animation
-
-local animation = inheritsfrom( nil )
-function animation:new( min, count, ssizex, ssizey )
-    count = count or 1
-    local newobj = { 
-        frames = {},
-        current_frame=1,
-        frame_rate_hz=10,
-        ssizex = ssizex or 1,
-        ssizey = ssizey or ssizex or 1,
-        style = 'loop',
-    }
-
-    for i = 0, count - 1 do
-        newobj.frames[ i + 1 ] = min + i * newobj.ssizex
-    end
-
-    return setmetatable( newobj, self )
-end
-
-function animation:update( deltatime )
-    if #self.frames < 1 then return end
-    self.current_frame += deltatime * self.frame_rate_hz
-end
-
-function animation:frame()
-    if #self.frames < 1 then return nil end
-
-    local fr = wrap( self.current_frame, 1, #self.frames + 1 )
-
-    if self.style == 'stop' then
-        fr = clamp( self.current_frame, 1, #self.frames )
-    end
-
-    return self.frames[ flr( fr ) ]
-end
-
--- actor
-
-local actor = inheritsfrom( nil )
-function actor:new( level, x, y, wid, hgt )
-    local newobj = { 
-        level = level,
-        active = true,
-        alive = true,
-        pos = vector:new( x or 0, y or x or 0 ),
-        vel = vector:new( 0, 0 ),
-        depth = 0,
-        offset = vector:new( 0, 0 ),
-        collision_size = vector:new( wid or 0, hgt or 0 ),
-        collision_planes_inc = 1,
-        collision_planes_exc = 15,
-        do_dynamics = false,
-        landed_tick = nil,
-        does_collide_with_ground = true,
-        gravity_scalar = 1.0,
-        jumpforce = 3,
-        animations = {},
-        current_animation_name = nil,
-        want_shadow = false,
-        damage = 1,
-    }
-
-    add( level.actors, newobj )
-
-    return setmetatable( newobj, self )
-end
-
-function actor:may_collide( other )
-    -- these collide if their inclusion planes overlap
-    -- and their exclusion planes don't
-    -- so to collide with the player (plane 1) without colliding with other obstacles (plane 2)
-    -- inc 1 but exc 2
-    return  self.active
-            and other.active
-            and 0 ~= band( self.collision_planes_inc, other.collision_planes_inc ) 
-            and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
-end
-
-function actor:collision_ul()
-    return self.pos
-end
-
-function actor:collision_br()
-    return self:collision_ul() + self.collision_size
-end
-
-function actor:collision_center()
-    return self:collision_ul() + self.collision_size * vector:new( 0.5 )
-end
-
-function actor:collision_rect()
-    return { l = self.pos.x,
-             t = self.pos.y,
-             r = self.pos.x + self.collision_size.x,
-             b = self.pos.y + self.collision_size.y }
-end
-
-function actor:does_collide( other )
-    return self:may_collide( other )
-        and rects_overlap( self:collision_rect(), other:collision_rect() )
-end
-
-function actor:on_collision( other )
-    -- override
-end
-
-function actor:update( deltatime )
-
-    if self.do_dynamics then
-        self.vel.y += self.gravity_scalar * 0.125
-
-        self.pos.x += self.vel.x
-        self.pos.y += self.vel.y
-
-        local footheight = self:collision_br().y
-        if self.does_collide_with_ground and footheight >= 0 then
-            self.pos.y = -self.collision_size.y
-            self:landed()
+        if actor.depth <= 0 then
+            actor:draw()
         end
-    end
-
-    -- die if too far left
-    local liveleft, liveright = self.level:live_actor_span()
-    if self.pos.x < liveleft then
-        self.active = false
-    end
-
-    -- update animation
-    local anim = self:current_animation()
-    if anim ~= nil then 
-        anim:update( deltatime ) 
-    end
-end
-
-function actor:current_animation()
-    if self.current_animation_name == nil then return nil end
-    return self.animations[ self.current_animation_name ]
-end
-
-function actor:landed()
-    self.vel.y = 0
-    self.landed_tick = self.level.tick_count
-end
-
-function actor:grounded()
-    return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 2
-end
-
-function actor:jump( amount )
-    if self:dead() or not self:grounded() then return end
-
-    self.vel.y = -self.jumpforce * ( amount or 1.0 )
-    self.landed_tick = nil
-end
-
-function actor:draw()
-    local anim = self:current_animation()
-    if anim ~= nil then 
-        local drawpos = self.pos + self.offset
-        local frame = anim:frame()
-        spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
-
-        --draw shadow
-        -- if self.want_shadow then
-        --     draw_color_shifted( -4, function()
-        --         spr( frame, drawpos.x, (-self:collision_br().y) / shadow_y_divisor, anim.ssizex, anim.ssizey, false, true )
-        --     end )
-        -- end
-    end
-end
-
-function actor:on_pickedup_by( other )
-    self.active = false    
-end
-
---player
-
-local player = inheritsfrom( actor )
-function player:new( level )
-    local newobj = actor:new( level, 0, -64, 8, 14 )
-    newobj.do_dynamics = true
-    newobj.want_shadow = true
-    newobj.depth = -100
-    newobj.vel.x = 1    -- player run speed
-    newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
-    newobj.current_animation_name = 'run'
-    newobj.collision_planes_exc = 0
-
-    newobj.leg_anim = animation:new( 48, 6 )
-
-    newobj.coins = 0
-    newobj.max_health = 6
-    newobj.health = newobj.max_health
-
-    newobj.reach_distance = 12
-
-    local death_anim = animation:new( 224, 7, 2, 2 )
-    death_anim.style = 'stop'
-    death_anim.frames = { 224, 226, 228, 230, 232, 234, 236 }
-    newobj.animations[ 'death' ] = death_anim
-    
-    return setmetatable( newobj, self )
-end
-
-function player:add_coins( amount )
-    self.coins += amount
-end
-
-function player:update( deltatime )
-    self:superclass().update( self, deltatime )
-    self.leg_anim:update( deltatime )
-end
-
-function player:dead()
-    return not self.alive
-end
-
-function player:die()
-    if self:dead() then return end
-
-    self.alive = false
-    self.animations[ 'death' ].current_frame = 1
-    self.current_animation_name = 'death'
-    self.vel.x = 0
-    debug_print( "dead!" )
-end
-
-function player:add_health( amount )
-    if self:dead() then return end
-    self.health = clamp( self.health + amount, 0, self.max_health )
-    if self.health == 0 then
-        self:die()
-    end
-end
-
-function player:start_invulnerable()
-    if self:dead() then return end
-    self.invulnerable = true
-    self.level:after_delay( 4.0, function()
-        self.invulnerable = false
     end )
-end
-
-function player:take_damage( amount )
-    if self.invulnerable or self:dead() then return end
-
-    self:add_health( -amount )
-    if self.health > 0 then
-        self:start_invulnerable()
-    end
-end
-
-function player:grab()
-    if self:dead() then return end
-
-    local pickup, distsqr = self.level:closest_actor( self:collision_center(), function(actor)
-        return actor.may_player_pickup
-    end )
-
-    if pickup ~= nil and 
-        ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
-            or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
-        pickup:on_pickedup_by( self )
-    end
-end
-
-function player:draw()
-    if not self.invulnerable or flicker( self.level:time(), 8 ) then
-        self:superclass().draw( self )
-
-        -- draw legs
-        if self.alive then
-            local legpos = self.pos + self.offset + vector:new( 0, 8 )
-
-            local leganim = self.leg_anim:frame()
-            spr( leganim, legpos.x, legpos.y )
-
-            -- draw_color_shifted( -4, function()
-            --     spr( leganim, legpos.x, (-legpos.y)/shadow_y_divisor, 1, 1, false, true )
-            -- end )
-        end
-    end
-end
-
-function player:on_collision( other )
-    if other.damage > 0 then
-        self:take_damage( other.damage )
-    end
 end
 
 -- creature
@@ -960,10 +1078,56 @@ function coin:on_pickedup_by( other )
     self:superclass().on_pickedup_by( self, other )
 end
 
+local tree = inheritsfrom( actor )
+function tree:new( level, x )
+    local scale = randinrange( 2, 4 )
+    local newobj = actor:new( level, x, -14 * scale, scale * 2 * 8, scale * 8 )
+    newobj.animations[ 'idle' ] = animation:new( 128, 1, 1, 2 )
+    newobj.current_animation_name = 'idle'
+    newobj.collision_planes_inc = 0
+    newobj.damage = 0
+    newobj.parallaxslide = randinrange( 0.5, 8.0 ) / (scale*scale)
+    newobj.depth = newobj.parallaxslide * 10           -- todo!!!
+    newobj.animations[ 'idle' ].drawscalex = scale
+    newobj.animations[ 'idle' ].drawscaley = scale
+
+    return setmetatable( newobj, self )    
+end
+
+local shrub = inheritsfrom( actor )
+function shrub:new( level, x )
+    local scale = randinrange( 1, 2 )
+    local newobj = actor:new( level, x, 32 - 16 * scale, scale * 4 * 8, scale * 2 * 8 )
+    newobj.animations[ 'idle' ] = animation:new( 160, 1, 4, 2 )
+    newobj.current_animation_name = 'idle'
+    newobj.collision_planes_inc = 0
+    newobj.damage = 0
+    newobj.parallaxslide = -randinrange( 0.5, 1 ) / scale
+    newobj.depth = newobj.parallaxslide * 10
+    newobj.animations[ 'idle' ].drawscalex = scale
+    newobj.animations[ 'idle' ].drawscaley = scale
+
+    return setmetatable( newobj, self )    
+end
+
+
 function level:create_props()
     local liveleft, liveright = self:live_actor_span()
     if pctchance( 1 ) then
         stone:new( self, liveright - 2, -8 )
+    end
+
+    if pctchance( 2 ) then
+        local tree = tree:new( self, liveright - 2 )
+    end
+    if pctchance( 1 ) then
+        local shrub = shrub:new( self, liveright - 2 )
+    end
+
+    if pctchance( 0.25 ) then
+        local pickup = pickup:new( self, liveright - 2, 11, function( pickup, actor )
+            actor.armor = max_armor
+        end )
     end
 end
 
@@ -1052,7 +1216,6 @@ end
 music()
 
 local current_level = level:new()
-current_level.player = player:new( current_level )
 
 local game_state = 'title'
 local current_level = nil
@@ -1065,7 +1228,7 @@ function restart_world()
 end
 
 function player_run_distance()
-    return ( current_level.player.pos.x - 0 ) / 100
+    return ( current_level.player.pos.x - 0 ) / 20
 end
 
 tidy_map()
@@ -1191,6 +1354,17 @@ function draw_ui()
             end
         end
 
+        -- draw player armor
+
+        local armor_left = health_left
+        local armor_top = 18
+
+        for i = 0, max_armor - 1 do
+            if i < player.armor then
+                spr( 11, armor_left + i * healthstepx, armor_top )
+            end
+        end
+
         -- draw player distance
 
         local dist = player_run_distance()
@@ -1226,8 +1400,8 @@ function draw_ui()
 
     if true then
         draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
-            -- print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            -- print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
+            print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
         end )
     end
 end
@@ -1246,6 +1420,7 @@ function _draw()
 
     -- debug
     draw_debug_lines()
+    print( stat(0) )
 end
 
 -->8
