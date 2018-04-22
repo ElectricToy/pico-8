@@ -527,6 +527,15 @@ function nibblerot( bits, offset )
     return band( bits, 0b1111 )             -- 00001100
 end
 
+function level:timeofday()
+    return 0.5 + sin( self:time() / 100 ) * 0.5
+end
+
+function level:categoricaltimeofday()
+    local thetime = self:timeofday()
+    return thetime < 0.7 and 1 or ( thetime < 0.9 and 2 or 3 )
+end
+
 function level:draw()
 
     local cam = self:camera_position()
@@ -581,16 +590,48 @@ function level:draw()
     -- grass
     cls( 1 )
 
+    local thetime = self:timeofday()
+    local categoricaltime = self:categoricaltimeofday()
+
+    -- matrix: grasscolors[ categoricaltime ][ darklevel ]
+    local grasscolors = {
+        {
+            3, 11, 11
+        },
+        {
+            3, 3, 11
+        },
+        {
+            0, 3, 3
+        },
+    }
+
+    local gc = grasscolors[ categoricaltime ]
+
     local grassscrolloffsetx = -( self.player.pos.x % 4 )
-    fillstripseries(  0, 16, 0, 4, dither_color( 3, 11 ), grassscrolloffsetx )
-    fillstripseries( 16, 8,  1, 0, dither_color( 3, 11 ), grassscrolloffsetx )
-    fillstripseries( 24, 8,  1, 0, dither_color( 0, 3 ), grassscrolloffsetx )
+    fillstripseries(  0, 16, 0, 1, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
+    fillstripseries( 16, 8,  1, 0, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
+    fillstripseries( 24, 8,  1, 0, dither_color( gc[1], gc[2] ), grassscrolloffsetx )
 
     -- sky
-    fillstripseries( -96, 32, 0, 1, dither_color( 13, 9 ) )
-    fillstripseries( -64,  8, 0, 1, dither_color( 9, 13 ) )
-    fillstripseries( -56, 32, 0, 1, dither_color( 13, 1 ) )
-    fillstripseries( -32, 32, 0, 1, dither_color( 1, 0 ) )
+
+    local skycolors = {
+        {
+            1, 13, 12, 12
+        },
+        {
+            0, 1, 9, 13
+        },
+        {
+            0, 1, 13, 1
+        },
+    }
+
+    local sc = skycolors[ categoricaltime ]
+    fillstripseries( -96, 32, 0, 1, dither_color( sc[4], sc[3] ) )
+    fillstripseries( -64,  8, 0, 1, dither_color( sc[3], sc[4] ) )
+    fillstripseries( -56, 32, 0, 1, dither_color( sc[4], sc[2] ) )
+    fillstripseries( -32, 32, 0, 1, dither_color( sc[2], sc[1] ) )
 
 
     camera( cam.x, cam.y )
