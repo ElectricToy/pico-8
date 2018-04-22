@@ -225,3 +225,72 @@ Background tiling (e.g. mountains, clouds)
 Background sprites (e.g. trees, near hills)
 Ground tiles with platforms
 Actor sprites
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Items
+
+Auto Items (Get used the moment you pick them up)
+	• Apple = Instantly heals one heart - uncommon
+	• Banana = Instantly heals one half hunger - uncommon
+
+
+Craftable Items
+	• Raw Meat - rare pickup, obtained from enemies when shot
+	• Mushroom - uncommon pickup
+	• Wheat - uncommon pickup
+	• Stick - MOST common pickup
+	• Oil - uncommon pickup
+	• Metal - rare pickup
+
+Tools
+	• Bow = 4 Stick + 2 Oil + 1 Metal
+	• Arrow = 1 Metal + 1 Stick
+		If you have one, you will automatically kill enemies.
+	• Armor = 5 Metal
+		Makes every attack do one half heart damage
+
+Food
+	• Cooked Meat = 1 Raw Meat + 1 Torch (torch doesn’t get consumed)
+		Heals one full heart and 3 full hungers
+	• Stew = 5 Mushroom + 3 Raw Meat
+		Adds one full hunger to max, heals all hunger
+	• Pizza = 3 Wheat + 3 Mushroom + 3 Raw Meat
+		Adds one full heart to max, heals one heart
+
+Other
+	• Torch = 3 Oil + 2 Stick
+		Allows you to see better at night.
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
