@@ -294,6 +294,7 @@ end
 local mapsegment_tile_size = vector:new( 16, 16 )
 local mapsegment_tiles_across_map = 8
 local shadow_y_divisor = 6
+local max_armor = 5
 
 -- mapsegment
 local mapsegment = inheritsfrom( nil )
@@ -445,7 +446,7 @@ function actor:new( level, x, y, wid, hgt )
         animations = {},
         current_animation_name = nil,
         want_shadow = false,
-        damage = 1,
+        damage = 2,
         parallaxslide = 0,
     }
 
@@ -591,12 +592,12 @@ function player:new( level )
     newobj.collision_planes_exc = 0
 
     newobj.coins = 0
-    newobj.max_health = 6
+    newobj.max_health = 10
     newobj.health = newobj.max_health
 
     newobj.reach_distance = 12
 
-    newobj.armor = false
+    newobj.armor = 0
     newobj.armorflicker = false
 
     local death_anim = animation:new( 224, 7, 2, 2 )
@@ -658,19 +659,26 @@ end
 function player:take_damage( amount )
     if self.invulnerable or self:dead() then return end
 
-    if self.armor then
+    if amount <= 0 then return end
+
+    if self.armor > 0 then
+        amount = 1
+
         self:start_invulnerable()
-        self.armor = false
-        self.armorflicker = true
-        self.level:after_delay( 4, function()
-            self.armorflicker = false
-        end)
-    else
-        self:add_health( -amount )
-        if self.health > 0 then
-            self.armorflicker = false
-            self:start_invulnerable()
+        self.armor -= 1
+
+        self.armorflicker = self.armor == 0
+
+        if self.armorflicker then
+            self.level:after_delay( 4, function()
+                self.armorflicker = false
+            end)
         end
+    end    
+
+    self:add_health( -amount )
+    if self.health > 0 then
+        self:start_invulnerable()
     end
 end
 
@@ -693,7 +701,7 @@ function player:draw()
 
         if not self:dead() then
             self.current_animation_name = 
-                ( self.armor or ( self.armorflicker and flicker( self.level:time(), 6 ))) and 'run_armor' or 'run'
+                ( self.armor > 0 or ( self.armorflicker and flicker( self.level:time(), 6 ))) and 'run_armor' or 'run'
         end
 
         self:superclass().draw( self )
@@ -1116,9 +1124,9 @@ function level:create_props()
         local shrub = shrub:new( self, liveright - 2 )
     end
 
-    if pctchance( 4 ) then
+    if pctchance( 0.25 ) then
         local pickup = pickup:new( self, liveright - 2, 11, function( pickup, actor )
-            actor.armor = true
+            actor.armor = max_armor
         end )
     end
 end
@@ -1343,6 +1351,17 @@ function draw_ui()
 
             if sprite > 0 then
                 spr( sprite, health_left + healthx, health_top )
+            end
+        end
+
+        -- draw player armor
+
+        local armor_left = health_left
+        local armor_top = 18
+
+        for i = 0, max_armor - 1 do
+            if i < player.armor then
+                spr( 11, armor_left + i * healthstepx, armor_top )
             end
         end
 
