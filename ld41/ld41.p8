@@ -579,7 +579,7 @@ function level:draw()
     end
 
     -- grass
-    cls( 1 )
+    cls( 12 )
 
     local grassscrolloffsetx = -( self.player.pos.x % 4 )
     fillstripseries(  0, 16, 0, 4, dither_color( 3, 11 ), grassscrolloffsetx )
@@ -587,11 +587,9 @@ function level:draw()
     fillstripseries( 24, 8,  1, 0, dither_color( 0, 3 ), grassscrolloffsetx )
 
     -- sky
-    fillstripseries( -96, 32, 0, 1, dither_color( 13, 9 ) )
-    fillstripseries( -64,  8, 0, 1, dither_color( 9, 13 ) )
-    fillstripseries( -56, 32, 0, 1, dither_color( 13, 1 ) )
-    fillstripseries( -32, 32, 0, 1, dither_color( 1, 0 ) )
-
+    --fillstripseries( -88, 8, 0, 1, dither_color( 12, 7 ) )
+    --fillstripseries( -80, 8, 0, 1, dither_color( 7, 12 ) )
+    
 
     camera( cam.x, cam.y )
 
