@@ -585,17 +585,19 @@ function player:new( level )
     newobj.want_shadow = true
     newobj.depth = -100
     newobj.vel.x = 1    -- player run speed
-    newobj.animations[ 'run' ] = animation:new( 32, 6 ) 
+    newobj.animations[ 'run' ] = animation:new( 32, 6, 1, 2 ) 
+    newobj.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 ) 
     newobj.current_animation_name = 'run'
     newobj.collision_planes_exc = 0
 
-    newobj.leg_anim = animation:new( 48, 6 )
-
     newobj.coins = 0
-    newobj.max_health = 1
+    newobj.max_health = 6
     newobj.health = newobj.max_health
 
     newobj.reach_distance = 12
+
+    newobj.armor = false
+    newobj.armorflicker = false
 
     local death_anim = animation:new( 224, 7, 2, 2 )
     death_anim.style = 'stop'
@@ -613,7 +615,14 @@ end
 
 function player:update( deltatime )
     self:superclass().update( self, deltatime )
-    self.leg_anim:update( deltatime )
+
+    -- sync anims
+    if self.current_animation_name ~= 'run' then
+        self.animations[ 'run' ]:update( deltatime )
+    end
+
+    local frame = self.animations[ 'run' ].current_frame
+    self.animations[ 'run_armor' ].current_frame = frame
 end
 
 function player:dead()
@@ -649,9 +658,19 @@ end
 function player:take_damage( amount )
     if self.invulnerable or self:dead() then return end
 
-    self:add_health( -amount )
-    if self.health > 0 then
+    if self.armor then
         self:start_invulnerable()
+        self.armor = false
+        self.armorflicker = true
+        self.level:after_delay( 4, function()
+            self.armorflicker = false
+        end)
+    else
+        self:add_health( -amount )
+        if self.health > 0 then
+            self.armorflicker = false
+            self:start_invulnerable()
+        end
     end
 end
 
@@ -670,20 +689,14 @@ function player:grab()
 end
 
 function player:draw()
-    if not self.invulnerable or flicker( self.level:time(), 8 ) then
-        self:superclass().draw( self )
+    if not self.invulnerable or self.armorflicker or flicker( self.level:time(), 8 ) then
 
-        -- draw legs
-        if self.alive then
-            local legpos = self.pos + self.offset + vector:new( 0, 8 )
-
-            local leganim = self.leg_anim:frame()
-            spr( leganim, legpos.x, legpos.y )
-
-            -- draw_color_shifted( -4, function()
-            --     spr( leganim, legpos.x, (-legpos.y)/shadow_y_divisor, 1, 1, false, true )
-            -- end )
+        if not self:dead() then
+            self.current_animation_name = 
+                ( self.armor or ( self.armorflicker and flicker( self.level:time(), 6 ))) and 'run_armor' or 'run'
         end
+
+        self:superclass().draw( self )
     end
 end
 
@@ -691,6 +704,25 @@ function player:on_collision( other )
     if other.damage > 0 then
         self:take_damage( other.damage )
     end
+end
+
+-- pickups
+local pickup = inheritsfrom( actor )
+function pickup:new( level, x, animframe, fn_on_pickup )
+    local newobj = actor:new( level, x, -16, 6, 6 )
+    newobj.animations[ 'idle' ] = animation:new( animframe ) 
+    newobj.current_animation_name = 'idle'
+    newobj.collision_planes_inc = 1
+    newobj.may_player_pickup = true
+    newobj.damage = 0
+    newobj.fn_on_pickup = fn_on_pickup
+
+    return setmetatable( newobj, self )    
+end
+
+function pickup:on_pickedup_by( other )
+    self.fn_on_pickup( self, other )
+    self:superclass().on_pickedup_by( self, other )
 end
 
 -- level
@@ -1083,6 +1115,12 @@ function level:create_props()
     if pctchance( 1 ) then
         local shrub = shrub:new( self, liveright - 2 )
     end
+
+    if pctchance( 4 ) then
+        local pickup = pickup:new( self, liveright - 2, 11, function( pickup, actor )
+            actor.armor = true
+        end )
+    end
 end
 
 function level:create_coins()
@@ -1343,8 +1381,8 @@ function draw_ui()
 
     if true then
         draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
-            -- print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            -- print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
+            print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
         end )
     end
 end
@@ -1363,6 +1401,7 @@ function _draw()
 
     -- debug
     draw_debug_lines()
+    print( stat(0) )
 end
 
 -->8
