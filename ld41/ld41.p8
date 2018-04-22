@@ -645,7 +645,7 @@ function player:new( level )
     newobj.max_health = 6
     newobj.health = newobj.max_health
 
-    newobj.max_satiation = 6
+    newobj.max_satiation = 10
     newobj.satiation = newobj.max_satiation
 
     newobj.reach_distance = 12
@@ -1471,9 +1471,9 @@ function draw_ui()
 
         function draw_halveable_stat( top, stat, max, full_sprite, half_sprite, empty_sprite )
 
-            local left = iconleft --right - ( max / 2 ) * iconstepx
+            local left = iconleft
             
-            for i = 0, max / 2 do
+            for i = 0, (max - 1) / 2 do
                 local x = i * iconstepx
 
                 local equivalent_x = i * 2
@@ -1495,7 +1495,7 @@ function draw_ui()
 	
 	    local left = iconleft
 
-	    for i = 0, max do
+	    for i = 0, max - 1 do
 		local x = i * iconstepx
 		
 		local sprite = 0
