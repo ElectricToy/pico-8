@@ -320,8 +320,6 @@ end
 
 function mapsegment:colliding_tile( withactor )
 
-    -- todo!!! working here
-
     local myrect = self:collision_rect()
     local rect = withactor:collision_rect()
 
@@ -368,7 +366,6 @@ function mapsegment:update()
 end
 
 function mapsegment:draw()
-    -- todo!!!
     if self.segment_num > 0 then
         local segmentul_mapspace = { 
             x =    ( self.segment_num % mapsegment_tiles_across_map ) * mapsegment_tile_size.x,
@@ -822,7 +819,7 @@ function level:new()
         stone    = { chance =   0.5, earliestnext =   64, interval = 48 },
         tree     = { chance =    1, earliestnext = -100, interval = 0 },
         shrub    = { chance =    1, earliestnext = -100, interval = 0 },
-        creature = { chance =    0.5, earliestnext = 256, interval = 256 },
+        creature = { chance =   0.5, earliestnext = 256, interval = 256 },
     }
 
     newobj.player = player:new( newobj )
@@ -1112,8 +1109,10 @@ function creature:new( level, x )
     newobj.want_shadow = true
     newobj.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
     newobj.current_animation_name = 'run'
-    newobj.jumpforce = 1.5
-    newobj.behavior = cocreate( behaviors.pounce_from_left )
+
+    local behavior = behaviors[ flr( randinrange( 1, #behaviors )) ]
+    -- local behavior = behaviors[ 4 ]
+    newobj.behavior = cocreate( behavior )
 
     return setmetatable( newobj, self )
 end
@@ -1344,6 +1343,82 @@ function deltafromplayer( actor )
     return actor.pos.x - current_level.player.pos.x
 end
 
+-- creature ai
+
+function wait( seconds )
+    for i = 0, seconds * 60 do
+        yield()
+    end
+end
+
+function stage_left_appear_pos()
+    local left, _ = current_level:live_actor_span()
+    return left + 2
+end
+
+behaviors = {
+    function() end,     -- still
+    function(actor)     -- hopping
+        actor.jumpforce = 3
+        while true do
+            actor:jump()
+            yield()
+        end
+    end,
+   function(actor)      -- slide_left_slow
+        actor.vel.x = -0.5
+        actor.flipx = true
+    end,
+   function(actor)      -- slide_left_fast
+        actor.flipx = true
+        actor.vel.x = -2
+        while deltafromplayer( actor ) > 80 do                
+            yield()
+        end
+        actor.vel.x = 0
+        wait( 0.4 )
+        actor:flash( 0.4 )
+        wait( 0.4 )
+        actor.vel.x = -3
+    end,
+   function(actor)      -- slide_right_fast
+        actor.pos.x = stage_left_appear_pos()
+        actor.flipx = false
+        actor.vel.x = 1.5
+        while deltafromplayer( actor ) < -24 do
+            yield()
+        end
+        actor.vel.x = 0.9
+        wait( 0.4 )
+        actor:flash( 0.5 )
+        wait( 0.5 )
+        actor.vel.x = 4
+    end,
+   function(actor)      -- pounce_from_left
+        actor.jumpforce = 1.5
+        actor.pos.x = stage_left_appear_pos()
+        actor.flipx = false
+
+        actor.vel.x = 1.25
+        while deltafromplayer( actor ) < -28 do
+            yield()
+        end
+        actor.vel.x = 0.95
+        wait( 1 )
+        actor:flash( 0.5 )
+        wait( 0.5 )
+        actor:jump()
+        actor.vel.x = 2.5
+        yield()
+
+        while not actor:grounded() do
+            yield()
+        end
+
+        actor.vel.x = 0
+    end,
+}
+
 tidy_map()
 restart_world()
 
@@ -1570,82 +1645,6 @@ function _draw()
     -- print( stat(0) )
 end
 
--- creature ai
-
-function wait( seconds )
-    for i = 0, seconds * 60 do
-        yield()
-    end
-end
-
-function stage_left_appear_pos()
-    local left, _ = current_level:live_actor_span()
-    return left + 2
-end
-
-behaviors = {
-    still = function() end,
-    hopping = 
-        function(actor)
-            while true do
-                actor:jump()
-                yield()
-            end
-        end,
-    slide_left_slow =
-        function(actor)
-            actor.vel.x = -0.5
-            actor.flipx = true
-        end,
-    slide_left_fast =
-        function(actor)
-            actor.flipx = true
-            actor.vel.x = -2
-            while deltafromplayer( actor ) > 64 do                
-                yield()
-            end
-            actor.vel.x = 0
-            wait( 0.6 )
-            actor.vel.x = -3
-        end,
-    slide_right_fast =
-        function(actor)
-            actor.pos.x = stage_left_appear_pos()
-            actor.flipx = false
-            actor.vel.x = 1.5
-            while deltafromplayer( actor ) < -24 do
-                yield()
-            end
-            actor.vel.x = 0.9
-            wait( 0.4 )
-            actor:flash( 0.5 )
-            wait( 0.5 )
-            actor.vel.x = 4
-        end,
-    pounce_from_left =
-        function(actor)
-            actor.pos.x = stage_left_appear_pos()
-            actor.flipx = false
-
-            actor.vel.x = 1.25
-            while deltafromplayer( actor ) < -28 do
-                yield()
-            end
-            actor.vel.x = 0.95
-            wait( 1 )
-            actor:flash( 0.5 )
-            wait( 0.5 )
-            actor:jump()
-            actor.vel.x = 2.5
-            yield()
-
-            while not actor:grounded() do
-                yield()
-            end
-
-            actor.vel.x = 0
-        end,
-}
 -->8
 -- liam's code
 

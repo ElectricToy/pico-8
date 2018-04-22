@@ -196,25 +196,25 @@ X Things to jump over
 X Something to pick up (coin?)
 X Pickup button
 X Platforms
-- Creature
+X Creature
+X Environment with motion
 - Craft one item with blank rest of crafting tree
 - Owned item inventory
 - Light/dark
-- Environment with motion
 
 ## Expansion - Saturday
 
-- Player character with all animations
+X Player character with all animations
+X Environment art
 - UI details (e.g. crafting requirements, warning signs)
 - Items
 - Creatures
-- Environment art
 
 ## Polish - Sunday
 
-- background with dithered gradient
+X background with dithered gradient
+X Music
 - SFX
-- Music
 - Tuning
 - Extra art variations
 
