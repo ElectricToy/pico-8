@@ -451,6 +451,8 @@ function actor:new( level, x, y, wid, hgt )
         want_shadow = false,
         damage = 2,
         parallaxslide = 0,
+        deathcolorshift = -1,
+        colorshift = 0,
         flashamount = 0,
         flashhertz = 6,
         floatbobamplitude = 0,
@@ -476,6 +478,10 @@ function actor:flash( time, hz, amount )
     end )
 end
 
+function actor:check_for_player_weapon()
+    self.level.player:maybe_shoot( self )
+end
+
 function actor:dead()
     return not self.alive
 end
@@ -483,6 +489,7 @@ end
 function actor:die( cause )
     if self:dead() then return end
 
+    self.colorshift = self.deathcolorshift
     self.flashamount = 0
     self.alive = false
     self.vel.x = 0
@@ -599,7 +606,7 @@ function actor:draw()
         local drawscalex = anim.drawscalex
         local drawscaley = anim.drawscaley
 
-        local colorize = flicker( self.level:time(), self.flashhertz ) and self.flashamount or 0
+        local colorize = self.colorshift + ( flicker( self.level:time(), self.flashhertz ) and self.flashamount or 0 )
 
         draw_color_shifted( colorize, function()
             if drawscalex == 1 and drawscaley == 1 then
@@ -645,15 +652,16 @@ function player:new( level )
     newobj.max_health = 6
     newobj.health = newobj.max_health
 
-    newobj.max_satiation = 6
+    newobj.max_satiation = 10
     newobj.satiation = newobj.max_satiation
 
     newobj.reach_distance = 12
 
-    newobj.max_armor = 5
+    newobj.max_armor = 3
     newobj.armor = 0
     newobj.armorflicker = false
 
+    newobj.deathcolorshift = 0
     newobj.deathcause = ''
 
     local death_anim = animation:new( 224, 7, 2, 2 )
@@ -664,6 +672,10 @@ function player:new( level )
     newobj.animations[ 'death' ] = death_anim
     
     return setmetatable( newobj, self )
+end
+
+function player:maybe_shoot( other )
+    -- todo!!!
 end
 
 function player:add_coins( amount )
@@ -721,8 +733,6 @@ function player:add_health( amount )
     else
 	sfx(34)
     end
-
-
 
 
     if self:dead() then return end
@@ -820,6 +830,8 @@ end
 
 -- level
 
+local creature = inheritsfrom( actor )
+
 local level = inheritsfrom( nil )
 function level:new()
     local newobj = {
@@ -831,10 +843,11 @@ function level:new()
         pending_calls = {},        
     }
     newobj.creation_records = {
+        coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( newobj:time() / 3 ) * sin( newobj:time() / 11 ) > 0.25 end },
         stone    = { chance =   0.5, earliestnext =   64, interval = 48 },
-        tree     = { chance =    1, earliestnext = -100, interval = 0 },
+        tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 20 end },
         shrub    = { chance =    1, earliestnext = -100, interval = 0 },
-        creature = { chance =    0.5, earliestnext = 256, interval = 256 },
+        creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
     }
 
     newobj.player = player:new( newobj )
@@ -857,6 +870,16 @@ end
 function level:live_actor_span()
     local left, right = self:viewspan()
     return left - 16, right + 32
+end
+
+function level:actors_of_class( class )
+    local arr = {}
+    for actor in all( self.actors ) do
+        if actor.active and ( class == nil or getmetatable( actor ) == class ) then
+            add( arr, actor )
+        end
+    end
+    return arr
 end
 
 function level:closest_actor( pos, filter )
@@ -1058,6 +1081,9 @@ function level:draw()
         fillstripseries(  0, 6 , 0, 1, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
         fillstripseries(  4, 20, 0, 1, dither_color( gc[3], gc[2] ), grassscrolloffsetx )
         fillstripseries(  24, 8, 0, 1, dither_color( gc[2], gc[1] ), grassscrolloffsetx )
+
+        -- boundary line
+        line( 0, 0, 128, 0, 0 )
     end
 
     -- sky
@@ -1112,7 +1138,6 @@ end
 local behaviors = {}
 
 -- creature
-local creature = inheritsfrom( actor )
 function creature:new( level, x )
     local y = -16
     local wid = 16
@@ -1145,18 +1170,22 @@ end
 
 local stone = inheritsfrom( actor )
 function stone:new( level, x )
-    local size = 2
-    local sprite = { 164, 167, 169 }
+    local size = flr( randinrange( 1, 3 ))
+
+    local sprite = { 185, 167, 164 }
     local spritewidth =  { 1, 2, 3 }
     local spriteheight = { 1, 2, 2 }
+    local spriteoffsetx = { -1, -4, -4 }
+    local spriteoffsety = { -1, -2, -2 }
     local collisionwid = { 6, 12, 16 }
     local collisionhgt = { 6, 12, 12 }
 
-    local newobj = actor:new( level, x, -8, 0, 0 )
+    local newobj = actor:new( level, x, -collisionhgt[ size ], 0, 0 )
     newobj.animations[ 'idle' ] = animation:new( sprite[size], 1, spritewidth[size], spriteheight[size] ) 
     newobj.current_animation_name = 'idle'
-    newobj.offset.x = -4
-    newobj.offset.y = -6
+    newobj.do_dynamics = false
+    newobj.offset.x = spriteoffsetx[ size ]
+    newobj.offset.y = spriteoffsety[ size ]
     newobj.collision_size.x = collisionwid[ size ]
     newobj.collision_size.y = collisionhgt[ size ]
 
@@ -1166,7 +1195,8 @@ end
 -- coin
 
 local coin = inheritsfrom( actor )
-function coin:new( level, x, y )
+function coin:new( level, x )
+    local y = -48 + 8 * flr( sin( x / 300 ) * 5 )
     local newobj = actor:new( level, x, y, 4, 4 )
     newobj.animations[ 'idle' ] = animation:new( 5 ) 
     newobj.current_animation_name = 'idle'
@@ -1241,7 +1271,9 @@ function level:maybe_create( class, classname )
     local creation_point = liveright - 2
 
     local record = self.creation_records[ classname ]
-    if record.earliestnext < creation_point and pctchance( record.chance ) then
+    if record.earliestnext < creation_point
+        and ( record.predicate == nil or record.predicate() )
+        and pctchance( record.chance ) then
         local obj = class:new( self, creation_point )
         record.earliestnext = creation_point + record.interval
         return obj
@@ -1265,10 +1297,7 @@ function level:create_props()
 end
 
 function level:create_coins()
-    local liveleft, liveright = self:live_actor_span()
-    if pctchance( 2 ) then
-        coin:new( self, liveright - 2, randinrange( -48, -4 ) )
-    end
+    self:maybe_create( coin, 'coin' )
 end
 
 function world_to_mapsegment_cell_x( x )
@@ -1466,13 +1495,10 @@ function draw_ui()
         local player = current_level.player
 
         local iconstepx = 8
-        local iconright = 127
-	local iconleft  = 2
+    	local iconleft  = 2 + 4*5
 
-        function draw_halveable_stat( right, top, stat, max, full_sprite, half_sprite )
+        function draw_halveable_stat( left, top, stat, max, full_sprite, half_sprite )
 
-            local left = iconleft --right - ( max / 2 ) * iconstepx
-            
             for i = 0, max / 2 do
                 local x = i * iconstepx
 
@@ -1494,46 +1520,44 @@ function draw_ui()
 
         -- draw player health
 
-        draw_halveable_stat( iconright, iconsy, player.health, player.max_health, 1, 2 )
-        --draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
-        --    print_rightaligned_text( 'life', x, y, 8 )
-        --end )
+        draw_halveable_stat( iconleft, iconsy, player.health, player.max_health, 1, 2 )
+        draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
+           print( 'life', x, y, 8 )
+        end )
         iconsy += 8
 
         -- draw player satiation
 
-        draw_halveable_stat( iconright, iconsy, player.satiation, player.max_satiation, 3, 4 )
-        --draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
-        --    print_rightaligned_text( 'food', x, y, 9 )
-        --end )
+        draw_halveable_stat( iconleft, iconsy, player.satiation, player.max_satiation, 3, 4 )
+        draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
+           print( 'food', x, y, 9 )
+        end )
         iconsy += 8
 
         -- draw player armor
 
-        local armor_left = iconleft -- player.max_armor * iconstepx
-
         for i = 0, player.max_armor - 1 do
             if i < player.armor then
-                spr( 11, armor_left + i * iconstepx, iconsy )
+                spr( 11, iconleft + i * iconstepx, iconsy )
             end
         end
-        --draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
-        --    print_rightaligned_text( 'armr', x, y, 6 )
-        --end )
+        draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
+           print( 'armr', x, y, 6 )
+        end )
         iconsy += 8
 
         -- draw player distance
 
         local dist = player_run_distance()
         draw_shadowed( 2, iconsy, 0, 1, 2, function(x,y)
-            print( '' .. dist .. ' dist', x, y, 11 )
+            print( 'dist ' .. dist, x, y, 11 )
         end )
         iconsy += 8
 
         -- draw player coins
 
         draw_shadowed( 2, iconsy, 0, 1, 2, function(x,y)
-            print( '' .. player.coins .. ' coin', x, y, 10 )
+            print( 'coin ' .. player.coins, x, y, 10 )
         end )
         iconsy += 8
 
@@ -1561,7 +1585,11 @@ function draw_ui()
     if true then
         draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
             print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
+            y -= 8
+            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
+            y -= 8
+            print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
+            y -= 8
         end )
     end
 end
@@ -1637,28 +1665,67 @@ behaviors = {
         end,
     pounce_from_left =
         function(actor)
+            local maxpounces = 3    -- todo based on level age
+
+            local numpounces = flr( randinrange( 1, maxpounces ))
+
+            --setup
             actor.pos.x = stage_left_appear_pos()
             actor.flipx = false
+            local stored_collision_planes = actor.collision_planes_inc
 
+            -- approach
             actor.vel.x = 1.25
             while deltafromplayer( actor ) < -28 do
                 yield()
             end
-            actor.vel.x = 0.95
-            wait( 1 )
-            actor:flash( 0.5 )
-            wait( 0.5 )
-            actor:jump()
-            actor.vel.x = 2.5
-            yield()
 
-            while not actor:grounded() do
-                yield()
+            -- loop
+            for i = 1, numpounces do
+
+                actor.colorshift = 0
+
+                -- wait
+                actor.vel.x = 0.95
+                wait( 1 )
+
+                --flash
+                actor:flash( 0.5 )
+                wait( 0.5 )
+
+                --pounce
+                actor.collision_planes_inc = stored_collision_planes
+                actor:jump()
+                actor.vel.x = 2.5
+
+                -- check for weapon strike.
+                wait( 0.35 )
+                actor:check_for_player_weapon()
+
+                -- wait to land
+
+                while not actor:grounded() do
+                    yield()
+                end
+
+                -- fall back
+                actor.vel.x = 0
+                stored_collision_planes = actor.collision_planes_inc
+                actor.collision_planes_inc = 0
+                
+                if actor:dead() then
+                    break
+                end
+
+                actor.colorshift = -1
+
+                while deltafromplayer( actor ) > -28 do
+                    yield()
+                end
             end
-
-            actor.vel.x = 0
         end,
 }
+
 -->8
 -- liam's code
 
@@ -1753,13 +1820,13 @@ bb3b300000005b300000000066666666000000000000000000000000000000000000000000000000
 00000000bbb3300bbb33000bbbbb0000044464611d11d44d0040000000661ddddddd444000000000000000000000000000000000000000000000000000000000
 00000000bbb3bbbbb3300bbbbbb0000000444444dddd44dd0044000044446dddddd4440000000000000000000000000000000000000000000000000000000000
 0000000bbb33bbbb3333bbbbbb0b0000000441d441dd14dd404400000044441ddd11dd0000000000000000000000000000000000000000000000000000000000
-000000bbbb3bbbb333bbbbbbb00b000000d611dd11dd11d4444000040066411dddddddd000000000000000000000000000000000000000000000000000000000
-000000bbb3bbb3333bbbbbb3330bbbbb4066644ddddddd44d44ddd444446ddddddddddd000000000000000000000000000000000000000000000000000000000
-00000bbbbbb3333bbbbbb33000bbbb0044466d41ddddd144d14dd4400441dddddddddddd00000000000000000000000000000000000000000000000000000000
-0000bb3bbbbbbbbbbbbb3300bbbbb00004441d11ddddd11dd11d14d00611dddddddddddd00000000000000000000000000000000000000000000000000000000
-000bb33bb3333bbbb3333333bb33003000611ddddddddddddddd11dd0666dddddddddddd00000000000000000000000000000000000000000000000000000000
-00bb3bb3333bbb3333333bbbb33bb30b0666dddddddddddddddddddd006dddddddddddd000000000000000000000000000000000000000000000000000000000
-bbbbbbbbb3bbbbbb33bbbbbbbbbbb33b0000dddddddddddddd00000000000dddddddd00000000000000000000000000000000000000000000000000000000000
+000000bbbb3bbbb333bbbbbbb00b000000d611dd11dd11d4444000040066411dddddddd004040040000000000000000000000000000000000000000000000000
+000000bbb3bbb3333bbbbbb3330bbbbb4066644ddddddd44d44ddd444446ddddddddddd000626660000000000000000000000000000000000000000000000000
+00000bbbbbb3333bbbbbb33000bbbb0044466d41ddddd144d14dd4400441dddddddddddd46d55456000000000000000000000000000000000000000000000000
+0000bb3bbbbbbbbbbbbb3300bbbbb00004441d11ddddd11dd11d14d00611dddddddddddd02655211000000000000000000000000000000000000000000000000
+000bb33bb3333bbbb3333333bb33003000611ddddddddddddddd11dd0666dddddddddddd6d5d1511000000000000000000000000000000000000000000000000
+00bb3bb3333bbb3333333bbbb33bb30b0666dddddddddddddddddddd006dddddddddddd015151111000000000000000000000000000000000000000000000000
+bbbbbbbbb3bbbbbb33bbbbbbbbbbb33b0000dddddddddddddd00000000000dddddddd00011511110000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
