@@ -294,7 +294,6 @@ end
 local mapsegment_tile_size = vector:new( 16, 16 )
 local mapsegment_tiles_across_map = 8
 local shadow_y_divisor = 6
-local max_armor = 5
 
 -- mapsegment
 local mapsegment = inheritsfrom( nil )
@@ -541,6 +540,8 @@ end
 function actor:jump( amount )
     if self:dead() or not self:grounded() then return end
 
+    self:drain_satiation( 0.01 )
+
     self.vel.y = -self.jumpforce * ( amount or 1.0 )
     self.landed_tick = nil
 end
@@ -595,10 +596,16 @@ function player:new( level )
     newobj.max_health = 10
     newobj.health = newobj.max_health
 
+    newobj.max_satiation = 20
+    newobj.satiation = newobj.max_satiation
+
     newobj.reach_distance = 12
 
+    newobj.max_armor = 5
     newobj.armor = 0
     newobj.armorflicker = false
+
+    newobj.deathcause = ''
 
     local death_anim = animation:new( 224, 7, 2, 2 )
     death_anim.style = 'stop'
@@ -614,8 +621,22 @@ function player:add_coins( amount )
     self.coins += amount
 end
 
+function player:drain_satiation( amount )
+    if self:dead() then return end
+    self.satiation -= amount
+
+    if self.satiation < 0 then
+        self.satiation = 0
+        self:die( 'died from hunger' )
+    end
+end
+
 function player:update( deltatime )
     self:superclass().update( self, deltatime )
+
+    -- update satiation
+
+    self:drain_satiation( 0.002 + self.armor > 0 and 0.001 or 0 )
 
     -- sync anims
     if self.current_animation_name ~= 'run' then
@@ -630,21 +651,22 @@ function player:dead()
     return not self.alive
 end
 
-function player:die()
+function player:die( cause )
     if self:dead() then return end
 
     self.alive = false
+    self.deathcause = cause
     self.animations[ 'death' ].current_frame = 1
     self.current_animation_name = 'death'
     self.vel.x = 0
-    debug_print( "dead!" )
+    debug_print( self.deathcause )
 end
 
 function player:add_health( amount )
     if self:dead() then return end
     self.health = clamp( self.health + amount, 0, self.max_health )
     if self.health == 0 then
-        self:die()
+        self:die( 'died from wounds' )
     end
 end
 
@@ -1126,7 +1148,7 @@ function level:create_props()
 
     if pctchance( 0.25 ) then
         local pickup = pickup:new( self, liveright - 2, 11, function( pickup, actor )
-            actor.armor = max_armor
+            actor.armor = actor.max_armor
         end )
     end
 end
@@ -1228,7 +1250,7 @@ function restart_world()
 end
 
 function player_run_distance()
-    return ( current_level.player.pos.x - 0 ) / 20
+    return flr(( current_level.player.pos.x - 0 ) / 40 )
 end
 
 tidy_map()
@@ -1334,49 +1356,77 @@ function draw_ui()
     function draw_ui_playing()
         local player = current_level.player
 
-        -- draw player health
+        local iconstepx = 8
+        local iconright = 100
 
-        local healthstepx = 8
-        local health_left = 124 - ( player.max_health / 2 ) * healthstepx
-        local health_top = 10
-        for i = 0, player.max_health / 2 do
-            local healthx = i * healthstepx
+        function draw_halveable_stat( right, top, stat, max, full_sprite, half_sprite )
 
-            local equivalent_health = i * 2
+            local left = right - ( max / 2 ) * iconstepx
+            
+            for i = 0, max / 2 do
+                local x = i * iconstepx
 
-            local sprite = 0
+                local equivalent_x = i * 2
 
-            if equivalent_health + 1 < player.health then sprite = 1 
-            elseif equivalent_health < player.health then sprite = 2 end
+                local sprite = 0
 
-            if sprite > 0 then
-                spr( sprite, health_left + healthx, health_top )
+                if equivalent_x + 1 < stat then sprite = full_sprite 
+                elseif equivalent_x < stat then sprite = half_sprite end
+
+                if sprite > 0 then
+                    spr( sprite, left + x, top )
+                end
             end
         end
 
-        -- draw player armor
+        local iconsy = 2
 
-        local armor_left = health_left
-        local armor_top = 18
+        -- draw player coins
 
-        for i = 0, max_armor - 1 do
-            if i < player.armor then
-                spr( 11, armor_left + i * healthstepx, armor_top )
-            end
-        end
+        draw_shadowed( 124, iconsy, 0, 1, 2, function(x,y)
+            print_rightaligned_text( '' .. player.coins .. ' coins', x, y, 10 )
+        end )
+        iconsy += 8
 
         -- draw player distance
 
         local dist = player_run_distance()
-        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
-            print_rightaligned_text( '' .. player.coins, x, y, 10 )
+        draw_shadowed( 124, iconsy, 0, 1, 2, function(x,y)
+            print_rightaligned_text( '' .. dist .. '  dist', x, y, 11 )
         end )
+        iconsy += 8
 
-        -- draw player coins
+        -- draw player satiation
 
-        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
-            print_rightaligned_text( '' .. player.coins, x, y, 10 )
+        draw_halveable_stat( iconright, iconsy, player.satiation, player.max_satiation, 3, 4 )
+        draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
+            print_rightaligned_text( 'hunger', x, y, 9 )
         end )
+        iconsy += 8
+
+
+        -- draw player health
+
+        draw_halveable_stat( iconright, iconsy, player.health, player.max_health, 1, 2 )
+        draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
+            print_rightaligned_text( 'health', x, y, 8 )
+        end )
+        iconsy += 8
+
+        -- draw player armor
+
+        local armor_left = iconright - player.max_armor * iconstepx
+
+        for i = 0, player.max_armor - 1 do
+            if i < player.armor then
+                spr( 11, armor_left + i * iconstepx, iconsy )
+            end
+        end
+        draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
+            print_rightaligned_text( 'armor', x, y, 6 )
+        end )
+        iconsy += 8
+
     end
 
     function draw_ui_title()
