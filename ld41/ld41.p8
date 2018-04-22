@@ -593,25 +593,29 @@ function level:draw()
     local thetime = self:timeofday()
     local categoricaltime = self:categoricaltimeofday()
 
-    -- matrix: grasscolors[ categoricaltime ][ darklevel ]
-    local grasscolors = {
-        {
-            3, 11, 11
-        },
-        {
-            3, 3, 11
-        },
-        {
-            0, 3, 3
-        },
-    }
+    function drawgrass()
+        camera( 0, cam.y )
 
-    local gc = grasscolors[ categoricaltime ]
+        -- matrix: grasscolors[ categoricaltime ][ darklevel ]
+        local grasscolors = {
+            {
+                3, 11, 11
+            },
+            {
+                3, 3, 11
+            },
+            {
+                0, 3, 3
+            },
+        }
 
-    local grassscrolloffsetx = -( self.player.pos.x % 4 )
-    fillstripseries(  0, 16, 0, 1, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
-    fillstripseries( 16, 8,  1, 0, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
-    fillstripseries( 24, 8,  1, 0, dither_color( gc[1], gc[2] ), grassscrolloffsetx )
+        local gc = grasscolors[ categoricaltime ]
+
+        local grassscrolloffsetx = -( self.player.pos.x % 4 )
+        fillstripseries(  0, 16, 0, 1, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
+        fillstripseries( 16, 8,  1, 0, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
+        fillstripseries( 24, 8,  1, 0, dither_color( gc[1], gc[2] ), grassscrolloffsetx )
+    end
 
     -- sky
 
@@ -633,7 +637,17 @@ function level:draw()
     fillstripseries( -56, 32, 0, 1, dither_color( sc[4], sc[2] ) )
     fillstripseries( -32, 32, 0, 1, dither_color( sc[2], sc[1] ) )
 
+    camera( cam.x, cam.y )
 
+    -- draw behind-grass actors
+    self:eachactor( function( actor )
+        if actor.depth > 0 then
+            actor:draw()
+        end
+    end )
+
+    drawgrass()
+ 
     camera( cam.x, cam.y )
 
     -- draw mapsegments
@@ -642,9 +656,11 @@ function level:draw()
         segment:draw()
     end
 
-    -- draw actors
+    -- draw in-front-of-grass actors
     self:eachactor( function( actor )
-        actor:draw()
+        if actor.depth <= 0 then
+            actor:draw()
+        end
     end )
 end
 
@@ -660,6 +676,8 @@ function animation:new( min, count, ssizex, ssizey )
         ssizex = ssizex or 1,
         ssizey = ssizey or ssizex or 1,
         style = 'loop',
+        drawscalex = 1,
+        drawscaley = 1,
     }
 
     for i = 0, count - 1 do
@@ -710,6 +728,7 @@ function actor:new( level, x, y, wid, hgt )
         current_animation_name = nil,
         want_shadow = false,
         damage = 1,
+        parallaxslide = 0,
     }
 
     add( level.actors, newobj )
@@ -771,9 +790,11 @@ function actor:update( deltatime )
         end
     end
 
+    self.pos.x += self.parallaxslide
+
     -- die if too far left
     local liveleft, liveright = self.level:live_actor_span()
-    if self.pos.x < liveleft then
+    if self:collision_br().x + 8 < liveleft then
         self.active = false
     end
 
@@ -810,7 +831,19 @@ function actor:draw()
     if anim ~= nil then 
         local drawpos = self.pos + self.offset
         local frame = anim:frame()
-        spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
+        local drawscalex = anim.drawscalex
+        local drawscaley = anim.drawscaley
+
+        if drawscalex == 1 and drawscaley == 1 then
+            spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
+        else
+            local spritesheetleft = frame % 16 * 8
+            local spritesheettop  = flr( frame / 16 ) * 8
+            local spritesheetwid = anim.ssizex * 8
+            local spritesheethgt = anim.ssizey * 8
+            sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
+                  drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8 )
+        end
 
         --draw shadow
         -- if self.want_shadow then
@@ -1003,10 +1036,50 @@ function coin:on_pickedup_by( other )
     self:superclass().on_pickedup_by( self, other )
 end
 
+local tree = inheritsfrom( actor )
+function tree:new( level, x )
+    local scale = randinrange( 2, 4 )
+    local newobj = actor:new( level, x, -14 * scale, scale * 2 * 8, scale * 8 )
+    newobj.animations[ 'idle' ] = animation:new( 128, 1, 1, 2 )
+    newobj.current_animation_name = 'idle'
+    newobj.collision_planes_inc = 0
+    newobj.damage = 0
+    newobj.parallaxslide = randinrange( 0.5, 8.0 ) / scale
+    newobj.depth = newobj.parallaxslide * 10           -- todo!!!
+    newobj.animations[ 'idle' ].drawscalex = scale
+    newobj.animations[ 'idle' ].drawscaley = scale
+
+    return setmetatable( newobj, self )    
+end
+
+local shrub = inheritsfrom( actor )
+function shrub:new( level, x )
+    local scale = randinrange( 1, 2 )
+    local newobj = actor:new( level, x, 32 - 16 * scale, scale * 4 * 8, scale * 2 * 8 )
+    newobj.animations[ 'idle' ] = animation:new( 160, 1, 4, 2 )
+    newobj.current_animation_name = 'idle'
+    newobj.collision_planes_inc = 0
+    newobj.damage = 0
+    newobj.parallaxslide = -randinrange( 0.5, 1 ) / scale
+    newobj.depth = newobj.parallaxslide * 10
+    newobj.animations[ 'idle' ].drawscalex = scale
+    newobj.animations[ 'idle' ].drawscaley = scale
+
+    return setmetatable( newobj, self )    
+end
+
+
 function level:create_props()
     local liveleft, liveright = self:live_actor_span()
     if pctchance( 1 ) then
         stone:new( self, liveright - 2, -8 )
+    end
+
+    if pctchance( 2 ) then
+        local tree = tree:new( self, liveright - 2 )
+    end
+    if pctchance( 1 ) then
+        local shrub = shrub:new( self, liveright - 2 )
     end
 end
 
