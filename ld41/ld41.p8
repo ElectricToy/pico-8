@@ -1407,22 +1407,92 @@ end
 -->8
 --crafting
 
-local spacing = 14
-function dest_for_child( index, parentindex )
-end
+local item_tree =
+    -- root
+    { sprite = 16, action = nil,
+        children = {
+            -- light
+            { sprite = 15, action = nil },          
+
+            -- food
+            { sprite = 10, action = nil,            
+                children = {
+                    { sprite = 10, action = nil },  
+                    { sprite = 11, action = nil },  
+                    { sprite = 12, action = nil },  
+                }
+            },
+
+            -- weapons
+            { sprite = 13, action = nil,
+                children = {
+                    { sprite = 13, action = nil },      
+                    { sprite = 14, action = nil },      
+                }
+            },
+        }
+    }
+
+local thingy_spacing = 14
 
 local thingy = inheritsfrom( nil )
-function thingy:new( parent, sprite )
+
+local crafting = inheritsfrom( nil )
+function crafting:new( pos )
     local newobj = {
+        pos = pos,
+        tick_count = 0,
+    }
+
+    local resultself =  setmetatable( newobj, self )
+
+    resultself.rootthingy = thingy:new( resultself, nil, item_tree )
+    resultself.rootthingy:activate()
+
+    return resultself
+end
+
+function crafting:time()
+    return self.tick_count / 60.0
+end
+
+function crafting:update()
+    self.tick_count += 1
+    self.rootthingy:update()
+end
+
+function crafting:draw()
+    self.rootthingy:draw( self.pos )
+end
+
+function thingy:new( crafting, parent, item_config )
+    local newobj = {
+        crafting = crafting,
         parent = parent,
-        sprite = sprite,
+        sprite = item_config.sprite,
+        action = item_config.action,
         children = {},
         pos = vector:new( 0, 0 ),
         destination = nil,
         lerpspeed = 0.1,
         activated = false,
+        flashendtime = nil,
     }
+
+    local configchildren = item_config.children
+    for child in all( configchildren ) do
+        add( newobj.children, thingy:new( crafting, newobj, child ) )
+    end
+
     return setmetatable( newobj, self )
+end
+
+function thingy:flash( duration )
+    self.flashendtime = self.crafting:time() + establish( duration, 1 )
+end
+
+function thingy:flashing()
+    return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
 end
 
 function thingy:drawchildren( basepos )
@@ -1457,12 +1527,18 @@ function thingy:draw( basepos )
     self:drawchildren( selfpos )
 
     -- draw self
-    spr( self.sprite, selfpos.x, selfpos.y )
+    local colorize = ( self:flashing() and flicker( self.crafting:time(), 2 )) and 8 or 0
+
+    draw_color_shifted( colorize, function()
+        spr( self.sprite, selfpos.x, selfpos.y )
+    end )
 end
 
 function thingy:update()
 
-    self:update_input()
+    if self.activated then
+        self:update_input()
+    end
 
     if self.destination ~= nil then
         self.pos.x = lerp( self.pos.x, self.destination.x, self.lerpspeed )
@@ -1483,13 +1559,13 @@ function thingy:expand( parentindex, myindex )
     -- if myindex == 3 then adjustedindex = ( parentindex == 1 ) and 3 or 1 end
 
     if adjustedindex == 1 then
-        self.destination = vector:new( -1, 0 )
+        self.destination = vector:new( -thingy_spacing, 0 )
     elseif adjustedindex == 2 then
-        self.destination = vector:new( 1, 0 )
+        self.destination = vector:new( thingy_spacing, 0 )
     elseif adjustedindex == 3 then
-        self.destination = vector:new( 0, -1 )
+        self.destination = vector:new( 0, -thingy_spacing )
     elseif adjustedindex == 4 then
-        self.destination = vector:new( 0, 1 )
+        self.destination = vector:new( 0, thingy_spacing )
     end
 end
 
@@ -1500,19 +1576,26 @@ end
 function thingy:activate()
     self.activated = true
 
+    self:flash()
+
+    self.destination = vector:new( 0, 0 )
+
     -- leaf node?
     if self.parent ~= nil and #self.children == 0 then
         -- yes. do what we do
-        -- todo!!!
+        
+        if self.action ~= nil then
+            self.action()
+        end
 
-        self:deactivate()
+        -- todo!!!
+        -- self:deactivate()
 
     else
         -- container. Expand children.
 
         local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 2
 
-        self.destination = vector:new( 0, 0 )
         for i = 1, #self.children do
             local child = self.children[ i ]
             child:expand( myindex, i )
@@ -1559,36 +1642,11 @@ function thingy:update_input()
 
             -- if root, move down
             if self.parent == nil then
-                self:expand( nil, 4 )
+                self:collapse()
             end
         end
 
     end
-
-
-
-end
-
-local crafting = inheritsfrom( nil )
-function crafting:new( pos )
-    local rootthingy = thingy:new( nil, 16 ) -- todo
-
-    local newobj = {
-        rootthingy = rootthingy,
-        pos = pos
-    }
-
-    rootthingy:activate()
-
-    return setmetatable( newobj, self )
-end
-
-function crafting:update()
-    self.rootthingy:update()
-end
-
-function crafting:draw()
-    self.rootthingy:draw( self.pos )
 end
 
 -->8
@@ -1625,7 +1683,7 @@ end
 --level creation
 music()
 
-local crafting_ui = crafting:new( vector:new( 96, 128 - 2 - 10 ))
+local crafting_ui = crafting:new( vector:new( 96, 128 - 2 - 10*2 ))
 local current_level = nil
 
 local game_state = 'title'
@@ -1846,7 +1904,7 @@ function draw_ui()
         draw_ui_gameover()
 
         draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
-            print_centered_text( 'play again! z/x 🅾/❎', x, y, 12 )
+            print_centered_text( 'play again! z/x ????/❎', x, y, 12 )
         end )
 
     end
