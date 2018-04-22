@@ -5,7 +5,7 @@ __lua__
 -- by jeff and liam wofford 
 -- http://www.electrictoy.co
 
--- u⬆️ d⬇️ l⬅️ r➡️ o🅾️ x❎
+-- u⬆️ d⬇️ l⬅️ r➡️ z🅾️ x❎
 -->8
 -- general utilities
 
@@ -24,6 +24,11 @@ function draw_debug_lines()
         print( line, 2, 7 * i, rel_color( 8, 1 - i ) )
     end
     print( '', 0, (#debug_lines+1) *7 )
+end
+
+function establish( value, default )
+    if value == nil then return default end
+    return value
 end
 
 function rel_color( base, change )
@@ -85,7 +90,7 @@ function shallowcopy(orig)
 end
 
 function flicker( time, hertz, cutoff )
-    return ( time * hertz ) % 1 <= ( cutoff or 0.5 )
+    return ( time * hertz ) % 1 <= establish( cutoff, 0.5 )
 end
 
 function dither_color( base, dither )
@@ -158,7 +163,7 @@ end
 vector = inheritsfrom( nil )
 
 function vector:new( x, y )
-    local newobj = { x = x or 0, y = y or x or 0 }
+    local newobj = { x = establish( x, 0 ), y = establish( y, establish( x, 0 )) }
     return setmetatable( newobj, self )
 end
 
@@ -222,9 +227,13 @@ end
 
 -- utilities 
 
-function randinrange( min, max )
-    assert( max >= min )
-    return min + rnd( max - min )
+function rand_int( min, maxinclusive )
+    return flr( randinrange( min, maxinclusive + 1 ) )
+end
+
+function randinrange( min, maxexclusive )
+    assert( maxexclusive >= min )
+    return min + rnd( maxexclusive - min )
 end
 
 function pctchance( pct )
@@ -295,6 +304,8 @@ end
 local mapsegment_tile_size = vector:new( 16, 16 )
 local mapsegment_tiles_across_map = 8
 local shadow_y_divisor = 6
+local weapon_check_distance = 32
+
 
 -- mapsegment
 local mapsegment = inheritsfrom( nil )
@@ -320,8 +331,6 @@ function mapsegment:right()
 end
 
 function mapsegment:colliding_tile( withactor )
-
-    -- todo!!! working here
 
     local myrect = self:collision_rect()
     local rect = withactor:collision_rect()
@@ -369,7 +378,6 @@ function mapsegment:update()
 end
 
 function mapsegment:draw()
-    -- todo!!!
     if self.segment_num > 0 then
         local segmentul_mapspace = { 
             x =    ( self.segment_num % mapsegment_tiles_across_map ) * mapsegment_tile_size.x,
@@ -387,13 +395,13 @@ end
 
 local animation = inheritsfrom( nil )
 function animation:new( min, count, ssizex, ssizey )
-    count = count or 1
+    count = establish( count, 1 )
     local newobj = { 
         frames = {},
         current_frame=1,
         frame_rate_hz=10,
-        ssizex = ssizex or 1,
-        ssizey = ssizey or ssizex or 1,
+        ssizex = establish( ssizex, 1 ),
+        ssizey = establish( ssizey, establish( ssizex, 1 )),
         style = 'loop',
         drawscalex = 1,
         drawscaley = 1,
@@ -426,17 +434,19 @@ end
 -- actor
 
 local actor = inheritsfrom( nil )
+local creature = inheritsfrom( actor )
+
 function actor:new( level, x, y, wid, hgt )
     local newobj = { 
         level = level,
         tick_count = 0,
         active = true,
         alive = true,
-        pos = vector:new( x or 0, y or x or 0 ),
-        vel = vector:new( 0, 0 ),
+        pos = vector:new( x, y ),
+        vel = vector:new(),
         depth = 0,
-        offset = vector:new( 0, 0 ),
-        collision_size = vector:new( wid or 0, hgt or 0 ),
+        offset = vector:new(),
+        collision_size = vector:new( establish( wid, 0 ), establish( hgt, 0 )),
         collision_planes_inc = 1,
         collision_planes_exc = 15,
         do_dynamics = false,
@@ -478,10 +488,6 @@ function actor:flash( time, hz, amount )
     end )
 end
 
-function actor:check_for_player_weapon()
-    self.level.player:maybe_shoot( self )
-end
-
 function actor:dead()
     return not self.alive
 end
@@ -493,6 +499,9 @@ function actor:die( cause )
     self.flashamount = 0
     self.alive = false
     self.vel.x = 0
+    self.collision_planes_inc = 0
+    self.animations[ 'death' ].current_frame = 1
+    self.current_animation_name = 'death'
 end
 
 function actor:age()
@@ -592,7 +601,7 @@ end
 function actor:jump( amount )
     if self:dead() or not self:grounded() then return end
 
-    self.vel.y = -self.jumpforce * ( amount or 1.0 )
+    self.vel.y = -self.jumpforce * establish( amount, 1.0 )
     self.landed_tick = nil
     sfx(32)
 end
@@ -675,7 +684,11 @@ function player:new( level )
 end
 
 function player:maybe_shoot( other )
-    -- todo!!!
+    -- todo and we have a weapon and ammo!!!
+    if abs( other.pos.x - self.pos.x ) < weapon_check_distance then
+        -- todo!!!
+        -- other:die()
+    end 
 end
 
 function player:add_coins( amount )
@@ -701,9 +714,15 @@ end
 function player:update( deltatime )
     self:superclass().update( self, deltatime )
 
+    -- fire weapon if appropriate
+    local creatures = self.level:actors_of_class( creature )
+    for creature in all( creatures ) do
+        self:maybe_shoot( creature )
+    end
+
     -- update satiation
 
-    self:drain_satiation( 0.002 + self.armor > 0 and 0.001 or 0 )
+    self:drain_satiation( 0.002 + ( self.armor > 0 and 0.001 or 0 ))
 
     -- sync anims
     if self.current_animation_name ~= 'run' then
@@ -717,14 +736,12 @@ end
 function player:die( cause )
     if self:dead() then return end
 
-    self.alive = false
     self.deathcause = cause
     self.vel.x = 0
-    self.animations[ 'death' ].current_frame = 1
-    self.current_animation_name = 'death'
     self.armorflicker = false
     self.armor = 0
-    debug_print( self.deathcause )
+
+    self:superclass().die( self, cause )
 end
 
 function player:add_health( amount )
@@ -754,6 +771,8 @@ function player:take_damage( amount )
     if self.invulnerable or self:dead() then return end
 
     if amount <= 0 then return end
+
+    self:flash( 0.25, 2, 5 )
 
     if self.armor > 0 then
         amount = 1
@@ -831,8 +850,6 @@ end
 
 -- level
 
-local creature = inheritsfrom( actor )
-
 local level = inheritsfrom( nil )
 function level:new()
     local newobj = {
@@ -845,10 +862,10 @@ function level:new()
     }
     newobj.creation_records = {
         coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( newobj:time() / 3 ) * sin( newobj:time() / 11 ) > 0.25 end },
-        stone    = { chance =   0.5, earliestnext =   64, interval = 48 },
+        stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #newobj:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
         tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 20 end },
         shrub    = { chance =    1, earliestnext = -100, interval = 0 },
-        creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
+        creature = { chance =    100, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
     }
 
     newobj.player = player:new( newobj )
@@ -1043,7 +1060,7 @@ function level:draw()
     end
 
     function fillstripseries( top, height, topdensity, bottomdensity, color, offsetx )
-        offsetx = offsetx ~= nil and offsetx or 0
+        offsetx = establish( offsetx, 0 )
         local bot = top + height - 1
         for row = top, bot, 4 do
             local proportionalrow = proportion( row, top, bot )
@@ -1140,6 +1157,8 @@ local behaviors = {}
 
 -- creature
 function creature:new( level, x )
+    local whichcreature = rand_int( 1, 2 )
+
     local y = -16
     local wid = 16
     local hgt = 7
@@ -1148,12 +1167,39 @@ function creature:new( level, x )
     newobj.do_dynamics = true
     newobj.depth = -10
     newobj.want_shadow = true
-    newobj.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
     newobj.current_animation_name = 'run'
     newobj.jumpforce = 1.5
-    newobj.behavior = cocreate( behaviors.pounce_from_left )
+
+    -- tiger
+    if whichcreature == 1 then
+        newobj.animations[ 'stop' ] = animation:new( 64, 1, 2, 1 )         
+        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
+        newobj.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
+        newobj.animations[ 'coil' ] = newobj.animations[ 'run' ]
+        newobj.animations[ 'pounce' ] = newobj.animations[ 'run' ]
+        newobj.behavior = cocreate( behaviors.slide_left_fast )
+    elseif whichcreature == 2 then
+        newobj.animations[ 'stop' ] = animation:new( 80, 1, 2, 1 )         
+        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
+        newobj.animations[ 'run' ] = animation:new( 80, 3, 2, 1 ) 
+        newobj.animations[ 'coil' ] = animation:new( 86, 1, 2, 1 ) 
+        newobj.animations[ 'pounce' ] = animation:new( 88, 1, 2, 1 ) 
+        newobj.behavior = cocreate( behaviors.pounce_from_left )
+    end
 
     return setmetatable( newobj, self )
+end
+
+function creature:die( cause )
+    if self:dead() then return end
+
+    self:superclass().die( self, cause )
+
+    self:flash( 0.2, 2, 5 )
+
+    self.flipy = true
+    self.landed_tick = nil
+    self.collision_size.y -= 4
 end
 
 function creature:update( deltatime )
@@ -1171,7 +1217,7 @@ end
 
 local stone = inheritsfrom( actor )
 function stone:new( level, x )
-    local size = flr( randinrange( 1, 3 ))
+    local size = rand_int( 1, 2 )
 
     local sprite = { 185, 167, 164 }
     local spritewidth =  { 1, 2, 3 }
@@ -1211,16 +1257,6 @@ function coin:new( level, x )
     return setmetatable( newobj, self )    
 end
 
-function coin:update( deltatime )
-    self:superclass().update( self, deltatime )
-
-    -- die if too far left
-    local liveleft, liveright = self.level:live_actor_span()
-    if self.pos.x < liveleft then
-        self.active = false
-    end
-end
-
 function coin:on_collision( other )
     self:on_pickedup_by( other )
     self:superclass().on_collision( self, other )
@@ -1242,7 +1278,7 @@ function tree:new( level, x )
     newobj.collision_planes_inc = 0
     newobj.damage = 0
     newobj.parallaxslide = randinrange( 0.5, 8.0 ) / (scale*scale)
-    newobj.depth = newobj.parallaxslide * 10           -- todo!!!
+    newobj.depth = newobj.parallaxslide * 10
     newobj.animations[ 'idle' ].drawscalex = scale
     newobj.animations[ 'idle' ].drawscaley = scale
 
@@ -1325,7 +1361,7 @@ function level:update_mapsegments()
         firstopenleft = max( firstopenleft, self.mapsegments[ #self.mapsegments ].worldx + maptoworld( mapsegment_tile_size.x ) )
     end
     for worldcellx = world_to_mapsegment_cell_x( firstopenleft ), world_to_mapsegment_cell_x( right ) do
-        local segment = mapsegment:new( flr( randinrange( 0, 6 ) ), maptoworld( worldcellx * mapsegment_tile_size.x ) )
+        local segment = mapsegment:new( rand_int( 0, 5 ), maptoworld( worldcellx * mapsegment_tile_size.x ) )
         add( self.mapsegments, segment )
     end
 
@@ -1591,14 +1627,28 @@ function draw_ui()
 
     function draw_ui_gameover()
         -- todo
+        draw_shadowed( 64, 64, 0, 1, 2, function(x,y)
+            print_centered_text( current_level.player.deathcause, x, y, 8 )
+        end )
     end
 
-    if game_state == 'playing' or game_state == 'gameover_dying' then
+    function draw_ui_gameover_fully()
+        draw_ui_gameover()
+
+        draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
+            print_centered_text( 'play again! z/x 🅾/❎', x, y, 12 )
+        end )
+
+    end
+
+    if game_state == 'playing' then
         draw_ui_playing()
     elseif game_state == 'title' then
         draw_ui_title()
-    elseif game_state == 'gameover' then
+    elseif game_state == 'gameover_dying' then
         draw_ui_gameover()
+    elseif game_state == 'gameover' then
+        draw_ui_gameover_fully()
     end
 
 
@@ -1611,6 +1661,8 @@ function draw_ui()
             print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
             y -= 8
             print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
+            y -= 8
+            print_rightaligned_text( 'coins : ' .. #current_level:actors_of_class( coin ), x, y, 6 )
             y -= 8
         end )
     end
@@ -1646,6 +1698,12 @@ function stage_left_appear_pos()
     return left + 2
 end
 
+function standard_attack_warning( actor, delay )
+    delay = establish( delay, 0.5 )
+    actor:flash( delay )
+    wait( delay )
+end
+
 behaviors = {
     still = function() end,
     hopping = 
@@ -1667,8 +1725,11 @@ behaviors = {
             while deltafromplayer( actor ) > 64 do                
                 yield()
             end
-            actor.vel.x = 0
-            wait( 0.6 )
+            actor.vel.x = 1
+            wait( 0.4 )
+            actor.vel.x = 0.8
+
+            standard_attack_warning( actor )
             actor.vel.x = -3
         end,
     slide_right_fast =
@@ -1680,16 +1741,15 @@ behaviors = {
                 yield()
             end
             actor.vel.x = 0.9
-            wait( 0.4 )
-            actor:flash( 0.5 )
-            wait( 0.5 )
+            wait( 0.2 )
+            standard_attack_warning( actor )
             actor.vel.x = 4
         end,
     pounce_from_left =
         function(actor)
             local maxpounces = 3    -- todo based on level age
 
-            local numpounces = flr( randinrange( 1, maxpounces ))
+            local numpounces = rand_int( 1, maxpounces )
 
             --setup
             actor.pos.x = stage_left_appear_pos()
@@ -1697,6 +1757,7 @@ behaviors = {
             local stored_collision_planes = actor.collision_planes_inc
 
             -- approach
+            actor.current_animation_name = 'run'
             actor.vel.x = 1.25
             while deltafromplayer( actor ) < -28 do
                 yield()
@@ -1708,21 +1769,20 @@ behaviors = {
                 actor.colorshift = 0
 
                 -- wait
+                actor.current_animation_name = 'run'
                 actor.vel.x = 0.95
                 wait( 1 )
 
                 --flash
+                actor.current_animation_name = 'coil'
                 actor:flash( 0.5 )
                 wait( 0.5 )
 
                 --pounce
                 actor.collision_planes_inc = stored_collision_planes
+                actor.current_animation_name = 'pounce'
                 actor:jump()
                 actor.vel.x = 2.5
-
-                -- check for weapon strike.
-                wait( 0.35 )
-                actor:check_for_player_weapon()
 
                 -- wait to land
 
@@ -1731,14 +1791,11 @@ behaviors = {
                 end
 
                 -- fall back
+                actor.current_animation_name = 'stop'
                 actor.vel.x = 0
                 stored_collision_planes = actor.collision_planes_inc
                 actor.collision_planes_inc = 0
                 
-                if actor:dead() then
-                    break
-                end
-
                 actor.colorshift = -1
 
                 while deltafromplayer( actor ) > -28 do
