@@ -428,6 +428,7 @@ local actor = inheritsfrom( nil )
 function actor:new( level, x, y, wid, hgt )
     local newobj = { 
         level = level,
+        tick_count = 0,
         active = true,
         alive = true,
         pos = vector:new( x or 0, y or x or 0 ),
@@ -452,6 +453,10 @@ function actor:new( level, x, y, wid, hgt )
     add( level.actors, newobj )
 
     return setmetatable( newobj, self )
+end
+
+function actor:age()
+    return self.tick_count / 60.0
 end
 
 function actor:may_collide( other )
@@ -494,6 +499,8 @@ function actor:on_collision( other )
 end
 
 function actor:update( deltatime )
+
+    self.tick_count += 1
 
     if self.do_dynamics then
         self.vel.y += self.gravity_scalar * 0.125
@@ -766,8 +773,8 @@ function level:new()
         horizon_decorations = {},
         tick_count = 0,
         pending_calls = {},
-        player = player:new( self ),
     }
+    newobj.player = player:new( newobj )
     return setmetatable( newobj, self )
 end
 
@@ -1037,6 +1044,32 @@ function level:draw()
     end )
 end
 
+-- -- behavior
+-- local behavior = inheritsfrom( nil )
+-- function behavior:new( creature, actions )
+--     local newobj = {
+--         creature = creature
+--         routine = cocreate( actions( creature ) )
+--     }
+--     return setmetatable( newobj, self )
+-- end
+
+-- function behavior:update()
+--     coresume( self.routine )
+-- end
+
+-- -- local behavior_stalkrear = inheritsfrom( behavior )
+-- -- function behavior_stalkrear:new( creature )
+-- --     local newobj = behavior:new( creature )
+-- --     newobj.phase = 'emerge'
+-- --     return setmetatable( newobj, self )
+-- -- end
+
+-- -- function behavior_stalkrear:update()
+-- -- end
+
+-- -- function behavior_stalkrear:
+
 -- creature
 local creature = inheritsfrom( actor )
 function creature:new( level, x, y, wid, hgt )
@@ -1045,7 +1078,23 @@ function creature:new( level, x, y, wid, hgt )
     newobj.depth = -10
     newobj.want_shadow = true
     newobj.current_animation_name = 'run'
+    newobj.behavior = nil
     return setmetatable( newobj, self )
+end
+
+function creature:setbehavior( routine )
+    self.behavior = coroutine( routine )
+end
+
+function creature:update( deltatime )
+    if self.behavior ~= nil then
+        coresume( self.behavior, self )
+        if not costatus( self.behavior ) then
+            self.behavior = nil
+        end
+    end
+
+    self:superclass().update( self, deltatime )    
 end
 
 -- stone
@@ -1168,6 +1217,9 @@ function level:update_creatures()
     if pctchance( 0.5 ) then
         local creat = creature:new( self, liveright - 2, -16, 16, 7 )
         creat.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
+        -- creat:setbehavior( function(creature)
+        --     creature:jump()
+        -- end )
     end
 end
 
@@ -1244,7 +1296,6 @@ local current_level = nil
 
 function restart_world()
     current_level = level:new()
-    current_level.player = player:new( current_level )
 
     game_state = 'playing'
 end
