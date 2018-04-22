@@ -445,14 +445,44 @@ function actor:new( level, x, y, wid, hgt )
         jumpforce = 3,
         animations = {},
         current_animation_name = nil,
+        flipx = false,
+        flipy = false,
         want_shadow = false,
         damage = 2,
         parallaxslide = 0,
+        flashamount = 0,
+        flashhertz = 6,
     }
 
     add( level.actors, newobj )
 
     return setmetatable( newobj, self )
+end
+
+function actor:flash( time, hz, amount )
+    if self.flashamount ~= 0 then return end  -- one at a time please
+
+    if hz == nil then hz = 6 end
+    if amount == nil then amount = 8 end
+
+    self.flashamount = amount
+    self.flashhertz = hz
+
+    self.level:after_delay( time, function()
+        self.flashamount = 0
+    end )
+end
+
+function actor:dead()
+    return not self.alive
+end
+
+function actor:die( cause )
+    if self:dead() then return end
+
+    self.flashamount = 0
+    self.alive = false
+    self.vel.x = 0
 end
 
 function actor:age()
@@ -523,6 +553,11 @@ function actor:update( deltatime )
         self.active = false
     end
 
+    -- die if too far right and rightbound
+    if self.vel.x > 0 and self:collision_ul().x > liveright then
+        self.active = false
+    end
+
     -- update animation
     local anim = self:current_animation()
     if anim ~= nil then 
@@ -547,8 +582,6 @@ end
 function actor:jump( amount )
     if self:dead() or not self:grounded() then return end
 
-    self:drain_satiation( 0.01 )
-
     self.vel.y = -self.jumpforce * ( amount or 1.0 )
     self.landed_tick = nil
 end
@@ -561,16 +594,20 @@ function actor:draw()
         local drawscalex = anim.drawscalex
         local drawscaley = anim.drawscaley
 
-        if drawscalex == 1 and drawscaley == 1 then
-            spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey )
-        else
-            local spritesheetleft = frame % 16 * 8
-            local spritesheettop  = flr( frame / 16 ) * 8
-            local spritesheetwid = anim.ssizex * 8
-            local spritesheethgt = anim.ssizey * 8
-            sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
-                  drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8 )
-        end
+        local colorize = flicker( self.level:time(), self.flashhertz ) and self.flashamount or 0
+
+        draw_color_shifted( colorize, function()
+            if drawscalex == 1 and drawscaley == 1 then
+                spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey, self.flipx, self.flipy )
+            else
+                local spritesheetleft = frame % 16 * 8
+                local spritesheettop  = flr( frame / 16 ) * 8
+                local spritesheetwid = anim.ssizex * 8
+                local spritesheethgt = anim.ssizey * 8
+                sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
+                      drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, self.flipx, self.flipy )
+            end
+        end )
 
         --draw shadow
         -- if self.want_shadow then
@@ -638,6 +675,11 @@ function player:drain_satiation( amount )
     end
 end
 
+function player:jump( amount )
+    self:superclass().jump( self, amount )
+    self:drain_satiation( 0.01 )
+end
+
 function player:update( deltatime )
     self:superclass().update( self, deltatime )
 
@@ -654,18 +696,16 @@ function player:update( deltatime )
     self.animations[ 'run_armor' ].current_frame = frame
 end
 
-function player:dead()
-    return not self.alive
-end
-
 function player:die( cause )
     if self:dead() then return end
 
     self.alive = false
     self.deathcause = cause
+    self.vel.x = 0
     self.animations[ 'death' ].current_frame = 1
     self.current_animation_name = 'death'
-    self.vel.x = 0
+    self.armorflicker = false
+    self.armor = 0
     debug_print( self.deathcause )
 end
 
@@ -726,7 +766,7 @@ function player:grab()
 end
 
 function player:draw()
-    if not self.invulnerable or self.armorflicker or flicker( self.level:time(), 8 ) then
+    if self:dead() or not self.invulnerable or self.armorflicker or flicker( self.level:time(), 8 ) then
 
         if not self:dead() then
             self.current_animation_name = 
@@ -772,8 +812,15 @@ function level:new()
         ground_decorations = {},
         horizon_decorations = {},
         tick_count = 0,
-        pending_calls = {},
+        pending_calls = {},        
     }
+    newobj.creation_records = {
+        stone    = { chance =   0.5, earliestnext =   64, interval = 48 },
+        tree     = { chance =    2, earliestnext = -100, interval = 0 },
+        shrub    = { chance =    1, earliestnext = -100, interval = 0 },
+        creature = { chance =    0.5, earliestnext = 256, interval = 256 },
+    }
+
     newobj.player = player:new( newobj )
     return setmetatable( newobj, self )
 end
@@ -1044,46 +1091,25 @@ function level:draw()
     end )
 end
 
--- -- behavior
--- local behavior = inheritsfrom( nil )
--- function behavior:new( creature, actions )
---     local newobj = {
---         creature = creature
---         routine = cocreate( actions( creature ) )
---     }
---     return setmetatable( newobj, self )
--- end
-
--- function behavior:update()
---     coresume( self.routine )
--- end
-
--- -- local behavior_stalkrear = inheritsfrom( behavior )
--- -- function behavior_stalkrear:new( creature )
--- --     local newobj = behavior:new( creature )
--- --     newobj.phase = 'emerge'
--- --     return setmetatable( newobj, self )
--- -- end
-
--- -- function behavior_stalkrear:update()
--- -- end
-
--- -- function behavior_stalkrear:
+local behaviors = {}
 
 -- creature
 local creature = inheritsfrom( actor )
-function creature:new( level, x, y, wid, hgt )
+function creature:new( level, x )
+    local y = -16
+    local wid = 16
+    local hgt = 7
+
     local newobj = actor:new( level, x, y, wid, hgt )
     newobj.do_dynamics = true
     newobj.depth = -10
     newobj.want_shadow = true
+    newobj.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
     newobj.current_animation_name = 'run'
-    newobj.behavior = nil
-    return setmetatable( newobj, self )
-end
+    newobj.jumpforce = 1.5
+    newobj.behavior = cocreate( behaviors.pounce_from_left )
 
-function creature:setbehavior( routine )
-    self.behavior = coroutine( routine )
+    return setmetatable( newobj, self )
 end
 
 function creature:update( deltatime )
@@ -1100,14 +1126,21 @@ end
 -- stone
 
 local stone = inheritsfrom( actor )
-function stone:new( level, x, y )
-    local newobj = actor:new( level, x, y, 0, 0 )
-    newobj.animations[ 'idle' ] = animation:new( 164, 1, 3, 2 ) 
+function stone:new( level, x )
+    local size = 2
+    local sprite = { 164, 167, 169 }
+    local spritewidth =  { 1, 2, 3 }
+    local spriteheight = { 1, 2, 2 }
+    local collisionwid = { 6, 12, 16 }
+    local collisionhgt = { 6, 12, 12 }
+
+    local newobj = actor:new( level, x, -8, 0, 0 )
+    newobj.animations[ 'idle' ] = animation:new( sprite[size], 1, spritewidth[size], spriteheight[size] ) 
     newobj.current_animation_name = 'idle'
     newobj.offset.x = -4
     newobj.offset.y = -6
-    newobj.collision_size.x = 16
-    newobj.collision_size.y = 12
+    newobj.collision_size.x = collisionwid[ size ]
+    newobj.collision_size.y = collisionhgt[ size ]
 
     return setmetatable( newobj, self )        
 end
@@ -1153,6 +1186,7 @@ local tree = inheritsfrom( actor )
 function tree:new( level, x )
     local scale = randinrange( 2, 4 )
     local newobj = actor:new( level, x, -14 * scale, scale * 2 * 8, scale * 8 )
+    newobj.flipx = pctchance( 50 )
     newobj.animations[ 'idle' ] = animation:new( 128, 1, 1, 2 )
     newobj.current_animation_name = 'idle'
     newobj.collision_planes_inc = 0
@@ -1169,6 +1203,7 @@ local shrub = inheritsfrom( actor )
 function shrub:new( level, x )
     local scale = randinrange( 1, 2 )
     local newobj = actor:new( level, x, 32 - 16 * scale, scale * 4 * 8, scale * 2 * 8 )
+    newobj.flipx = pctchance( 33 )
     newobj.animations[ 'idle' ] = animation:new( 160, 1, 4, 2 )
     newobj.current_animation_name = 'idle'
     newobj.collision_planes_inc = 0
@@ -1182,18 +1217,26 @@ function shrub:new( level, x )
 end
 
 
-function level:create_props()
-    local liveleft, liveright = self:live_actor_span()
-    if pctchance( 1 ) then
-        stone:new( self, liveright - 2, -8 )
-    end
+function level:maybe_create( class, classname )
+    local _, liveright = self:live_actor_span()
+    local creation_point = liveright - 2
 
-    if pctchance( 2 ) then
-        local tree = tree:new( self, liveright - 2 )
+    local record = self.creation_records[ classname ]
+    if record.earliestnext < creation_point and pctchance( record.chance ) then
+        local obj = class:new( self, creation_point )
+        record.earliestnext = creation_point + record.interval
+        return obj
     end
-    if pctchance( 1 ) then
-        local shrub = shrub:new( self, liveright - 2 )
-    end
+    return nil
+end
+
+
+function level:create_props()
+    local _, liveright = self:live_actor_span()
+
+    self:maybe_create( stone, 'stone' )
+    self:maybe_create( tree, 'tree' )
+    self:maybe_create( shrub, 'shrub' )
 
     if pctchance( 0.25 ) then
         local pickup = pickup:new( self, liveright - 2, 11, function( pickup, actor )
@@ -1206,20 +1249,6 @@ function level:create_coins()
     local liveleft, liveright = self:live_actor_span()
     if pctchance( 2 ) then
         coin:new( self, liveright - 2, randinrange( -48, -4 ) )
-    end
-end
-
-function level:update_creatures()
-    local liveleft, liveright = self:live_actor_span()
-
-    -- create new creature if desired
-    -- todo
-    if pctchance( 0.5 ) then
-        local creat = creature:new( self, liveright - 2, -16, 16, 7 )
-        creat.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
-        -- creat:setbehavior( function(creature)
-        --     creature:jump()
-        -- end )
     end
 end
 
@@ -1304,8 +1333,18 @@ function player_run_distance()
     return flr(( current_level.player.pos.x - 0 ) / 40 )
 end
 
+function deltafromplayer( actor )
+    return actor.pos.x - current_level.player.pos.x
+end
+
 tidy_map()
 restart_world()
+
+
+function level:update_creatures()
+    -- create new creature if desired
+    self:maybe_create( creature, 'creature' )
+end
 
 --main loops
 local buttonstates = {}
@@ -1521,9 +1560,85 @@ function _draw()
 
     -- debug
     draw_debug_lines()
-    print( stat(0) )
+    -- print( stat(0) )
 end
 
+-- creature ai
+
+function wait( seconds )
+    for i = 0, seconds * 60 do
+        yield()
+    end
+end
+
+function stage_left_appear_pos()
+    local left, _ = current_level:live_actor_span()
+    return left + 2
+end
+
+behaviors = {
+    still = function() end,
+    hopping = 
+        function(actor)
+            while true do
+                actor:jump()
+                yield()
+            end
+        end,
+    slide_left_slow =
+        function(actor)
+            actor.vel.x = -0.5
+            actor.flipx = true
+        end,
+    slide_left_fast =
+        function(actor)
+            actor.flipx = true
+            actor.vel.x = -2
+            while deltafromplayer( actor ) > 64 do                
+                yield()
+            end
+            actor.vel.x = 0
+            wait( 0.6 )
+            actor.vel.x = -3
+        end,
+    slide_right_fast =
+        function(actor)
+            actor.pos.x = stage_left_appear_pos()
+            actor.flipx = false
+            actor.vel.x = 1.5
+            while deltafromplayer( actor ) < -24 do
+                yield()
+            end
+            actor.vel.x = 0.9
+            wait( 0.4 )
+            actor:flash( 0.5 )
+            wait( 0.5 )
+            actor.vel.x = 4
+        end,
+    pounce_from_left =
+        function(actor)
+            actor.pos.x = stage_left_appear_pos()
+            actor.flipx = false
+
+            actor.vel.x = 1.25
+            while deltafromplayer( actor ) < -28 do
+                yield()
+            end
+            actor.vel.x = 0.95
+            wait( 1 )
+            actor:flash( 0.5 )
+            wait( 0.5 )
+            actor:jump()
+            actor.vel.x = 2.5
+            yield()
+
+            while not actor:grounded() do
+                yield()
+            end
+
+            actor.vel.x = 0
+        end,
+}
 -->8
 -- liam's code
 
