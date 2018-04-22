@@ -244,6 +244,10 @@ function lerp( a, b, alpha )
     return a + (( b - a ) * alpha )
 end
 
+function proportion( x, min, max )
+    return ( x - min ) / ( max - min )
+end
+
 function sign( x )
     return x > 0 and 1 or ( x < 0 and -1 or 0 )
 end
@@ -511,17 +515,83 @@ function level:camera_position()
     return vector:new( -64, -96 ) + vector:new( self.player.pos.x + 32, 0 )
 end
 
+function nibblerot( bits, offset )
+    offset = wrap( offset, 0, 4 )
+                                            -- 00001001
+    bits = shl( bits, 4 )                   -- 10010000
+
+    bits = shr( bits, offset )              -- 01001000
+    local upper = shr( bits, 4)             -- 00000100
+    bits = bor( bits, upper )               -- 01001100
+
+    return band( bits, 0b1111 )             -- 00001100
+end
+
 function level:draw()
 
     local cam = self:camera_position()
 
-    cls( 3 )
-
     -- draw background
     camera( 0, cam.y )
 
-    fillp( 0b1010010110100101 )
-    rectfill( 0, cam.y, 128, 0, dither_color( 12, 13 ) )
+    function ditherpattern( topdensity, bottomdensity, offsetx )
+        local patterns = {
+            0b0000,
+            0b0000,
+            0b0010,
+            0b1000,
+            0b0101,
+            0b1010,
+            0b1101,
+            0b0111,
+            0b1111,
+            0b1111,
+        }
+
+        local pattern = 0
+        for y = 0, 3 do
+            local ydensity = lerp( topdensity, bottomdensity, y / 3.0 )
+            local patternindex = 1 + 2*flr( ydensity * 4 + 0.5 ) + ( band( y, 1 ) == 0 and 1 or 0 )
+            local rowpattern = patterns[ patternindex ]
+            rowpattern = nibblerot( rowpattern, offsetx )
+
+            pattern = bor( pattern, shl( rowpattern, 4 * (3 - y)))
+        end
+
+        return pattern
+    end
+
+    function fillstrip( top, topdensity, bottomdensity, color, offsetx )
+        fillp( ditherpattern( topdensity, bottomdensity, offsetx ))
+        rectfill( 0, top, 128, top + 3, color )
+    end
+
+    function fillstripseries( top, height, topdensity, bottomdensity, color, offsetx )
+        offsetx = offsetx ~= nil and offsetx or 0
+        local bot = top + height - 1
+        for row = top, bot, 4 do
+            local proportionalrow = proportion( row, top, bot )
+            local proportionalbot = proportion( min( bot, row + 3 ), top, top + height - 1 )
+            local striptopdense = clamp( lerp( topdensity, bottomdensity, proportionalrow ), 0, 1 )
+            local stripbotdense = clamp( lerp( topdensity, bottomdensity, proportionalbot ), 0, 1 )
+            fillstrip( row, striptopdense, stripbotdense, color, offsetx )
+        end
+    end
+
+    -- grass
+    cls( 1 )
+
+    local grassscrolloffsetx = -( self.player.pos.x % 4 )
+    fillstripseries(  0, 16, 0, 4, dither_color( 3, 11 ), grassscrolloffsetx )
+    fillstripseries( 16, 8,  1, 0, dither_color( 3, 11 ), grassscrolloffsetx )
+    fillstripseries( 24, 8,  1, 0, dither_color( 0, 3 ), grassscrolloffsetx )
+
+    -- sky
+    fillstripseries( -96, 32, 0, 1, dither_color( 13, 9 ) )
+    fillstripseries( -64,  8, 0, 1, dither_color( 9, 13 ) )
+    fillstripseries( -56, 32, 0, 1, dither_color( 13, 1 ) )
+    fillstripseries( -32, 32, 0, 1, dither_color( 1, 0 ) )
+
 
     camera( cam.x, cam.y )
 
@@ -684,7 +754,7 @@ function actor:landed()
 end
 
 function actor:grounded()
-    return self.landed_tick ~= nil
+    return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 2
 end
 
 function actor:jump( amount )
@@ -730,7 +800,7 @@ function player:new( level )
     newobj.leg_anim = animation:new( 48, 6 )
 
     newobj.coins = 0
-    newobj.max_health = 1
+    newobj.max_health = 6
     newobj.health = newobj.max_health
 
     newobj.reach_distance = 12
@@ -1051,12 +1121,15 @@ function _update60()
 
 
         if current_level.player:dead() then
-            game_state = 'gameover'
+            game_state = 'gameover_dying'
+            current_level:after_delay( 2.0, function()
+                game_state = 'gameover'
+            end )
         else
             update_input()
         end
 
-    else -- game over, title
+    elseif game_state == 'gameover' or game_state == 'title' then
 
         -- update input
         if wentdown( 4 ) or wentdown( 5 ) then
@@ -1097,47 +1170,66 @@ end
 
 function draw_ui()
 
-    local player = current_level.player
+    function draw_ui_playing()
+        local player = current_level.player
 
-    -- draw player health
+        -- draw player health
 
-    local healthstepx = 8
-    local health_left = 124 - ( player.max_health / 2 ) * healthstepx
-    local health_top = 10
-    for i = 0, player.max_health / 2 do
-        local healthx = i * healthstepx
+        local healthstepx = 8
+        local health_left = 124 - ( player.max_health / 2 ) * healthstepx
+        local health_top = 10
+        for i = 0, player.max_health / 2 do
+            local healthx = i * healthstepx
 
-        local equivalent_health = i * 2
+            local equivalent_health = i * 2
 
-        local sprite = 0
+            local sprite = 0
 
-        if equivalent_health + 1 < player.health then sprite = 1 
-        elseif equivalent_health < player.health then sprite = 2 end
+            if equivalent_health + 1 < player.health then sprite = 1 
+            elseif equivalent_health < player.health then sprite = 2 end
 
-        if sprite > 0 then
-            spr( sprite, health_left + healthx, health_top )
+            if sprite > 0 then
+                spr( sprite, health_left + healthx, health_top )
+            end
         end
+
+        -- draw player distance
+
+        local dist = player_run_distance()
+        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+            print_rightaligned_text( '' .. player.coins, x, y, 10 )
+        end )
+
+        -- draw player coins
+
+        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+            print_rightaligned_text( '' .. player.coins, x, y, 10 )
+        end )
     end
 
-    -- draw player distance
+    function draw_ui_title()
+        -- todo
+    end
 
-    local dist = player_run_distance()
-    draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
-        print_rightaligned_text( '' .. player.coins, x, y, 10 )
-    end )
+    function draw_ui_gameover()
+        -- todo
+    end
 
-    -- draw player coins
+    if game_state == 'playing' or game_state == 'gameover_dying' then
+        draw_ui_playing()
+    elseif game_state == 'title' then
+        draw_ui_title()
+    elseif game_state == 'gameover' then
+        draw_ui_gameover()
+    end
 
-    draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
-        print_rightaligned_text( '' .. player.coins, x, y, 10 )
-    end )
 
     -- draw debug
 
     if true then
         draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
-            print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
+            -- print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+            -- print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y - 8, 6 )
         end )
     end
 end
