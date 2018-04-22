@@ -452,6 +452,8 @@ function actor:new( level, x, y, wid, hgt )
         parallaxslide = 0,
         flashamount = 0,
         flashhertz = 6,
+        floatbobamplitude = 0,
+        floatbobfrequency = 1.2,
     }
 
     add( level.actors, newobj )
@@ -589,7 +591,8 @@ end
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
-        local drawpos = self.pos + self.offset
+        local floatbobadjustment = sin( self:age() * self.floatbobfrequency ) * self.floatbobamplitude
+        local drawpos = self.pos + self.offset + vector:new( 0, floatbobadjustment )
         local frame = anim:frame()
         local drawscalex = anim.drawscalex
         local drawscaley = anim.drawscaley
@@ -793,6 +796,7 @@ function pickup:new( level, x, animframe, fn_on_pickup )
     newobj.may_player_pickup = true
     newobj.damage = 0
     newobj.fn_on_pickup = fn_on_pickup
+    newobj.floatbobamplitude = 1
 
     return setmetatable( newobj, self )    
 end
@@ -1155,6 +1159,7 @@ function coin:new( level, x, y )
     newobj.collision_planes_inc = 1
     newobj.may_player_pickup = true
     newobj.damage = 0
+    newobj.floatbobamplitude = 1
 
     newobj.value = 1
 
