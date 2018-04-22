@@ -820,7 +820,7 @@ function level:new()
     }
     newobj.creation_records = {
         stone    = { chance =   0.5, earliestnext =   64, interval = 48 },
-        tree     = { chance =    2, earliestnext = -100, interval = 0 },
+        tree     = { chance =    1, earliestnext = -100, interval = 0 },
         shrub    = { chance =    1, earliestnext = -100, interval = 0 },
         creature = { chance =    0.5, earliestnext = 256, interval = 256 },
     }
@@ -1478,10 +1478,20 @@ function draw_ui()
 
         local iconsy = 2
 
-        -- draw player coins
 
-        draw_shadowed( 124, iconsy, 0, 1, 2, function(x,y)
-            print_rightaligned_text( '' .. player.coins .. ' coins', x, y, 10 )
+        -- draw player health
+
+        draw_halveable_stat( iconright, iconsy, player.health, player.max_health, 1, 2 )
+        draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
+            print_rightaligned_text( 'life', x, y, 8 )
+        end )
+        iconsy += 8
+
+        -- draw player satiation
+
+        draw_halveable_stat( iconright, iconsy, player.satiation, player.max_satiation, 3, 4 )
+        draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
+            print_rightaligned_text( 'food', x, y, 9 )
         end )
         iconsy += 8
 
@@ -1493,20 +1503,10 @@ function draw_ui()
         end )
         iconsy += 8
 
-        -- draw player satiation
+        -- draw player coins
 
-        draw_halveable_stat( iconright, iconsy, player.satiation, player.max_satiation, 3, 4 )
-        draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
-            print_rightaligned_text( 'hunger', x, y, 9 )
-        end )
-        iconsy += 8
-
-
-        -- draw player health
-
-        draw_halveable_stat( iconright, iconsy, player.health, player.max_health, 1, 2 )
-        draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
-            print_rightaligned_text( 'health', x, y, 8 )
+        draw_shadowed( 124, iconsy, 0, 1, 2, function(x,y)
+            print_rightaligned_text( '' .. player.coins .. ' coin', x, y, 10 )
         end )
         iconsy += 8
 
@@ -1520,7 +1520,7 @@ function draw_ui()
             end
         end
         draw_shadowed( 124, iconsy + 1, 0, 1, 1, function(x,y)
-            print_rightaligned_text( 'armor', x, y, 6 )
+            print_rightaligned_text( 'armr', x, y, 6 )
         end )
         iconsy += 8
 
