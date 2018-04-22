@@ -201,6 +201,8 @@ X Environment with motion
 - Craft one item with blank rest of crafting tree
 - Owned item inventory
 - Light/dark
+- Jump hint
+- Grab button hint
 
 ## Expansion - Saturday
 
@@ -214,7 +216,7 @@ X Environment art
 
 X background with dithered gradient
 X Music
-- SFX
+X SFX
 - Tuning
 - Extra art variations
 

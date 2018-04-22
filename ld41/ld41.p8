@@ -606,6 +606,9 @@ function actor:jump( amount )
     sfx(32)
 end
 
+function actor:postdraw( drawpos )
+end
+
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
@@ -628,6 +631,9 @@ function actor:draw()
                 sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
                       drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, self.flipx, self.flipy )
             end
+
+            self:postdraw( drawpos )
+
         end )
 
         --draw shadow
@@ -746,9 +752,9 @@ end
 
 function player:add_health( amount )
     if amount > 1 then
-	sfx(35)
+    sfx(35)
     else
-	sfx(34)
+    sfx(34)
     end
 
 
@@ -806,7 +812,7 @@ function player:grab()
         ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
             or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
         pickup:on_pickedup_by( self )
-	sfx(33)
+    sfx(33)
     end
 end
 
@@ -1169,6 +1175,7 @@ function creature:new( level, x )
     newobj.want_shadow = true
     newobj.current_animation_name = 'run'
     newobj.jumpforce = 1.5
+    newobj.whichcreature = whichcreature
 
     -- tiger
     if whichcreature == 1 then
@@ -1179,11 +1186,11 @@ function creature:new( level, x )
         newobj.animations[ 'pounce' ] = newobj.animations[ 'run' ]
         newobj.behavior = cocreate( behaviors.slide_left_fast )
     elseif whichcreature == 2 then
-        newobj.animations[ 'stop' ] = animation:new( 80, 1, 2, 1 )         
-        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
         newobj.animations[ 'run' ] = animation:new( 80, 3, 2, 1 ) 
         newobj.animations[ 'coil' ] = animation:new( 86, 1, 2, 1 ) 
         newobj.animations[ 'pounce' ] = animation:new( 88, 1, 2, 1 ) 
+        newobj.animations[ 'stop' ] = newobj.animations[ 'pounce' ]
+        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
         newobj.behavior = cocreate( behaviors.pounce_from_left )
     end
 
@@ -1211,6 +1218,16 @@ function creature:update( deltatime )
     end
 
     self:superclass().update( self, deltatime )    
+end
+
+function creature:postdraw( drawpos )
+    self:superclass().postdraw( self, drawpos  )
+
+    if self.whichcreature == 2 then -- snake
+        for i = 1,4 do
+            spr( 88, drawpos.x - 8*i, drawpos.y )
+        end
+    end
 end
 
 -- stone
@@ -1379,7 +1396,7 @@ function isdown( btn )
     return buttonstates[ btn ]
 end
 
-function update_input()
+function update_buttons()
     lastbuttonstates = shallowcopy( buttonstates )
 
     for i = 0,5 do
@@ -1403,6 +1420,7 @@ function thingy:new( parent, sprite )
         pos = vector:new( 0, 0 ),
         destination = nil,
         lerpspeed = 0.1,
+        activated = false,
     }
     return setmetatable( newobj, self )
 end
@@ -1414,12 +1432,22 @@ function thingy:drawchildren( basepos )
 end
 
 function thingy:child_index( child )
-    for i in 1, #self.children do
+    for i = 1, #self.children do
         if child == self.children[ i ] then
             return i
         end
     end
     return nil
+end
+
+function thingy:child_from_button( button )
+    if button == nil then return nil end
+
+    if button <= #self.children then
+        return self.children[ button ]
+    else
+        return nil
+    end
 end
 
 function thingy:draw( basepos )
@@ -1433,6 +1461,9 @@ function thingy:draw( basepos )
 end
 
 function thingy:update()
+
+    self:update_input()
+
     if self.destination ~= nil then
         self.pos.x = lerp( self.pos.x, self.destination.x, self.lerpspeed )
         self.pos.y = lerp( self.pos.y, self.destination.y, self.lerpspeed )
@@ -1443,18 +1474,66 @@ function thingy:update()
     end    
 end
 
+function thingy:expand( parentindex, myindex )
+    -- 1 = left; 2 = right; 3 = up; 4 = down
+
+    local adjustedindex = myindex
+    -- todo!!!
+    -- if myindex == 1 then adjustedindex = parentindex end
+    -- if myindex == 3 then adjustedindex = ( parentindex == 1 ) and 3 or 1 end
+
+    if adjustedindex == 1 then
+        self.destination = vector:new( -1, 0 )
+    elseif adjustedindex == 2 then
+        self.destination = vector:new( 1, 0 )
+    elseif adjustedindex == 3 then
+        self.destination = vector:new( 0, -1 )
+    elseif adjustedindex == 4 then
+        self.destination = vector:new( 0, 1 )
+    end
+end
+
+function thingy:collapse()
+    self.destination = vector:new( 0, 0 )
+end
+
 function thingy:activate()
-    if #self.children == 0 then
-        -- do what we do
+    self.activated = true
+
+    -- leaf node?
+    if self.parent ~= nil and #self.children == 0 then
+        -- yes. do what we do
         -- todo!!!
+
+        self:deactivate()
+
     else
-        local myindex = self.parent:child_index( self )
+        -- container. Expand children.
+
+        local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 2
 
         self.destination = vector:new( 0, 0 )
-        for i in 1, #self.children do
+        for i = 1, #self.children do
             local child = self.children[ i ]
-            child.destination = dest_for_child( i, myindex )
+            child:expand( myindex, i )
         end
+    end
+end
+
+function thingy:deactivate()
+    self.activated = false
+
+    self.destination = vector:new( 0, 0 )
+
+    if self.parent == nil then
+        -- root
+        self:activate()
+    else
+        for child in all( children ) do
+            child:collapse()
+        end
+
+        self.parent:deactivate()
     end
 end
 
@@ -1462,17 +1541,41 @@ function thingy:update_input()
 
     -- home button
     if btnp( 3 ) and self.parent ~= nil then
+        self:deactivate()
+    else 
+        local button = nil    
+        if btnp( 2 ) then
+            button = 3
+        elseif btnp( 1 ) then
+            button = 2
+        elseif btnp( 0 ) then
+            button = 1
+        end
+
+        local activated_child = self:child_from_button( button )
+
+        if activated_child ~= nil then
+            activated_child:activate()
+
+            -- if root, move down
+            if self.parent == nil then
+                self:expand( nil, 4 )
+            end
+        end
 
     end
+
+
 
 end
 
 local crafting = inheritsfrom( nil )
-function crafting:new()
-    local rootthingy = thingy:new( nil, 67 ) -- todo
+function crafting:new( pos )
+    local rootthingy = thingy:new( nil, 16 ) -- todo
 
     local newobj = {
         rootthingy = rootthingy,
+        pos = pos
     }
 
     rootthingy:activate()
@@ -1482,7 +1585,10 @@ end
 
 function crafting:update()
     self.rootthingy:update()
-    -- todo
+end
+
+function crafting:draw()
+    self.rootthingy:draw( self.pos )
 end
 
 -->8
@@ -1519,7 +1625,8 @@ end
 --level creation
 music()
 
-local current_level = level:new()
+local crafting_ui = crafting:new( vector:new( 96, 128 - 2 - 10 ))
+local current_level = nil
 
 local game_state = 'title'
 local current_level = nil
@@ -1550,7 +1657,7 @@ end
 --main loops
 function _update60()
 
-    update_input()
+    update_buttons()
 
     -- update game state logic
 
@@ -1564,6 +1671,8 @@ function _update60()
             if wentdown(5) then
                 player:grab()
             end
+
+            crafting_ui:update()
 
             -- manual movement
             if false then
@@ -1635,7 +1744,7 @@ function draw_ui()
         local iconstepx = 8
         
         local iconright = 126
-	local iconleft  = 19
+        local iconleft  = 19
 
         function draw_halveable_stat( pos, top, stat, max, full_sprite, half_sprite, empty_sprite )
 
@@ -1650,8 +1759,7 @@ function draw_ui()
 
                 if equivalent_x + 1 < stat then sprite = full_sprite 
                 elseif equivalent_x < stat then sprite = half_sprite
-		else sprite = empty_sprite end
-
+                else sprite = empty_sprite end
 
                 if sprite > 0 then
                     spr( sprite, left + x, top )
@@ -1659,23 +1767,23 @@ function draw_ui()
             end
         end
 
-	function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
-	
-	    local left = pos
+        function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
+        
+            local left = pos
 
-	    for i = 0, max - 1 do
-		local x = i * iconstepx
-		
-		local sprite = 0
+            for i = 0, max - 1 do
+            local x = i * iconstepx
+            
+            local sprite = 0
 
-		if i < stat then sprite = full_sprite
-		else sprite = empty_sprite end
+            if i < stat then sprite = full_sprite
+            else sprite = empty_sprite end
 
-		if sprite > 0 then
-		    spr( sprite, left + x, top )
-		end
-	    end
-	end
+            if sprite > 0 then
+                spr( sprite, left + x, top )
+            end
+            end
+        end
 
         local iconsy = 2
 
@@ -1698,7 +1806,7 @@ function draw_ui()
 
         -- draw player armor
 
-	draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
+        draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
         draw_shadowed( 6, iconsy + 1, 0, 1, 1, function(x,y)
             print( 'def', x, y, 13 )
         end )
@@ -1720,6 +1828,7 @@ function draw_ui()
 
         iconsy += 9
 
+        crafting_ui:draw()
     end
 
     function draw_ui_title()
@@ -1755,16 +1864,16 @@ function draw_ui()
 
     -- draw debug
 
-    if true then
-        draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
+    if false then
+        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
             print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'coins : ' .. #current_level:actors_of_class( coin ), x, y, 6 )
-            y -= 8
+            y += 8
         end )
     end
 end
