@@ -244,6 +244,10 @@ function lerp( a, b, alpha )
     return a + (( b - a ) * alpha )
 end
 
+function proportion( x, min, max )
+    return ( x - min ) / ( max - min )
+end
+
 function sign( x )
     return x > 0 and 1 or ( x < 0 and -1 or 0 )
 end
@@ -511,17 +515,83 @@ function level:camera_position()
     return vector:new( -64, -96 ) + vector:new( self.player.pos.x + 32, 0 )
 end
 
+function nibblerot( bits, offset )
+    offset = wrap( offset, 0, 4 )
+                                            -- 00001001
+    bits = shl( bits, 4 )                   -- 10010000
+
+    bits = shr( bits, offset )              -- 01001000
+    local upper = shr( bits, 4)             -- 00000100
+    bits = bor( bits, upper )               -- 01001100
+
+    return band( bits, 0b1111 )             -- 00001100
+end
+
 function level:draw()
 
     local cam = self:camera_position()
 
-    cls( 3 )
-
     -- draw background
     camera( 0, cam.y )
 
-    fillp( 0b1010010110100101 )
-    rectfill( 0, cam.y, 128, 0, dither_color( 12, 13 ) )
+    function ditherpattern( topdensity, bottomdensity, offsetx )
+        local patterns = {
+            0b0000,
+            0b0000,
+            0b0010,
+            0b1000,
+            0b0101,
+            0b1010,
+            0b1101,
+            0b0111,
+            0b1111,
+            0b1111,
+        }
+
+        local pattern = 0
+        for y = 0, 3 do
+            local ydensity = lerp( topdensity, bottomdensity, y / 3.0 )
+            local patternindex = 1 + 2*flr( ydensity * 4 + 0.5 ) + ( band( y, 1 ) == 0 and 1 or 0 )
+            local rowpattern = patterns[ patternindex ]
+            rowpattern = nibblerot( rowpattern, offsetx )
+
+            pattern = bor( pattern, shl( rowpattern, 4 * (3 - y)))
+        end
+
+        return pattern
+    end
+
+    function fillstrip( top, topdensity, bottomdensity, color, offsetx )
+        fillp( ditherpattern( topdensity, bottomdensity, offsetx ))
+        rectfill( 0, top, 128, top + 3, color )
+    end
+
+    function fillstripseries( top, height, topdensity, bottomdensity, color, offsetx )
+        offsetx = offsetx ~= nil and offsetx or 0
+        local bot = top + height - 1
+        for row = top, bot, 4 do
+            local proportionalrow = proportion( row, top, bot )
+            local proportionalbot = proportion( min( bot, row + 3 ), top, top + height - 1 )
+            local striptopdense = clamp( lerp( topdensity, bottomdensity, proportionalrow ), 0, 1 )
+            local stripbotdense = clamp( lerp( topdensity, bottomdensity, proportionalbot ), 0, 1 )
+            fillstrip( row, striptopdense, stripbotdense, color, offsetx )
+        end
+    end
+
+    -- grass
+    cls( 1 )
+
+    local grassscrolloffsetx = -( self.player.pos.x % 4 )
+    fillstripseries(  0, 16, 0, 4, dither_color( 3, 11 ), grassscrolloffsetx )
+    fillstripseries( 16, 8,  1, 0, dither_color( 3, 11 ), grassscrolloffsetx )
+    fillstripseries( 24, 8,  1, 0, dither_color( 0, 3 ), grassscrolloffsetx )
+
+    -- sky
+    fillstripseries( -96, 32, 0, 1, dither_color( 13, 9 ) )
+    fillstripseries( -64,  8, 0, 1, dither_color( 9, 13 ) )
+    fillstripseries( -56, 32, 0, 1, dither_color( 13, 1 ) )
+    fillstripseries( -32, 32, 0, 1, dither_color( 1, 0 ) )
+
 
     camera( cam.x, cam.y )
 
@@ -730,7 +800,7 @@ function player:new( level )
     newobj.leg_anim = animation:new( 48, 6 )
 
     newobj.coins = 0
-    newobj.max_health = 1
+    newobj.max_health = 6
     newobj.health = newobj.max_health
 
     newobj.reach_distance = 12
