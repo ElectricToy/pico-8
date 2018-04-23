@@ -251,29 +251,30 @@ Auto Items (Get used the moment you pick them up)
 Craftable Items
 	• Raw Meat - rare pickup, obtained from enemies when shot
 	• Mushroom - uncommon pickup
-	• Wheat - uncommon pickup
+	• Wheat - rare pickup
 	• Stick - MOST common pickup
 	• Oil - uncommon pickup
 	• Metal - rare pickup
 
 Tools
-	• Bow = 4 Stick + 2 Oil + 1 Metal
+	• Bow = 4 Stick + 2 Metal
+		You must craft a bow in order to use arrows. One bow can shoot 5 arrows before breaking.
 	• Arrow = 1 Metal + 1 Stick
 		If you have one, you will automatically kill enemies.
-	• Armor = 5 Metal
-		Makes every attack do one half heart damage
+	• Armor = 3 Metal + 2 Oil
+		Makes every attack do one half heart damage.
 
 Food
 	• Cooked Meat = 1 Raw Meat + 1 Torch (torch doesn’t get consumed)
-		Heals one full heart and 3 full hungers
+		Heals one full heart and 3 full hungers.
 	• Stew = 5 Mushroom + 3 Raw Meat
-		Adds one full hunger to max, heals all hunger
+		Adds one full hunger to max, heals all hunger.
 	• Pizza = 3 Wheat + 3 Mushroom + 3 Raw Meat
-		Adds one full heart to max, heals one heart
+		Adds one full heart to max, heals three hearts.
 
 Other
-	• Torch = 3 Oil + 2 Stick
-		Allows you to see better at night.
+	• Torch = 1 Oil + 2 Stick
+		Allows you to see better at night. One torch lasts one night.
 	
 
 
