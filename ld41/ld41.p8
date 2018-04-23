@@ -340,9 +340,6 @@ function mapsegment:colliding_tile( withactor )
 	return nil
 end
 
-function mapsegment:update()
-end
-
 function mapsegment:draw()
 	if self.segment_num > 0 then
 		local segmentul_mapspace = {
@@ -418,7 +415,6 @@ function actor:new( level, x, y, wid, hgt )
 		jumpforce = 3,
 		animations = {},
 		current_animation_name = nil,
-		flipx = false,
 		flipy = false,
 		damage = 2,
 		parallaxslide = 0,
@@ -428,6 +424,7 @@ function actor:new( level, x, y, wid, hgt )
 		flashhertz = 6,
 		floatbobamplitude = 0,
 		floatbobfrequency = 1.2,
+		transparent_color = 0,
 	}
 
 	add( level.actors, o )
@@ -580,15 +577,25 @@ function actor:draw()
 		local colorize = self.colorshift + ( flicker( self.level:time(), self.flashhertz ) and self.flashamount or 0 )
 
 		draw_color_shifted( colorize, function()
+			if self.transparent_color ~= 0 then
+				palt( 0, false )
+				palt( self.transparent_color, true )
+			end
+
 			if drawscalex == 1 and drawscaley == 1 then
-				spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey, self.flipx, self.flipy )
+				spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey, false, self.flipy )
 			else
 				local spritesheetleft = frame % 16 * 8
 				local spritesheettop  = flr( frame / 16 ) * 8
 				local spritesheetwid = anim.ssizex * 8
 				local spritesheethgt = anim.ssizey * 8
 				sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
-					  drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, self.flipx, self.flipy )
+					  drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, false, self.flipy )
+			end
+
+			if self.transparent_color ~= 0 then
+				palt( 0, true )
+				palt( self.transparent_color, false )
 			end
 
 			self:postdraw( drawpos )
@@ -606,7 +613,7 @@ end
 
 local player = inheritsfrom( actor )
 function player:new( level )
-	local o = actor:new( level, 0, -64, 8, 14 )
+	local o = actor:new( level, 0, -15, 8, 14 )
 	o.immortal = false
 	o.do_dynamics = true
 	o.depth = -100
@@ -960,6 +967,19 @@ local items = {
 	home = { sprite = 61 },
 }
 
+function ordered_items()
+	local ordered = {}
+	add( ordered, { name = 'stick', item = items.stick })
+	add( ordered, { name = 'metal', item = items.metal })
+	add( ordered, { name = 'oil', item = items.oil })
+	add( ordered, { name = 'mushroom', item = items.mushroom })
+	add( ordered, { name = 'rawmeat', item = items.rawmeat })
+	add( ordered, { name = 'wheat', item = items.wheat })
+	add( ordered, { name = 'torch', item = items.torch })
+	add( ordered, { name = 'arrow', item = items.arrow })
+	return ordered
+end
+
 local inventory = inheritsfrom( nil )
 function inventory:new()
 	local o = {
@@ -1160,7 +1180,6 @@ function level:draw()
 	camera( 0, cam.y )
 
 	local thetime = self:timeofday()
-	local categoricaltime = self:categoricaltimeofday()
 
 	function drawgrass()
 		camera( 0, cam.y)
@@ -1297,6 +1316,10 @@ function stone:new( level, x )
 	o.collision_size.y = collisionhgt[ size ]
 	o.damage = damage[ size ]
 
+	if size == 1 then
+		o.transparent_color = 14
+	end
+
 	return setmetatable( o, self )
 end
 
@@ -1374,7 +1397,6 @@ function level:update_mapsegments()
 	local left, right = self:viewspan()
 
 	erase_elements( self.mapsegments, function(segment)
-		segment:update()
 		local farleft = segment:right() < left
 		return farleft
 	end )
@@ -1425,9 +1447,6 @@ function inventorydisplay:new( level )
 	return setmetatable( o, self )
 end
 
-function inventorydisplay:update()
-end
-
 function inventorydisplay:highlight_items( items )
 	self.flashstarttime = self.level:time()
 	self.highlighted_items = items
@@ -1469,7 +1488,12 @@ function inventorydisplay:draw()
 		colorshift = flicker( now, 2 ) and 8 or 0
 	end
 
-	for itemname, item in pairs( items ) do
+	local ordered = ordered_items()
+
+	for itemrecord in all( ordered ) do
+		local item = itemrecord.item
+		local itemname = itemrecord.name
+
 		if item.showinv then
 			local x = left + i * 9
 
@@ -1478,7 +1502,7 @@ function inventorydisplay:draw()
 				
 				local count = self.level.inventory:item_count( itemname )
 				
-				draw_shadowed( x + 2, top + 9, 0, 1, 2, function(x,y)
+				draw_shadowed( x + 2, top + 9, function(x,y)
 					print( '' .. count, x, y, 12 )
 				end )
 			end )
@@ -1490,7 +1514,7 @@ function inventorydisplay:draw()
 	-- show needs/used
 	if self:highlighting() then
 		draw_color_shifted( colorshift, function()
-			draw_shadowed( 40, top, 0, 1, 2, function(x,y)
+			draw_shadowed( 40, top, function(x,y)
 				print_centered_text( self.item_use_message, x, y, 14 )
 			end )		
 		end )
@@ -1628,7 +1652,7 @@ function crafting:draw()
 		drawfn( x, y, col2 )
 	end
 
-	draw_shadowed( rootbasis.x, rootbasis.y, 0, 1, 2, function(x,y,col)
+	draw_shadowed( rootbasis.x, rootbasis.y, function(x,y,col)
 		print( '⬅️', x - 10, y, 8 )
 		print( '➡️', x + 10, y, 9 )
 		print( '⬆️', x, y - 10, 10 )
@@ -1639,7 +1663,7 @@ function crafting:draw()
 	end )
 
 	if self.activated == self.rootthingy then
-		draw_shadowed( rootbasis.x + 4, rootbasis.y + 12, 0, 1, 2, function(x,y)
+		draw_shadowed( rootbasis.x + 4, rootbasis.y + 12, function(x,y)
 			print_centered_text( 'craft', x, y, 4 )
 		end )
 	end
@@ -1971,8 +1995,6 @@ function restart_world()
 	current_level = level:new( inventory:new() )
 	crafting_ui = crafting:new( current_level, vector:new( 96, 2 + thingy_spacing + 2 ))
 	inventory_display = inventorydisplay:new( current_level )
-
-	game_state = 'playing'
 end
 
 function player_run_distance()
@@ -1999,7 +2021,6 @@ function _update60()
 			end
 
 			crafting_ui:update()
-			inventory_display:update()
 
 			-- manual movement
 			if false then
@@ -2024,14 +2045,18 @@ function _update60()
 			update_input()
 		end
 
-	elseif game_state == 'gameover' or game_state == 'title' then
-
+	elseif game_state == 'gameover' then
 		if wentdown( 4 ) or wentdown( 5 ) then
 			restart_world()
+			game_state = 'playing'
+		end
+	elseif game_state == 'title' then
+		if wentdown( 4 ) or wentdown( 5 ) then
+			game_state = 'playing'
 		end
 	end
 
-	if current_level ~= nil then
+	if current_level ~= nil and game_state ~= 'title' then
 		current_level:update()
 	end
 end
@@ -2046,9 +2071,9 @@ function draw_color_shifted( shift, fn )
 	pal()
 end
 
-function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
-	draw_color_shifted( -darkness, function()
-		fn( x + offsetx, y + offsety )
+function draw_shadowed( x, y, fn )
+	draw_color_shifted( -2, function()
+		fn( x, y + 1 )
 	end )
 
 	fn( x, y )
@@ -2115,25 +2140,25 @@ function draw_ui()
 
 
 		draw_halveable_stat( iconleft, iconsy, player.health, player.max_health, 1, 2, 3 )
-		draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
+		draw_shadowed( 2, iconsy + 1, function(x,y)
 			print( 'life', x, y, 8 )
 		end )
 		iconsy += 9
 
 		draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
-		draw_shadowed( 6, iconsy + 1, 0, 1, 1, function(x,y)
+		draw_shadowed( 6, iconsy + 1, function(x,y)
 			print( 'def', x, y, 13 )
 		end )
 		iconsy += 9
 
 		draw_halveable_stat( iconleft, iconsy, player.satiation, player.max_satiation, 4, 5, 6 )
-		draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
+		draw_shadowed( 2, iconsy + 1, function(x,y)
 			print( 'food', x, y, 9 )
 		end )
 
 		iconsy += 9
 
-		draw_shadowed( 2, 128 - 2 - 6, 0, 1, 2, function(x,y)
+		draw_shadowed( 2, 128 - 2 - 6, function(x,y)
 			print( 'score ' .. player.coins * 10, x, y, 10 )
 		end )
 
@@ -2143,24 +2168,29 @@ function draw_ui()
 		inventory_display:draw()
 
 		if player.jump_count == 0 then
-			draw_shadowed( 64, 54, 0, 1, 2, function(x,y)
+			draw_shadowed( 64, 54, function(x,y)
 				print_centered_text( 'press z to jump!', x, y, 8 )
 			end )
 		end
 
-		draw_shadowed( 90, 128-28, 0, 1, 2, function(x,y)
+		draw_shadowed( 90, 128-28, function(x,y)
 			print_centered_text( curmessage(), x, y, 12 )
 		end )
 
 	end
 
 	function draw_ui_title()
-		-- todo
+		
+		spr( 148, 32, 32, 12, 4 )
+
+		draw_shadowed( 64, 0, function(x,y)
+			print_centered_text( 'press z to start', x, y + 102, 12 )
+		end )
 	end
 
 	function draw_ui_gameover()
 		-- todo
-		draw_shadowed( 64, 64, 0, 1, 2, function(x,y)
+		draw_shadowed( 64, 64, function(x,y)
 			print_centered_text( current_level.player.deathcause, x, y, 8 )
 		end )
 	end
@@ -2168,9 +2198,8 @@ function draw_ui()
 	function draw_ui_gameover_fully()
 		draw_ui_gameover()
 
-		draw_shadowed( 64, 0, 0, 1, 2, function(x,y)
-			print_centered_text( 'play again? z/x', x, y + 102, 12 )
-
+		draw_shadowed( 64, 0, function(x,y)
+			print_centered_text( 'press z to play again', x, y + 102, 12 )
 			print_centered_text( 'coins: ' .. current_level.player.coins, x, y + 34, 11 )
 		end )
 
@@ -2188,7 +2217,7 @@ function draw_ui()
 
 
 	if false then
-		draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+		draw_shadowed( 124, 2, function(x,y)
 			print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
 			y += 8
 			print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
@@ -2242,11 +2271,9 @@ behaviors = {
 	slide_left_slow =
 		function(actor)
 			actor.vel.x = -0.5
-			actor.flipx = true
 		end,
 	slide_left_fast =
 		function(actor)
-			actor.flipx = true
 			actor.vel.x = -2
 			while deltafromplayer( actor ) > 64 do
 				yield()
@@ -2261,7 +2288,6 @@ behaviors = {
 	slide_right_fast =
 		function(actor)
 			actor.pos.x = stage_left_appear_pos()
-			actor.flipx = false
 			set_player_relative_velocity( actor, 1.5 )
 			while deltafromplayer( actor ) < -24 do
 				yield()
@@ -2277,7 +2303,6 @@ behaviors = {
 			local restpos = 128
 
 			actor.pos.x = stage_right_appear_pos()
-			actor.flipx = false
 			
 			actor.current_animation_name = 'run'
 			actor.vel.x = 0
@@ -2301,7 +2326,6 @@ behaviors = {
 			local numpounces = rand_int( 1, maxpounces )
 
 			actor.pos.x = stage_left_appear_pos()
-			actor.flipx = false
 			local stored_collision_planes = actor.collision_planes_inc
 
 			actor.current_animation_name = 'run'

@@ -317,7 +317,6 @@ gravity_scalar=1.0,
 jumpforce=3,
 animations={},
 current_animation_name=nil,
-flipx=false,
 flipy=false,
 damage=2,
 parallaxslide=0,
@@ -327,6 +326,7 @@ flashamount=0,
 flashhertz=6,
 floatbobamplitude=0,
 floatbobfrequency=1.2,
+transparent_color=0,
 }
 add(level.actors,o)
 return setmetatable(o,self)
@@ -442,15 +442,23 @@ local drawscalex=anim.drawscalex
 local drawscaley=anim.drawscaley
 local colorize=self.colorshift+(flicker(self.level:time(),self.flashhertz)and self.flashamount or 0)
 draw_color_shifted(colorize,function()
+if self.transparent_color~=0 then
+palt(0,false)
+palt(self.transparent_color,true)
+end
 if drawscalex==1 and drawscaley==1 then
-spr(frame,drawpos.x,drawpos.y,anim.ssizex,anim.ssizey,self.flipx,self.flipy)
+spr(frame,drawpos.x,drawpos.y,anim.ssizex,anim.ssizey,false,self.flipy)
 else
 local spritesheetleft=frame % 16*8
 local spritesheettop=flr(frame / 16)*8
 local spritesheetwid=anim.ssizex*8
 local spritesheethgt=anim.ssizey*8
 sspr(spritesheetleft,spritesheettop,spritesheetwid,spritesheethgt,
-drawpos.x,drawpos.y,drawscalex*anim.ssizex*8,drawscaley*anim.ssizey*8,self.flipx,self.flipy)
+drawpos.x,drawpos.y,drawscalex*anim.ssizex*8,drawscaley*anim.ssizey*8,false,self.flipy)
+end
+if self.transparent_color~=0 then
+palt(0,true)
+palt(self.transparent_color,false)
 end
 self:postdraw(drawpos)
 end)
@@ -750,6 +758,18 @@ end
 },
 home={ sprite=61 },
 }
+function ordered_items()
+local ordered={}
+add(ordered,{ name='stick',item=items.stick })
+add(ordered,{ name='metal',item=items.metal })
+add(ordered,{ name='oil',item=items.oil })
+add(ordered,{ name='mushroom',item=items.mushroom })
+add(ordered,{ name='rawmeat',item=items.rawmeat })
+add(ordered,{ name='wheat',item=items.wheat })
+add(ordered,{ name='torch',item=items.torch })
+add(ordered,{ name='arrow',item=items.arrow })
+return ordered
+end
 local inventory=inheritsfrom(nil)
 function inventory:new()
 local o={
@@ -791,8 +811,6 @@ inventory=inventory,
 o.creation_records={
 coin={ chance=100,earliestnext=64,interval=16,predicate=function()return sin(o:time()/ 3)*sin(o:time()/ 11)> 0.25 end },
 stone={ chance=0.5,earliestnext=64,interval=48,predicate=function()return (#o:actors_of_class(creature)==0)or pctchance(0.1)end },
-tree={ chance=1,earliestnext=-100,interval=0,predicate=function()return #o.actors < 10 end },
-shrub={ chance=1,earliestnext=-100,interval=0,predicate=function()return #o.actors < 10 end },
 creature={ chance=0.25,earliestnext=256,interval=256,predicate=function()return #o:actors_of_class(creature)==0 end },
 material={ chance=80,earliestnext=64,interval=24 },
 }
@@ -909,7 +927,6 @@ function level:draw()
 local cam=self:camera_pos()
 camera(0,cam.y)
 local thetime=self:timeofday()
-local categoricaltime=self:categoricaltimeofday()
 function drawgrass()
 camera(0,cam.y)
 rectfill(0,0,128,32,3)
@@ -998,7 +1015,7 @@ end
 end
 local stone=inheritsfrom(actor)
 function stone:new(level,x)
-local size=rand_int(1,3)
+local size=rand_int(1,2)
 local sprite={ 185,167,164 }
 local spritewidth={ 1,2,3 }
 local spriteheight={ 1,2,2 }
@@ -1016,6 +1033,9 @@ o.offset.y=spriteoffsety[ size ]
 o.collision_size.x=collisionwid[ size ]
 o.collision_size.y=collisionhgt[ size ]
 o.damage=damage[ size ]
+if size==1 then
+o.transparent_color=14
+end
 return setmetatable(o,self)
 end
 local coin=inheritsfrom(actor)
@@ -1040,36 +1060,6 @@ other:add_coins(self.value)
 self.value=0
 self:superclass().on_pickedup_by(self,other)
 end
-local tree=inheritsfrom(actor)
-function tree:new(level,x)
-local scale=randinrange(2,4)
-local o=actor:new(level,x,-14*scale,scale*2*8,scale*8)
-o.flipx=pctchance(50)
-o.animations[ 'idle' ]=animation:new(128,1,1,2)
-o.current_animation_name='idle'
-o.collision_planes_inc=0
-o.damage=0
-o.parallaxslide=randinrange(0.5,8.0)/ (scale*scale)
-o.depth=o.parallaxslide*10
-o.animations[ 'idle' ].drawscalex=scale
-o.animations[ 'idle' ].drawscaley=scale
-return setmetatable(o,self)
-end
-local shrub=inheritsfrom(actor)
-function shrub:new(level,x)
-local scale=randinrange(1,2)
-local o=actor:new(level,x,32-16*scale,scale*4*8,scale*2*8)
-o.flipx=pctchance(33)
-o.animations[ 'idle' ]=animation:new(160,1,4,2)
-o.current_animation_name='idle'
-o.collision_planes_inc=0
-o.damage=0
-o.parallaxslide=-randinrange(0.5,1)/ scale
-o.depth=o.parallaxslide*10
-o.animations[ 'idle' ].drawscalex=scale
-o.animations[ 'idle' ].drawscaley=scale
-return setmetatable(o,self)
-end
 function level:maybe_create(class,classname)
 local _,liveright=self:live_actor_span()
 local creation_point=liveright-2
@@ -1086,8 +1076,6 @@ end
 function level:create_props()
 local _,liveright=self:live_actor_span()
 self:maybe_create(stone,'stone')
-self:maybe_create(tree,'tree')
-self:maybe_create(shrub,'shrub')
 self:maybe_create(coin,'coin')
 local _,liveright=self:live_actor_span()
 local creation_point=liveright-2
@@ -1179,13 +1167,16 @@ local now=self.level:time()
 local colorshift=0 if self:highlighting()then
 colorshift=flicker(now,2)and 8 or 0
 end
-for itemname,item in pairs(items)do
+local ordered=ordered_items()
+for itemrecord in all(ordered)do
+local item=itemrecord.item
+local itemname=itemrecord.name
 if item.showinv then
 local x=left+i*9
 draw_color_shifted(self.highlighted_items[ itemname ]~=nil and colorshift or 0,function()
 spr(item.sprite,x,top)
 local count=self.level.inventory:item_count(itemname)
-draw_shadowed(x+2,top+9,0,1,2,function(x,y)
+draw_shadowed(x+2,top+9,function(x,y)
 print('' .. count,x,y,12)
 end)
 end)
@@ -1194,7 +1185,7 @@ end
 end
 if self:highlighting()then
 draw_color_shifted(colorshift,function()
-draw_shadowed(40,top,0,1,2,function(x,y)
+draw_shadowed(40,top,function(x,y)
 print_centered_text(self.item_use_message,x,y,14)
 end)end)
 end
@@ -1302,7 +1293,7 @@ function special_shadow(x,y,col1,col2,drawfn)
 drawfn(x,y+1,col1)
 drawfn(x,y,col2)
 end
-draw_shadowed(rootbasis.x,rootbasis.y,0,1,2,function(x,y,col)
+draw_shadowed(rootbasis.x,rootbasis.y,function(x,y,col)
 print('⬅️',x-10,y,8)
 print('➡️',x+10,y,9)
 print('⬆️',x,y-10,10)
@@ -1311,7 +1302,7 @@ print('⬇️',x,y+10,11)
 end
 end)
 if self.activated==self.rootthingy then
-draw_shadowed(rootbasis.x+4,rootbasis.y+12,0,1,2,function(x,y)
+draw_shadowed(rootbasis.x+4,rootbasis.y+12,function(x,y)
 print_centered_text('craft',x,y,4)
 end)
 end
@@ -1624,9 +1615,9 @@ end
 fn()
 pal()
 end
-function draw_shadowed(x,y,offsetx,offsety,darkness,fn)
-draw_color_shifted(-darkness,function()
-fn(x+offsetx,y+offsety)
+function draw_shadowed(x,y,fn)
+draw_color_shifted(-2,function()
+fn(x,y+1)
 end)
 fn(x,y)
 end
@@ -1670,45 +1661,48 @@ end
 end
 local iconsy=2
 draw_halveable_stat(iconleft,iconsy,player.health,player.max_health,1,2,3)
-draw_shadowed(2,iconsy+1,0,1,1,function(x,y)
+draw_shadowed(2,iconsy+1,function(x,y)
 print('life',x,y,8)
 end)
 iconsy+=9
 draw_fullicon_stat(iconleft,iconsy,player.armor,player.max_armor,7,8)
-draw_shadowed(6,iconsy+1,0,1,1,function(x,y)
+draw_shadowed(6,iconsy+1,function(x,y)
 print('def',x,y,13)
 end)
 iconsy+=9
 draw_halveable_stat(iconleft,iconsy,player.satiation,player.max_satiation,4,5,6)
-draw_shadowed(2,iconsy+1,0,1,1,function(x,y)
+draw_shadowed(2,iconsy+1,function(x,y)
 print('food',x,y,9)
 end)
 iconsy+=9
-draw_shadowed(2,128-2-6,0,1,2,function(x,y)
+draw_shadowed(2,128-2-6,function(x,y)
 print('gold ' .. player.coins,x,y,10)
 end)
 iconsy+=9
 crafting_ui:draw()
 inventory_display:draw()
 if player.jump_count==0 then
-draw_shadowed(64,54,0,1,2,function(x,y)
+draw_shadowed(64,54,function(x,y)
 print_centered_text('press z to jump!',x,y,8)
 end)
 end
-draw_shadowed(90,128-28,0,1,2,function(x,y)
+draw_shadowed(90,128-28,function(x,y)
 print_centered_text(curmessage(),x,y,12)
 end)
 end
 function draw_ui_title()
+draw_shadowed(64,0,function(x,y)
+print_centered_text('play again? z/x',x,y+102,12)
+end)
 end
 function draw_ui_gameover()
-draw_shadowed(64,64,0,1,2,function(x,y)
+draw_shadowed(64,64,function(x,y)
 print_centered_text(current_level.player.deathcause,x,y,8)
 end)
 end
 function draw_ui_gameover_fully()
 draw_ui_gameover()
-draw_shadowed(64,0,0,1,2,function(x,y)
+draw_shadowed(64,0,function(x,y)
 print_centered_text('play again? z/x',x,y+102,12)
 print_centered_text('coins: ' .. current_level.player.coins,x,y+34,11)
 end)
@@ -1723,7 +1717,7 @@ elseif game_state=='gameover' then
 draw_ui_gameover_fully()
 end
 if false then
-draw_shadowed(124,2,0,1,2,function(x,y)
+draw_shadowed(124,2,function(x,y)
 print_rightaligned_text('actors: ' .. #current_level.actors,x,y,6)
 y+=8
 print_rightaligned_text('segmts: ' .. #current_level.mapsegments,x,y,6)
@@ -1770,11 +1764,9 @@ end,
 slide_left_slow=
 function(actor)
 actor.vel.x=-0.5
-actor.flipx=true
 end,
 slide_left_fast=
 function(actor)
-actor.flipx=true
 actor.vel.x=-2
 while deltafromplayer(actor)> 64 do
 yield()
@@ -1788,7 +1780,6 @@ end,
 slide_right_fast=
 function(actor)
 actor.pos.x=stage_left_appear_pos()
-actor.flipx=false
 set_player_relative_velocity(actor,1.5)
 while deltafromplayer(actor)<-24 do
 yield()
@@ -1801,7 +1792,6 @@ end,
 maybe_jump=function(actor)
 local willjump=rand_int(1,1)local restpos=128
 actor.pos.x=stage_right_appear_pos()
-actor.flipx=false
 actor.current_animation_name='run'
 actor.vel.x=0
 wait(0.2)
@@ -1818,7 +1808,6 @@ function(actor)
 local maxpounces=3 local restpos=-32
 local numpounces=rand_int(1,maxpounces)
 actor.pos.x=stage_left_appear_pos()
-actor.flipx=false
 local stored_collision_planes=actor.collision_planes_inc
 actor.current_animation_name='run'
 set_player_relative_velocity(actor,1.25)
@@ -1899,22 +1888,22 @@ __gfx__
 53900953535900005353900953535333935353900953535013151513131330005335335335335307000000000000000000000000000000000000000000000000
 590000935390000053590000935390000953590000935a5353035303530390005335335335339000000000000000000000000000000000000000000000000000
 90000009990000009990000009990000009990000009933399099909990990009999999999990330000000000000000000000000000000000000000000000000
-000cdc0dd0000000000cdc0dd0000000000cdc0dd0000000dcc0011d000000000000000000000000000000000000000000000000000000000000000000000000
-00c11ddccdc0000000c11ddccdc0000000c11ddccdc000001c0dcdaa100000000000000000000000000000000000000000000000000000000000000000000000
-0cddaa1dccc100000cddaa1dccc100000cddaa1dccc10000cd0ccd11110000000000000000000000000000000000000000000000000000000000000000000000
-ccc1111ccccc1000ccc1111ccccc1000ccc1111ccccc1000cc10cdccdc1000000000000000000000000000000000000000000000000000000000000000000000
-dcdccc1cdcdc1100dcdccc1cdcdc1100dcdccc1cdcdc11000cc11c1cccc100000000000000000000000000000000000000000000000000000000000000000000
-0ccccdccccccc1100ccccdccccccc1100ccccdccccccc1100cd11cccdcc110000000000000000000000000000000000000000000000000000000000000000000
-ccdcccccdccdcd10ccdcccccdccdcd10ccdcccccdccdcd1000cccdc1c1dc11000000000000000000000000000000000000000000000000000000000000000000
-c11cdcdccccccc11c11cdcdccccccc11c11cdcdccccccc11000dcc11dcccc1000000000000000000000000000000000000000000000000000000000000000000
-00011cc1c1dccc110001ccc1c1dccc11001cccc1c1dccc110000111cccdcd1100000000000000000000000000000000000000000000000000000000000000000
-0000111c11ccdd110000c11c1cccdd1101ccc11c1cccdd11000011cccd1cd1110000000000000000000000000000000000000000000000000000000000000000
-0000001c11cdccc100001c1c1ccdccc101cccc1c1ccdccc1000001111ccccc100000000000000000000000000000000000000000000000000000000000000000
-000000d111dccd11000001d1ccdccd1101ccc1d1ccdccd11000000011cdcd1000000000000000000000000000000000000000000000000000000000000000000
-000000c100dcc111000000c1ccdcc1110cccc1c1ccdcc1110000000001ccc1100000000000000000000000000000000000000000000000000000000000000000
-00000cc111c1111100000cc111c1111101ccccc111c1111100000000001ccc100000000000000000000000000000000000000000000000000000000000000000
-00001c11ccc1111000001c11ccc11110001c1c11ccc11110000000000000cdc00000000000000000000000000000000000000000000000000000000000000000
-001ccdcc11111110001ccdcc11111110001ccdcc111111100000000000001c110000000000000000000000000000000000000000000000000000000000000000
+000a9a0990000000000a9a0990000000000a9a09900000009aa00449000000000000000000000000000000000000000000000000000000000000000000000000
+00a4499aa9a0000000a4499aa9a0000000a4499aa9a000004a09a9ff400000000000000000000000000000000000000000000000000000000000000000000000
+0a99ff49aaa400000a99ff49aaa400000a99ff49aaa40000a90aa944440000000000000000000000000000000000000000000000000000000000000000000000
+aaa4444aaaaa4000aaa4444aaaaa4000aaa4444aaaaa4000aa40a9aa9a4000000000000000000000000000000000000000000000000000000000000000000000
+9a9aaa4a9a9a44009a9aaa4a9a9a44009a9aaa4a9a9a44000aa44a4aaaa400000000000000000000000000000000000000000000000000000000000000000000
+0aaaa9aaaaaaa4400aaaa9aaaaaaa4400aaaa9aaaaaaa4400a944aaa9aa440000000000000000000000000000000000000000000000000000000000000000000
+aa9aaaaa9aa9a940aa9aaaaa9aa9a940aa9aaaaa9aa9a94000aaa9a4a49a44000000000000000000000000000000000000000000000000000000000000000000
+a44a9a9aaaaaaa44a44a9a9aaaaaaa44a44a9a9aaaaaaa440009aa449aaaa4000000000000000000000000000000000000000000000000000000000000000000
+00044aa4a49aaa440004aaa4a49aaa44004aaaa4a49aaa440000444aaa9a94400000000000000000000000000000000000000000000000000000000000000000
+0000444a44aa99440000a44a4aaa994404aaa44a4aaa9944000044aaa94a94440000000000000000000000000000000000000000000000000000000000000000
+0000004a44a9aaa400004a4a4aa9aaa404aaaa4a4aa9aaa4000004444aaaaa400000000000000000000000000000000000000000000000000000000000000000
+00000094449aa94400000494aa9aa94404aaa494aa9aa944000000044a9a94000000000000000000000000000000000000000000000000000000000000000000
+000000a4009aa444000000a4aa9aa4440aaaa4a4aa9aa4440000000004aaa4400000000000000000000000000000000000000000000000000000000000000000
+00000aa444a4444400000aa444a4444404aaaaa444a4444400000000004aaa400000000000000000000000000000000000000000000000000000000000000000
+00004a44aaa4444000004a44aaa44440004a4a44aaa44440000000000000a9a00000000000000000000000000000000000000000000000000000000000000000
+004aa9aa44444440004aa9aa44444440004aa9aa444444400000000000004a440000000000000000000000000000000000000000000000000000000000000000
 000b000000000b00000b0000dddd0000111111110111111111111000011110000000000000000000000000000000000000000000000000000000000000000000
 0b3bb0000000bb3b000bb0006666ddddbb33bb331bb3bb33bb3335001bb335000000000000000000000000000000000000000000000000000000000000000000
 00b3bb00000bb3b000b3b00066666666111111111b331111111111101b3311100000000000000000000000000000000000000000000000000000000000000000
@@ -2042,6 +2031,7 @@ __sfx__
 000100000b3500b3000b3500b3500b3500c3000c3500c3500d3500d3500e3500f3000f350113501330013350153501635018350193501c3501f3502235025350293502d350323503f6003f6003f6003f6003f600
 000100002e6202e6112e6112e6012e6010f6010b6052e6102e6102e6002e6003160031600316003f600016003f600016003f600016003f600016003f600016003f600016003f600016003f600016003f60001600
 000300000537005370053700030005370053700537005370053000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
+000200003a65039650386503665034650306502d65029650246501e6501865001650026001e600000001960013600086000160000000000000000000000000000000000000000000000000000000000000000000
 __music__
 01 01024a00
 00 01024500
