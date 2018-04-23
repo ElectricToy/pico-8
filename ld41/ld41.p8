@@ -1061,7 +1061,7 @@ function level:new( inventory )
 	o.creation_records = {
 		coin     = { chance =   100, earliestnext =   64, interval = 8, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
 		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
-		creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
+		creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return o:phase() >= 4 and #o:actors_of_class( creature ) == 0 end },
 		material = { chance =   80, earliestnext = 64, interval = 24, create = function(level, creation_point)
 			for itemname, type in pairs( items ) do
 				if type.shoulddrop ~= nil then
@@ -1087,6 +1087,12 @@ end
 
 function level:time()
 	return self.tick_count / 60.0
+end
+
+function level:phase()
+	if self.player.jump_count == 0 then return 1 end
+
+	return flr( self:time() / 40 )
 end
 
 function level:after_delay( delay, fn )
@@ -1266,7 +1272,8 @@ end
 local behaviors = {}
 
 function creature:new( level, x )
-	local whichcreature = rand_int( 3, 3 )
+	local maxcreaturetype = flr(( level:phase() - 4 ) / 2 ) + 1
+	local whichcreature = rand_int( 1, max( 1, maxcreaturetype ))
 
 	local y = -16
 	local wid = 14

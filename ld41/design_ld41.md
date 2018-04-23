@@ -240,12 +240,12 @@ X hunger flash when nearly dead (and health etc)
 - Title screen (Jeff)
 - Fast/slow run periods (Jeff)
 - Difficulty ramp (Jeff)
-    + jump quest: no creatures, rocks only, until jump
-    + torch quest: no creatures, small rocks only, specific items for torch, done when create torch, then sunset immediately
-    + first night: add arbitrary items, more stones; done with time
-    + second day: fox
-    + third day:  frog
-    + fourth day: snake
+    + 1 jump quest: no creatures, rocks only, until jump
+    + 2 torch quest: no creatures, small rocks only, specific items for torch, done when create torch, then sunset immediately
+    + 3 first night: add arbitrary items, more stones; done with time
+    + 4, 5 second day: fox
+    + 6, 7 third day:  frog
+    + 8, 9 fourth day: snake
     + PERPETUAL DIFFICULTY RAMP
     + Subsequent plays start on second day
 - performance problem when you craft something
