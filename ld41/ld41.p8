@@ -8,22 +8,22 @@ __lua__
 -->8
 -- general utilities
 
-debug_lines = {}
-function debug_print( text )
-	add( debug_lines, text )
+-- debug_lines = {}
+-- function debug_print( text )
+-- 	add( debug_lines, text )
 
-	while #debug_lines > 10 do
-		del_index( debug_lines, 1 )
-	end
-end
+-- 	while #debug_lines > 10 do
+-- 		del_index( debug_lines, 1 )
+-- 	end
+-- end
 
-function draw_debug_lines()
-	for i = 1, #debug_lines do
-		local line = debug_lines[ #debug_lines - i + 1 ]
-		print( line, 2, 7 * i, rel_color( 8, 1 - i ) )
-	end
-	print( '', 0, (#debug_lines+1) *7 )
-end
+-- function draw_debug_lines()
+-- 	for i = 1, #debug_lines do
+-- 		local line = debug_lines[ #debug_lines - i + 1 ]
+-- 		print( line, 2, 7 * i, rel_color( 8, 1 - i ) )
+-- 	end
+-- 	print( '', 0, (#debug_lines+1) *7 )
+-- end
 
 local current_level = nil
 local crafting_ui = nil
@@ -854,7 +854,7 @@ local items = {
 		sprite = 19,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 2 )
+			return pctchance( 4 )
 		end
 	},
 	mushroom = {
@@ -862,7 +862,7 @@ local items = {
 		sprite = 20,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 3 )
+			return pctchance( 6 )
 		end
 	},
 	wheat = {
@@ -870,7 +870,7 @@ local items = {
 		sprite = 21,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 1 )
+			return pctchance( 2 )
 		end
 	},
 	stick = {
@@ -878,7 +878,7 @@ local items = {
 		sprite = 22,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 6 )
+			return pctchance( 12 )
 		end
 	},
 	oil = {
@@ -886,7 +886,7 @@ local items = {
 		sprite = 23,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 4 )
+			return pctchance( 8 )
 		end
 	},
 	metal = {
@@ -894,7 +894,7 @@ local items = {
 		sprite = 24,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 4 )
+			return pctchance( 8 )
 		end
 	},
 
@@ -909,7 +909,6 @@ local items = {
 		end,
 		oncreated = function(level)
 			level.inventory:acquire( 'bow' )
-			-- todo prevent re-creating?
 		end
 	},
 	arrow = {
@@ -954,7 +953,6 @@ local items = {
 		oncreated = function(level)
 			current_player.max_health = min( current_player.max_health + 2, 16 )
 			current_player:heal( 4 )
-			current_player:eat( 3 )
 		end
 	},
 	torch = {
@@ -973,7 +971,7 @@ local items = {
 		name = 'an apple',
 		sprite = 17,
 		shoulddrop = function(level)
-			return pctchance( 0.5 )
+			return pctchance( 1 )
 		end,
 		onpickedup = function(level)
 			current_player:heal( 2 )
@@ -983,7 +981,7 @@ local items = {
 		name = 'a banana',
 		sprite = 18,
 		shoulddrop = function(level)
-			return pctchance( 1 )
+			return pctchance( 2 )
 		end,
 		onpickedup = function(level)
 			current_player:eat( 1 )
@@ -1012,6 +1010,7 @@ local inventory = inheritsfrom( nil )
 function inventory:new()
 	local o = {
 		itemcounts = {},
+		owned_torch = false,
 	}
 	return setmetatable( o, self )
 end
@@ -1037,6 +1036,10 @@ function inventory:acquire( type )
 		local gaineditems = {}
 		gaineditems[ type ] = item
 		inventory_display:on_gained( gaineditems )
+
+		if item.name == 'a torch' then
+			self.owned_torch = true
+		end
 	end
 end
 
@@ -1059,9 +1062,9 @@ function level:new( inventory )
 	}
 	o.creation_records = {
 		coin     = { chance =   100, earliestnext =   64, interval = 8, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
-		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
-		creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return o:phase() >= 4 and #o:actors_of_class( creature ) == 0 end },
-		material = { chance =   80, earliestnext = 64, interval = 24, create = function(level, creation_point)
+		stone    = { chance =   4, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
+		creature = { chance =    2, earliestnext = 256, interval = 256, predicate = function() return o:phase() >= 3 and #o:actors_of_class( creature ) == 0 end },
+		material = { chance =   100, earliestnext = 64, interval = 24, create = function(level, creation_point)
 			for itemname, type in pairs( items ) do
 				if type.shoulddrop ~= nil then
 					if type.shoulddrop( level ) then
@@ -1088,10 +1091,20 @@ function level:time()
 	return self.tick_count / 60.0
 end
 
+function level:ramptime()
+	if self.base_tick == nil then
+		return 0
+	end
+	return ( self.tick_count - self.base_tick ) / 60
+end
+
+local day_length = 30
+
 function level:phase()
 	if self.player.jump_count == 0 then return 1 end
+	if not self.inventory.owned_torch then return 2 end
 
-	return flr( self:time() / 40 )
+	return 3 + flr( self:ramptime() / day_length )
 end
 
 function level:after_delay( delay, fn )
@@ -1189,6 +1202,10 @@ function level:update()
 
 	self.tick_count += 1
 
+	if self.base_tick == nil and self.inventory.owned_torch then
+		self.base_tick = self.tick_count
+	end
+
 	self:update_pending_calls()
 
 	if self.player.alive then
@@ -1228,34 +1245,18 @@ function level:camera_pos()
 	return vector:new( self.player.pos.x - 32, -96 )
 end
 
-function level:timeofday()
-	return 0.5 + sin( self:time() / 50 ) * 0.5
-end
-
-function level:categoricaltimeofday()
-	local thetime = self:timeofday()
-	return thetime < 0.7 and 1 or ( thetime < 0.9 and 2 or 3 )
-end
-
 function level:draw()
 
 	local cam = self:camera_pos()
 
+	cls( 3 )
+
 	camera( 0, cam.y )
 
-	local thetime = self:timeofday()
-
-	function drawgrass()
-		camera( 0, cam.y)
-		rectfill( 0, 0, 128, 32, 3 )
-		line( 0, 0, 128, 0, 5 )
-	end
+	-- local thetime = self:timeofday()
 
 	rectfill( 0, -96, 128, 0, 12 )
-
-	camera( cam.x, cam.y )
-
-	drawgrass()
+	line( 0, 0, 128, 0, 5 )
 
 	camera( cam.x, cam.y )
 
@@ -1352,6 +1353,7 @@ end
 local stone = inheritsfrom( actor )
 function stone:new( level, x )
 	local size = rand_int( 1, 2 )
+	if level:phase() == 2 then size = 1 end
 
 	local sprite = { 136, 130, 164 }
 	local spritewidth =  { 1, 2, 3 }
@@ -2212,9 +2214,18 @@ function draw_ui()
 		crafting_ui:draw()
 		inventory_display:draw()
 
-		if current_player.jump_count == 0 then
+		if current_level:phase() == 1 then
 			draw_shadowed( 64, 54, function(x,y)
 				print_centered_text( 'press z to jump!', x, y, 8 )
+			end )
+		end
+
+		if current_level:phase() == 2 then
+			draw_shadowed( 64, 46, function(x,y)
+				print_centered_text( 'craft a    with   and', x, y+1, 8 )
+				spr( 15, x - 9, y )
+				spr( 22, x + 20, y )
+				spr( 23, x + 44, y )
 			end )
 		end
 
@@ -2259,17 +2270,14 @@ function draw_ui()
 	end
 
 
-	-- todo!!! debug
-	if false then
-		draw_shadowed( 124, 2, function(x,y)
-			print_rightaligned_text( 't: ' ..flr( current_level:time() ), x, y, 6 )
-			y += 8
-			print_rightaligned_text( 'x: ' .. flr( current_player.pos.x ), x, y, 6 )
-			y += 8
-			print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-			y += 8
-		end )
-	end
+	-- -- todo!!! debug
+	-- if true then
+	-- 	draw_shadowed( 124, 2, function(x,y)
+	-- 		print_rightaligned_text( 'phase: ' .. current_level:phase(), x, y, 6 )
+	-- 		y += 8
+
+	-- 	end )
+	-- end
 end
 
 function _draw()
@@ -2277,7 +2285,7 @@ function _draw()
 	current_level:draw()
 	camera( 0, 0 )
 	draw_ui()
-	draw_debug_lines()
+	-- draw_debug_lines()
 end
 
 function wait( seconds )
@@ -2355,7 +2363,7 @@ behaviors = {
 		end,
 	pounce_from_left =
 		function(actor)
-			local maxpounces = 3    -- todo based on level age
+			local maxpounces = clamp( actor.level:phase() - 7, 1, 3 )
 			local restpos = -32
 
 			local numpounces = rand_int( 1, maxpounces )
