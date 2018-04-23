@@ -232,12 +232,9 @@ X SFX
     + item power (Liam): look for 'oncreated'
 - Apples (Jeff)
 - Bananas (Jeff)
-- Title screen (Jeff)
 - Day/night cycle with darkness, torch (Jeff)
-- Fast/slow run periods (Jeff)
+- fast/slow
 - Snake (Jeff/Liam??)
-- Small rock (Liam/Jeff)
-- Mushroom art
 - Difficulty ramp (Jeff)
     + jump quest: no creatures, rocks only, until jump
     + torch quest: no creatures, small rocks only, specific items for torch, done when create torch, then sunset immediately
@@ -312,7 +309,7 @@ Run from the night
 Survival Marathon
 MarathonCraft
 Sonicraft
-
+Survival Run 
 
 
 
