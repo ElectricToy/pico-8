@@ -841,6 +841,10 @@ end
 function pickup:on_pickedup_by( other )
 	self.level.inventory:acquire( self.itemname )
 
+	if self.item.onpickedup ~= nil then
+		self.item.onpickedup( self.level )
+	end
+
 	self:superclass().on_pickedup_by( self, other )
 end
 
@@ -963,6 +967,31 @@ local items = {
 		end
 	},
 
+	--
+
+	apple = {
+		name = 'an apple',
+		sprite = 17,
+		shoulddrop = function(level)
+			return pctchance( 4 )
+		end,
+		onpickedup = function(level)
+			level.player:heal( 2 )
+		end
+	},
+	banana = {
+		name = 'a banana',
+		sprite = 18,
+		shoulddrop = function(level)
+			return pctchance( 4 )
+		end,
+		onpickedup = function(level)
+			level.player:eat( 1 )
+		end
+	},
+	--
+
+
 	home = { sprite = 61 },
 }
 
@@ -982,7 +1011,7 @@ end
 local inventory = inheritsfrom( nil )
 function inventory:new()
 	local o = {
-		itemcounts = {}
+		itemcounts = {},
 	}
 	return setmetatable( o, self )
 end
@@ -999,12 +1028,14 @@ function inventory:acquire( type )
 
 	if self.itemcounts[ type ] < 9 then
 		self.itemcounts[ type ] += 1
-		message( 'got ' .. items[ type ].name )
+		local item = items[ type ]
+
+		message( 'got ' .. item.name )
 
 		sfx( 33 )
 
 		local gaineditems = {}
-		gaineditems[ type ] = items[ type ]
+		gaineditems[ type ] = item
 		inventory_display:on_gained( gaineditems )
 	end
 end
@@ -1747,8 +1778,8 @@ function thingy:drawself( basepos )
 	draw_color_shifted( colorize, function()
 
 		local basecolorshift = colorize
-		if basecolorshift == 0 and not self:recursively_usable() then
-			basecolorshift = 1
+		if basecolorshift == 0 then
+			basecolorshift = self:recursively_usable() and 1 or 0
 		end
 		draw_color_shifted( basecolorshift, function()
 			spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
