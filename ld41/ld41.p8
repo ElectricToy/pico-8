@@ -261,7 +261,7 @@ end
 
 local mapsegment_tile_size = vector:new( 16, 16 )
 local mapsegment_tiles_across_map = 8
-local weapon_check_distance = 32
+local weapon_check_distance = 24
 
 
 local mapsegment = inheritsfrom( nil )
@@ -623,11 +623,35 @@ function player:new( level )
 	return setmetatable( o, self )
 end
 
+function player:has_weapon()
+	return self.level.inventory:item_count( 'bow' ) > 0
+end
+
+function player:ammo()
+	return self.level.inventory:item_count( 'arrow' )
+end
+
+function player:use_ammo()
+	return self.level.inventory:use( 'arrow', 1 )
+end
+
+function player:heal( amount )
+	self.health = clamp( self.health + amount, 0, self.max_health )
+end
+
+function player:eat( amount )
+	self.satiation = clamp( self.satiation + amount, 0, self.max_satiation )
+end
+
 function player:maybe_shoot( other )
-	-- todo and we have a weapon and ammo!!!
+	if self:dead() then return end
+
 	if abs( other.pos.x - self.pos.x ) < weapon_check_distance then
-		-- todo!!!
-		-- other:die()
+		
+		if self:has_weapon() and self:ammo() > 0 then
+			other:die()
+			self:use_ammo()
+		end
 	end
 end
 
@@ -787,6 +811,14 @@ function pickup:new( level, itemname, item, x )
 	return setmetatable( o, self )
 end
 
+function pickup:on_collision( other )
+	self:on_pickedup_by( other )
+
+	if true then	-- todo
+		self:superclass().on_collision( self, other )
+	end
+end
+
 function pickup:on_pickedup_by( other )
 	self.level.inventory:acquire( self.itemname )
 
@@ -797,40 +829,43 @@ local items = {
 	rawmeat = {
 		sprite = 19,
 		showinv = true,
+		shoulddrop = function(level)
+			return pctchance( 2 )
+		end
 	},
 	mushroom = {
 		sprite = 20,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 1 )
+			return pctchance( 4 )
 		end
 	},
 	wheat = {
 		sprite = 21,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 1 )
+			return pctchance( 4 )
 		end
 	},
 	stick = {
 		sprite = 22,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 1 )
+			return pctchance( 4 )
 		end
 	},
 	oil = {
 		sprite = 23,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 1 )
+			return pctchance( 4 )
 		end
 	},
 	metal = {
 		sprite = 24,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 1 )
+			return pctchance( 4 )
 		end
 	},
 
@@ -840,6 +875,8 @@ local items = {
 		sprite = 13,
 		requirements = { stick = 4, metal = 2 },
 		oncreated = function(level)
+			level.inventory:acquire( 'bow' )
+			-- todo prevent re-creating?
 		end
 	},
 	arrow = {
@@ -847,36 +884,47 @@ local items = {
 		showinv = true,
 		requirements = { stick = 1, metal = 1 },
 		oncreated = function(level)
+			level.inventory:acquire( 'arrow') 
 		end
 	},
 	armor = {
 		sprite =  7,
 		requirements = { metal = 3, oil = 2 },
 		oncreated = function(level)
+			level.player.armor = level.player.max_armor
 		end
 	},
 	cookedmeat = {
 		sprite = 10,
 		requirements = { rawmeat = 1, torch = 1 },
 		oncreated = function(level)
+			level.player:heal( 2 )
+			level.player:eat( 6 )
 		end
 	},
 	stew = {
 		sprite = 11,
 		requirements = { mushroom = 5, rawmeat = 3 },
 		oncreated = function(level)
+			level.player.max_satiation += 2
+			level.player.satiation = level.player.max_satiation
 		end
 	},
 	pizza = {
 		sprite = 12,
-		requirements = { wheat = 3, mushroom = 3, rawmeat = 3 },
+		requirements = { wheat = 3, mushroom = 3 },
 		oncreated = function(level)
+			level.player.max_health += 2
+			level.player:heal( 6 )
+			level.player:eat( 2 )
 		end
 	},
 	torch = {
 		sprite = 15,
+		showinv = true,
 		requirements = { oil = 1, stick = 2 },
 		oncreated = function(level)
+			level.inventory:acquire( 'torch' )
 		end
 	},
 
@@ -926,8 +974,8 @@ function level:new( inventory )
 		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
 		tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end },
 		shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end  },
-		creature = { chance =    0.1, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
-		material = { chance =   100, earliestnext = 128, interval = 4 },
+		creature = { chance =    100, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
+		material = { chance =   100, earliestnext = 64, interval = 2 },
 	}
 
 	local finishedobject = setmetatable( o, self )
@@ -1085,7 +1133,7 @@ function level:draw()
 		line( 0, 0, 128, 0, 0 )
 	end
 
-	rectfill( 0, -96, 128, 0, 1 )
+	rectfill( 0, -96, 128, 0, 12 )
 
 	camera( cam.x, cam.y )
 
@@ -1113,7 +1161,7 @@ end
 local behaviors = {}
 
 function creature:new( level, x )
-	local whichcreature = 2 --todo!!! rand_int( 1, 2 )
+	local whichcreature = rand_int( 1, 2 )
 
 	local y = -16
 	local wid = 16
@@ -1155,6 +1203,9 @@ function creature:die( cause )
 	self.flipy = true
 	self.landed_tick = nil
 	self.collision_size.y -= 4
+	self.behavior = nil
+
+	self.level.inventory:acquire( 'rawmeat' )
 end
 
 function creature:update( deltatime )
@@ -1365,7 +1416,7 @@ end
 
 function inventorydisplay:draw()
 
-	local left = 64
+	local left = 54
 	local top = 128 - 2 - 9 - 6
 	local i = 0
 	for itemname, item in pairs( items ) do
@@ -1740,7 +1791,7 @@ function thingy:activate()
 
 		local action = self.item.oncreated
 		if action ~= nil then
-			action()
+			action( self.crafting.level )
 		end
 
 		self.crafting:on_activating_item( self, true )
