@@ -701,7 +701,6 @@ function player:jump( amount )
 	local jumped = self:superclass().jump( self, amount )
 
 	if jumped then
-		self:drain_satiation( 0.01 )
 		self.jump_count += 1
 	end
 
@@ -716,7 +715,7 @@ function player:update( deltatime )
 		self:maybe_shoot( creature )
 	end
 
-	self:drain_satiation( 0.001 + ( self.armor > 0 and 0.0005 or 0 ))
+	self:drain_satiation( 0.0005 )
 
 	if self.current_animation_name ~= 'run' then
 		self.animations[ 'run' ]:update( deltatime )
