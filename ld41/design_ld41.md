@@ -203,6 +203,7 @@ X Environment with motion
 - Light/dark
 - Jump hint
 - Grab button hint
+- jump hint (with monster)
 
 ## Expansion - Saturday
 

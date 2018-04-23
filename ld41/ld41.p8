@@ -654,6 +654,10 @@ end
 
 function actor:on_pickedup_by( other )
     self.current_animation_name = 'swirl'
+
+    --disable any further pickup
+    self.may_player_pickup = false
+    self.collision_planes_inc = 0
 end
 
 --player
@@ -884,7 +888,7 @@ function level:new()
         stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #newobj:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
         tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end },
         shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end  },
-        creature = { chance =    100, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
+        creature = { chance =    0.1, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
     }
 
     newobj.player = player:new( newobj )
@@ -1447,7 +1451,7 @@ local item_tree =
         }
     }
 
-local thingy_spacing = 16
+local thingy_spacing = 20
 
 local thingy = inheritsfrom( nil )
 
@@ -1460,6 +1464,7 @@ function crafting:new( pos )
         activated = nil,
         homebutton = false,
         lockout_input = false,
+        last_activate_time = nil,
     }
 
     local resultself =  setmetatable( newobj, self )
@@ -1476,7 +1481,11 @@ function crafting:on_activating( thing )
     self.activated = thing
 end
 
-function crafting:on_activating_item( thing )
+function crafting:on_activating_item( thing, takingaction )
+
+    self.last_activate_time = self:time()
+
+    if not takingaction then return end
 
     self.lockout_input = true
 
@@ -1502,6 +1511,7 @@ function crafting:update_pending_calls()
 end
 
 function crafting:reset()
+    self.last_activate_time = nil
     self.activated = nil
     self.lockout_input = false
     self.rootthingy:collapse( true )
@@ -1525,19 +1535,44 @@ function crafting:update()
         self.activated:update_input()
     end
 
+    if self.last_activate_time ~= nil then
+        if self:time() - self.last_activate_time > 6 then
+            self:reset()
+        end
+    end
+
     self.rootthingy:update()
 end
 
 function crafting:draw()
-    self.rootthingy:draw( self.pos, false )
+
+    local rootbasis = self.pos
+
+    self.rootthingy:draw( rootbasis, false )
 
     -- draw again, but only the activated branch
     if self.activated ~= nil then
-        self.rootthingy:draw( self.pos, true )
+        self.rootthingy:draw( rootbasis, true )
     end
 
+    -- draw hint arrows
+    function special_shadow( x, y, col1, col2, drawfn )
+        drawfn( x, y+1, col1 )
+        drawfn( x, y, col2 )
+    end
+
+    draw_shadowed( rootbasis.x, rootbasis.y, 0, 1, 2, function(x,y,col)
+        print( '⬅️', x - 10, y, 8 )
+        print( '➡️', x + 10, y, 9 )
+        print( '⬆️', x, y - 10, 10 )
+
+        if self.activated ~= self.rootthingy then
+            print( '⬇️', x, y + 10, 11 )
+        end
+    end )
+
     if self.activated == self.rootthingy then
-        draw_shadowed( self.pos.x + 4, self.pos.y + 12, 0, 1, 2, function(x,y)
+        draw_shadowed( rootbasis.x + 4, rootbasis.y + 12, 0, 1, 2, function(x,y)
             print_centered_text( 'craft', x, y, 4 )
         end )
     end
@@ -1727,7 +1762,7 @@ function thingy:activate()
     if not self:available() then
         -- unavailable
         self:flash( 0.05 )
-        self.crafting:on_activating_item( self )
+        self.crafting:on_activating_item( self, true )
         return
     end
 
@@ -1743,9 +1778,11 @@ function thingy:activate()
             self.action()
         end
 
-        self.crafting:on_activating_item( self )
+        self.crafting:on_activating_item( self, true )
     else
-        -- container. Expand children.
+        -- container. expand children.
+
+        self.crafting:on_activating_item( self, false )
 
         self.destination = vector:new( 0, 0 )
 
@@ -2011,15 +2048,15 @@ function draw_ui()
         draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
             print( 'life', x, y, 8 )
         end )
+        iconsy += 9
 
         -- draw player distance
 
-        local dist = player_run_distance()
-        draw_shadowed( iconright, iconsy, 0, 1, 2, function(x,y)
-            print_rightaligned_text( '' .. dist .. ' m', x, y, 11 )
-        end )
-
-        iconsy += 9
+        -- local dist = player_run_distance()
+        -- draw_shadowed( iconright, iconsy, 0, 1, 2, function(x,y)
+        --     print_rightaligned_text( '' .. dist .. ' m', x, y, 11 )
+        -- end )
+        -- iconsy += 9
 
         -- draw player armor
 
@@ -2027,13 +2064,6 @@ function draw_ui()
         draw_shadowed( 6, iconsy + 1, 0, 1, 1, function(x,y)
             print( 'def', x, y, 13 )
         end )
-
-        -- draw player coins
-
-        draw_shadowed( iconright, iconsy, 0, 1, 2, function(x,y)
-            print_rightaligned_text( '' .. player.coins .. ' g', x, y, 10 )
-        end )
-
         iconsy += 9
 
         -- draw player satiation
@@ -2041,6 +2071,14 @@ function draw_ui()
         draw_halveable_stat( iconleft, iconsy, player.satiation, player.max_satiation, 4, 5, 6 )
         draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
             print( 'food', x, y, 9 )
+        end )
+
+        iconsy += 9
+
+        -- draw player coins
+
+        draw_shadowed( 2, 128 - 2 - 6, 0, 1, 2, function(x,y)
+            print( 'gold ' .. player.coins, x, y, 10 )
         end )
 
         iconsy += 9
@@ -2273,7 +2311,7 @@ __gfx__
 800000000088a8a0000000000000000000000000088a8a0000000000000000000000000000000000000400000000000000000000000000000000000000000000
 8822800000088882002280000088a8a0000288000088882000000000000000000000000000000000004140000000000000000000000000000000000000000000
 08282282002888800882828800088882088288280822880000000000000000000000000000000000041424000000000000000000000000000000000000000000
-00082882828228000800088222822280880008282288200000000000000000000000000000000000414442404000000000000000000000000000000000000000
+00082882828228000800088222822280880008282288200000000000000000000000000000000000414442400000000000000000000000000000000000000000
 00028882828882200080028282888800000000882828820000000000000000000000000000000000014442000000000000000000000000000000000000000000
 00288882882828220000002888288000000000828828822200000000000000000000000000000000044144000000000000000000000000000000000000000000
 02888000882808820000000082280000000000822088888200000000000000000000000000000000022122000000000000000000000000000000000000000000
