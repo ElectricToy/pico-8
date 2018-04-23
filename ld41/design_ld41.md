@@ -199,20 +199,22 @@ X Platforms
 X Creature
 X Environment with motion
 X Craft one item with blank rest of crafting tree
-- Owned item inventory
-    + Used/Need hints
+X Owned item inventory
+    X Used/Need hints
 - Light/dark
-- Jump hint
-- Grab button hint
-- jump hint (with monster)
+- difficulty ramp
+- title screen
+X Jump hint
+~~- Grab button hint~~
+~~- jump hint (with monster)~~
 
 ## Expansion - Saturday
 
 X Player character with all animations
 X Environment art
-- UI details (e.g. crafting requirements, warning signs)
-- Items
-- Creatures
+X UI details (e.g. crafting requirements, warning signs)
+X Items
+X Creatures
 
 ## Polish - Sunday
 
@@ -264,23 +266,3 @@ Food
 Other
 	• Torch = 1 Oil + 2 Stick
 		Allows you to see better at night. One torch lasts one night.
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
