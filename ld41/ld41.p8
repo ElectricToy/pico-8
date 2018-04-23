@@ -25,9 +25,24 @@ function draw_debug_lines()
 	print( '', 0, (#debug_lines+1) *7 )
 end
 
+local current_level = nil
+local crafting_ui = nil
+local inventory_display = nil
+
+
 function establish( value, default )
 	if value == nil then return default end
 	return value
+end
+
+local messagedur = 3
+local gamemessage = { text = '', time = nil }
+function message( text )
+	gamemessage.text = text
+	gamemessage.time = time()
+end
+function curmessage()
+	return ( gamemessage.time ~= nil and time() < gamemessage.time + messagedur ) and gamemessage.text or ''
 end
 
 function rel_color( base, change )
@@ -540,11 +555,13 @@ function actor:grounded()
 end
 
 function actor:jump( amount )
-	if self:dead() or not self:grounded() then return end
+	if self:dead() or not self:grounded() then return false end
 
 	self.vel.y = -self.jumpforce * establish( amount, 1.0 )
 	self.landed_tick = nil
 	sfx(32)
+
+	return true
 end
 
 function actor:postdraw( drawpos )
@@ -597,6 +614,9 @@ function player:new( level )
 	o.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 )
 	o.current_animation_name = 'run'
 	o.collision_planes_exc = 0
+
+
+	o.jump_count = 0
 
 	o.coins = 0
 	o.max_health = 6
@@ -671,8 +691,14 @@ function player:drain_satiation( amount )
 end
 
 function player:jump( amount )
-	self:superclass().jump( self, amount )
-	self:drain_satiation( 0.01 )
+	local jumped = self:superclass().jump( self, amount )
+
+	if jumped then
+		self:drain_satiation( 0.01 )
+		self.jump_count += 1
+	end
+
+	return jumped
 end
 
 function player:update( deltatime )
@@ -827,6 +853,7 @@ end
 
 local items = {
 	rawmeat = {
+		name = 'raw meat',
 		sprite = 19,
 		showinv = true,
 		shoulddrop = function(level)
@@ -834,6 +861,7 @@ local items = {
 		end
 	},
 	mushroom = {
+		name = 'a mushroom',
 		sprite = 20,
 		showinv = true,
 		shoulddrop = function(level)
@@ -841,6 +869,7 @@ local items = {
 		end
 	},
 	wheat = {
+		name = 'wheat',
 		sprite = 21,
 		showinv = true,
 		shoulddrop = function(level)
@@ -848,6 +877,7 @@ local items = {
 		end
 	},
 	stick = {
+		name = 'a stick',
 		sprite = 22,
 		showinv = true,
 		shoulddrop = function(level)
@@ -855,6 +885,7 @@ local items = {
 		end
 	},
 	oil = {
+		name = 'oil',
 		sprite = 23,
 		showinv = true,
 		shoulddrop = function(level)
@@ -862,6 +893,7 @@ local items = {
 		end
 	},
 	metal = {
+		name = 'metal',
 		sprite = 24,
 		showinv = true,
 		shoulddrop = function(level)
@@ -872,14 +904,19 @@ local items = {
 	--
 
 	bow = {
+		name = 'a bow',
 		sprite = 13,
 		requirements = { stick = 4, metal = 2 },
+		unavailable = function(level)
+			return level.inventory:item_count( 'bow' ) > 0
+		end,
 		oncreated = function(level)
 			level.inventory:acquire( 'bow' )
 			-- todo prevent re-creating?
 		end
 	},
 	arrow = {
+		name = 'an arrow',
 		sprite = 14,
 		showinv = true,
 		requirements = { stick = 1, metal = 1 },
@@ -888,6 +925,7 @@ local items = {
 		end
 	},
 	armor = {
+		name = 'armor',
 		sprite =  7,
 		requirements = { metal = 3, oil = 2 },
 		oncreated = function(level)
@@ -895,6 +933,7 @@ local items = {
 		end
 	},
 	cookedmeat = {
+		name = 'cooked meat',
 		sprite = 10,
 		requirements = { rawmeat = 1, torch = 1 },
 		oncreated = function(level)
@@ -903,6 +942,7 @@ local items = {
 		end
 	},
 	stew = {
+		name = 'stew',
 		sprite = 11,
 		requirements = { mushroom = 5, rawmeat = 3 },
 		oncreated = function(level)
@@ -911,6 +951,7 @@ local items = {
 		end
 	},
 	pizza = {
+		name = 'pizza',
 		sprite = 12,
 		requirements = { wheat = 3, mushroom = 3 },
 		oncreated = function(level)
@@ -920,6 +961,7 @@ local items = {
 		end
 	},
 	torch = {
+		name = 'a torch',
 		sprite = 15,
 		showinv = true,
 		requirements = { oil = 1, stick = 2 },
@@ -944,12 +986,18 @@ function inventory:item_count( type )
 end
 
 function inventory:acquire( type )
-	if not self.itemcounts[ type ] then
-		self.itemcounts[ type ] = 1
-	else
-		self.itemcounts[ type ] += 1
 
-		if self.itemcounts[ type ] > 9 then self.itemcounts[ type ] = 9 end
+	if not self.itemcounts[ type ] then
+		self.itemcounts[ type ] = 0
+	end
+
+	if self.itemcounts[ type ] < 9 then
+		self.itemcounts[ type ] += 1
+		message( 'got ' .. items[ type ].name )
+
+		local gaineditems = {}
+		gaineditems[ type ] = items[ type ]
+		inventory_display:on_gained( gaineditems )
 	end
 end
 
@@ -1231,7 +1279,7 @@ end
 
 local stone = inheritsfrom( actor )
 function stone:new( level, x )
-	local size = rand_int( 1, 2 )
+	local size = rand_int( 1, 3 )
 
 	local sprite = { 185, 167, 164 }
 	local spritewidth =  { 1, 2, 3 }
@@ -1240,6 +1288,7 @@ function stone:new( level, x )
 	local spriteoffsety = { -1, -2, -2 }
 	local collisionwid = { 6, 12, 16 }
 	local collisionhgt = { 6, 12, 12 }
+	local damage = { 1, 2, 2 }
 
 	local o = actor:new( level, x, -collisionhgt[ size ], 0, 0 )
 	o.animations[ 'idle' ] = animation:new( sprite[size], 1, spritewidth[size], spriteheight[size] )
@@ -1249,6 +1298,7 @@ function stone:new( level, x )
 	o.offset.y = spriteoffsety[ size ]
 	o.collision_size.x = collisionwid[ size ]
 	o.collision_size.y = collisionhgt[ size ]
+	o.damage = damage[ size ]
 
 	return setmetatable( o, self )
 end
@@ -1402,11 +1452,14 @@ end
 -->8
 --crafting
 
+local flashduration = 2
 local inventorydisplay = inheritsfrom( nil )
 function inventorydisplay:new( level )
 	local o = {
 		level = level,
-		itemdrawinfo = {},
+		highlighted_items = {},
+		flashstarttime = nil,
+		item_use_message = '',
 	}
 	return setmetatable( o, self )
 end
@@ -1414,22 +1467,62 @@ end
 function inventorydisplay:update()
 end
 
+function inventorydisplay:highlight_items( items )
+	self.flashstarttime = self.level:time()
+	self.highlighted_items = items
+end
+
+function inventorydisplay:on_gained( items )
+	self.item_use_message = ''
+	self:highlight_items( items )
+end
+
+function inventorydisplay:on_used( items )
+	self.item_use_message = 'used:'
+	self:highlight_items( items )
+end
+
+function inventorydisplay:on_tried_to_use( items )
+	self.item_use_message = 'need:'
+	self:highlight_items( items )
+end
+
 function inventorydisplay:draw()
 
 	local left = 54
 	local top = 128 - 2 - 9 - 6
 	local i = 0
+	local now = self.level:time()
+
+	local colorshift = 0 
+	if self.flashstarttime ~= nil and now < self.flashstarttime + flashduration then
+		colorshift = flicker( now, 2 ) and 8 or 0
+	end
+
 	for itemname, item in pairs( items ) do
 		if item.showinv then
 			local x = left + i * 9
-			spr( item.sprite, x, top )
-			local count = self.level.inventory:item_count( itemname )
-			draw_shadowed( x + 2, top + 9, 0, 1, 2, function(x,y)
-				print( '' .. count, x, y, 12 )
+
+			draw_color_shifted( self.highlighted_items[ itemname ] ~= nil and colorshift or 0, function()
+				spr( item.sprite, x, top )
+				
+				local count = self.level.inventory:item_count( itemname )
+				
+				draw_shadowed( x + 2, top + 9, 0, 1, 2, function(x,y)
+					print( '' .. count, x, y, 12 )
+				end )
 			end )
+
 			i += 1
 		end
 	end
+
+	-- show needs/used
+	draw_color_shifted( colorshift, function()
+		draw_shadowed( 40, top, 0, 1, 2, function(x,y)
+			print_centered_text( self.item_use_message, x, y, 14 )
+		end )		
+	end )
 end
 
 local item_tree =
@@ -1631,6 +1724,8 @@ end
 function thingy:available()
 	if self.homebutton or #self.children > 0 then return true end
 
+	if self.item.unavailable ~= nil and self.item.unavailable( self.crafting.level ) then return false end
+
 	for itemname, count in pairs( self.item.requirements ) do
 		if self.crafting.level.inventory:item_count( itemname ) < count then
 			return false
@@ -1775,6 +1870,7 @@ function thingy:activate()
 	if not self:available() then
 		self:flash( 0.05 )
 		self.crafting:on_activating_item( self, true )
+		inventory_display:on_tried_to_use( self.item.requirements )
 		return
 	end
 
@@ -1783,10 +1879,18 @@ function thingy:activate()
 	local flashduration = 0.25
 
 	if self.parent ~= nil and #self.children == 0 and self.item ~= nil then
+		-- have the requirements?
 		for itemname, count in pairs( self.item.requirements ) do
-			if self.crafting.level.inventory:use( itemname, count ) then
+			if count > self.crafting.level.inventory:item_count( itemname ) then
+				debug_print( 'failed ' .. itemname)
+				inventory_display:on_tried_to_use( self.item.requirements )
 				return false
 			end
+		end
+
+		-- yes
+		for itemname, count in pairs( self.item.requirements ) do
+			self.crafting.level.inventory:use( itemname, count )
 		end
 
 		local action = self.item.oncreated
@@ -1794,7 +1898,11 @@ function thingy:activate()
 			action( self.crafting.level )
 		end
 
+		inventory_display:on_used( self.item.requirements )
+		message( 'made ' .. self.item.name )
+
 		self.crafting:on_activating_item( self, true )
+
 	else
 		self.crafting:on_activating_item( self, false )
 
@@ -1884,10 +1992,6 @@ end
 --level creation
 music()
 
-local current_level = nil
-local crafting_ui = nil
-local inventory_display = nil
-
 local game_state = 'title'
 local current_level = nil
 
@@ -1918,12 +2022,8 @@ function _update60()
 	if game_state == 'playing' then
 		function update_input()
 			local player = current_level.player
-			if wentdown(4) then
+			if wentdown(4) or wentdown(5) then
 				player:jump()
-			end
-
-			if wentdown(5) then
-				player:grab()
 			end
 
 			crafting_ui:update()
@@ -2069,6 +2169,17 @@ function draw_ui()
 
 		crafting_ui:draw()
 		inventory_display:draw()
+
+		if player.jump_count == 0 then
+			draw_shadowed( 64, 54, 0, 1, 2, function(x,y)
+				print_centered_text( 'press z to jump!', x, y, 8 )
+			end )
+		end
+
+		draw_shadowed( 90, 128-28, 0, 1, 2, function(x,y)
+			print_centered_text( curmessage(), x, y, 12 )
+		end )
+
 	end
 
 	function draw_ui_title()
@@ -2143,6 +2254,10 @@ function standard_attack_warning( actor, delay )
 	wait( delay )
 end
 
+function set_player_relative_velocity( actor, speedscale )
+	actor.vel.x = current_level.player.vel.x * speedscale
+end
+
 behaviors = {
 	still = function() end,
 	hopping =
@@ -2164,9 +2279,9 @@ behaviors = {
 			while deltafromplayer( actor ) > 64 do
 				yield()
 			end
-			actor.vel.x = 1
+			set_player_relative_velocity( actor, 1 )
 			wait( 0.4 )
-			actor.vel.x = 0.8
+			set_player_relative_velocity( actor, 0.8 )
 
 			standard_attack_warning( actor )
 			actor.vel.x = -3
@@ -2175,14 +2290,14 @@ behaviors = {
 		function(actor)
 			actor.pos.x = stage_left_appear_pos()
 			actor.flipx = false
-			actor.vel.x = 1.5
+			set_player_relative_velocity( actor, 1.5 )
 			while deltafromplayer( actor ) < -24 do
 				yield()
 			end
-			actor.vel.x = 0.9
+			set_player_relative_velocity( actor, 0.9 )
 			wait( 0.2 )
 			standard_attack_warning( actor )
-			actor.vel.x = 4
+			set_player_relative_velocity( actor, 4 )
 		end,
 	pounce_from_left =
 		function(actor)
@@ -2196,7 +2311,7 @@ behaviors = {
 			local stored_collision_planes = actor.collision_planes_inc
 
 			actor.current_animation_name = 'run'
-			actor.vel.x = 1.25
+			set_player_relative_velocity( actor, 1.25 )
 			while deltafromplayer( actor ) < restpos do
 				yield()
 			end
@@ -2206,17 +2321,16 @@ behaviors = {
 				actor.colorshift = 0
 
 				actor.current_animation_name = 'run'
-				actor.vel.x = 0.95
+				set_player_relative_velocity( actor, 0.95 )
 				wait( 1 )
 
 				actor.current_animation_name = 'coil'
-				actor:flash( 0.5 )
-				wait( 0.5 )
+				standard_attack_warning( actor )
 
 				actor.collision_planes_inc = stored_collision_planes
 				actor.current_animation_name = 'pounce'
 				actor:jump()
-				actor.vel.x = 2.5
+				set_player_relative_velocity( actor, 2.5 )
 
 				while not actor:grounded() do
 					yield()
