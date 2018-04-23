@@ -1370,9 +1370,6 @@ function level:update_mapsegments()
     erase_elements( self.mapsegments, function(segment)
         segment:update()
         local farleft = segment:right() < left
-        if farleft then
-            -- debug_print( 'will delete segment ' .. segment.worldx )
-        end
         return farleft
     end )
 
@@ -1441,7 +1438,7 @@ local item_tree =
         }
     }
 
-local thingy_spacing = 14
+local thingy_spacing = 16
 
 local thingy = inheritsfrom( nil )
 
@@ -1488,7 +1485,6 @@ function crafting:update_pending_calls()
 
     erase_elements( self.pending_calls, function(call)
         if now >= call.deadline then
-            debug_print( 'calling ' .. now )
             call.fn()
             return true
         end
@@ -1530,6 +1526,12 @@ function crafting:draw()
     if self.activated ~= nil then
         self.rootthingy:draw( self.pos, true )
     end
+
+    if self.activated == self.rootthingy then
+        draw_shadowed( self.pos.x + 4, self.pos.y + 12, 0, 1, 2, function(x,y)
+            print_centered_text( 'craft', x, y, 4 )
+        end )
+    end
 end
 
 function thingy:new( crafting, parent, item_config )
@@ -1568,6 +1570,12 @@ function thingy:flashing()
     return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
 end
 
+function thingy:available()
+    if self.homebutton or #self.children > 0 then return true end
+    -- todo!!!
+    return false
+end
+
 function thingy:drawself( basepos )
     local selfpos = basepos + self.pos
 
@@ -1579,7 +1587,14 @@ function thingy:drawself( basepos )
     end
 
     draw_color_shifted( colorize, function()
-        spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
+
+        local basecolorshift = colorize
+        if basecolorshift == 0 and not self:available() then
+            basecolorshift = 1
+        end
+        draw_color_shifted( basecolorshift, function()        
+            spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
+        end )
 
         local iconcolorshift = colorize
         if iconcolorshift == 0 and #self.children > 0 then
@@ -1700,6 +1715,12 @@ function thingy:collapse( recursive )
 end
 
 function thingy:activate()
+    if not self:available() then
+        -- unavailable
+        self:flash( 0.05 )
+        return
+    end
+
     self.crafting:on_activating( self )
 
     local flashduration = 0.25
@@ -1713,7 +1734,6 @@ function thingy:activate()
         end
 
         self.crafting:on_activating_item( self )
-
     else
         -- container. Expand children.
 
@@ -1721,8 +1741,6 @@ function thingy:activate()
 
         flashduration = 0.15
         local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 0
-
-        debug_print( myindex )
 
         for i = 1, #self.children do
             local child = self.children[ i ]
@@ -1814,7 +1832,7 @@ end
 --level creation
 music()
 
-local crafting_ui = crafting:new( vector:new( 96, 18 ))
+local crafting_ui = crafting:new( vector:new( 96, 2 + thingy_spacing + 2 ))
 local current_level = nil
 
 local game_state = 'title'
