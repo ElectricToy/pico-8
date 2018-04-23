@@ -237,6 +237,9 @@ X hunger flash when nearly dead (and health etc)
 - Item distribution (Liam): look for 'shoulddrop = function(level)'
     + craft balancing (Liam): look for 'requirements'
     + item power (Liam): look for 'oncreated'
+- Apples (Jeff)
+- Bananas (Jeff)
+- fast/slow
 - Title screen (Jeff)
 - Fast/slow run periods (Jeff)
 - Difficulty ramp (Jeff)
@@ -312,7 +315,7 @@ Run from the night
 Survival Marathon
 MarathonCraft
 Sonicraft
-
+Survival Run 
 
 
 
