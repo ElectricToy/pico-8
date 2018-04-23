@@ -2142,7 +2142,10 @@ function draw_ui()
 				else sprite = empty_sprite end
 
 				if sprite > 0 then
-					spr( sprite, left + x, top )
+					local flashrate = stat > 2 and 0 or ( 3 - stat )
+					draw_color_shifted( ( flashrate > 0 and flicker( current_level:time(), flashrate ) ) and 8 or 0, function()
+						spr( sprite, left + x, top )
+					end )
 				end
 			end
 		end
@@ -2208,40 +2211,29 @@ function draw_ui()
 
 	end
 
-	function draw_ui_title()
-		
-		spr( 148, 32, 32, 12, 4 )
-
-		draw_shadowed( 64, 0, function(x,y)
-			print_centered_text( 'press z to start', x, y + 102, 12 )
-		end )
-	end
-
 	function draw_ui_gameover()
-		-- todo
 		draw_shadowed( 64, 64, function(x,y)
 			print_centered_text( current_level.player.deathcause, x, y, 8 )
 		end )
 	end
 
-	function draw_ui_gameover_fully()
+	if game_state == 'playing' then
+		draw_ui_playing()
+	elseif game_state == 'title' then
+		spr( 148, 16, 32, 12, 4 )
+
+		draw_shadowed( 64, 0, function(x,y)
+			print_centered_text( 'press z to start', x, y + 102, 12 )
+		end )
+	elseif game_state == 'gameover_dying' then
+		draw_ui_gameover()
+	elseif game_state == 'gameover' then
 		draw_ui_gameover()
 
 		draw_shadowed( 64, 0, function(x,y)
 			print_centered_text( 'press z to play again', x, y + 102, 12 )
-			print_centered_text( 'coins: ' .. current_level.player.coins, x, y + 34, 11 )
+			print_centered_text( 'score: ' .. current_level.player.coins, x, y + 16, 10 )
 		end )
-
-	end
-
-	if game_state == 'playing' then
-		draw_ui_playing()
-	elseif game_state == 'title' then
-		draw_ui_title()
-	elseif game_state == 'gameover_dying' then
-		draw_ui_gameover()
-	elseif game_state == 'gameover' then
-		draw_ui_gameover_fully()
 	end
 
 

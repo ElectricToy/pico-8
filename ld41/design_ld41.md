@@ -227,17 +227,18 @@ X SFX
 
 ## FINAL POLISH
 
+X Apples (Jeff)
+X Bananas (Jeff)
+X Small rock (Liam/Jeff)
+X Mushroom art
+X hunger flash when nearly dead (and health etc)
+~~- Day/night cycle with darkness, torch (Jeff)~~
+~~- Snake (Jeff/Liam??)~~
 - Item distribution (Liam): look for 'shoulddrop = function(level)'
     + craft balancing (Liam): look for 'requirements'
     + item power (Liam): look for 'oncreated'
-- Apples (Jeff)
-- Bananas (Jeff)
 - Title screen (Jeff)
-~~- Day/night cycle with darkness, torch (Jeff)~~
 - Fast/slow run periods (Jeff)
-~~- Snake (Jeff/Liam??)~~
-- Small rock (Liam/Jeff)
-X Mushroom art
 - Difficulty ramp (Jeff)
     + jump quest: no creatures, rocks only, until jump
     + torch quest: no creatures, small rocks only, specific items for torch, done when create torch, then sunset immediately
@@ -248,7 +249,6 @@ X Mushroom art
     + PERPETUAL DIFFICULTY RAMP
     + Subsequent plays start on second day
 - performance problem when you craft something
-- hunger flash when nearly dead (and health etc)
 
 # Draw Tech
 
