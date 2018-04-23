@@ -404,7 +404,6 @@ function actor:new( level, x, y, wid, hgt )
 		alive = true,
 		pos = vector:new( x, y ),
 		vel = vector:new(),
-		depth = 0,
 		offset = vector:new(),
 		collision_size = vector:new( establish( wid, 0 ), establish( hgt, 0 )),
 		collision_planes_inc = 1,
@@ -418,7 +417,6 @@ function actor:new( level, x, y, wid, hgt )
 		current_animation_name = nil,
 		flipy = false,
 		damage = 2,
-		parallaxslide = 0,
 		deathcolorshift = -1,
 		colorshift = 0,
 		flashamount = 0,
@@ -518,8 +516,6 @@ function actor:update( deltatime )
 		end
 	end
 
-	self.pos.x += self.parallaxslide * current_player.vel.x
-
 	local liveleft, liveright = self.level:live_actor_span()
 	if self:collision_br().x + 8 < liveleft then
 		self.active = false
@@ -615,10 +611,12 @@ end
 local player = inheritsfrom( actor )
 function player:new( level )
 	local o = actor:new( level, 0, -14, 8, 14 )
+
+	o.vel.x = 1		-- player speed
+
 	o.immortal = false
+
 	o.do_dynamics = true
-	o.depth = -100
-	o.vel.x = 1
 	o.animations[ 'run' ] = animation:new( 32, 6, 1, 2 )
 	o.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 )
 	o.current_animation_name = 'run'
@@ -689,7 +687,8 @@ function player:add_coins( amount )
 end
 
 function player:drain_satiation( amount )
-	if self:dead() then return end
+	if self:dead() or self.immortal then return end
+
 	self.satiation -= amount
 
 	if self.satiation < 0 then
@@ -820,7 +819,7 @@ function pickup:new( level, itemname, item, x )
 	o.collision_planes_inc = 1
 	o.may_player_pickup = true
 	o.damage = 0
-	o.floatbobamplitude = 1
+	o.floatbobamplitude = 2
 
 	local swirl = animation:new( 25, 7, 1, 1 )
 	swirl.style = 'stop'
@@ -833,10 +832,8 @@ end
 function pickup:on_collision( other )
 	self:on_pickedup_by( other )
 
-	if true then	-- todo
-		self:superclass().on_collision( self, other )
-		sfx(33)
-	end
+	self:superclass().on_collision( self, other )
+	sfx(33)
 end
 
 function pickup:on_pickedup_by( other )
@@ -1056,9 +1053,10 @@ function level:new( inventory )
 		tick_count = 0,
 		pending_calls = {},
 		inventory = inventory,
+		last_creation_cell = 0,
 	}
 	o.creation_records = {
-		coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
+		coin     = { chance =   100, earliestnext =   64, interval = 8, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
 		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
 		creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
 		material = { chance =   80, earliestnext = 64, interval = 24, create = function(level, creation_point)
@@ -1078,6 +1076,10 @@ function level:new( inventory )
 	finishedobject.player = player:new( finishedobject )
 
 	return finishedobject
+end
+
+function level:creation_cell()
+	return flr( self.player.pos.x / 8 )
 end
 
 function level:time()
@@ -1195,13 +1197,29 @@ function level:update()
 		return not actor.active
 	end)
 
-	sort( self.actors, function( a, b )
-		return a.depth < b.depth
-	end )
+	-- put the player atop everything else
+	del( self.actors, self.player )
+	add( self.actors, self.player )
+
+	-- fix wrapping
+	local limit = 32000
+	if self.player.pos.x >= limit then
+		for actor in all( self.actors ) do
+			actor.pos.x -= limit
+		end
+
+		for _, record in pairs( self.creation_records ) do
+			record.earliestnext -= limit
+		end
+
+		for segment in all( self.mapsegments ) do
+			segment.worldx -= limit
+		end
+	end
 end
 
 function level:camera_pos()
-	return vector:new( -64, -96 ) + vector:new( self.player.pos.x + 32, 0 )
+	return vector:new( self.player.pos.x - 32, -96 )
 end
 
 function level:timeofday()
@@ -1231,12 +1249,6 @@ function level:draw()
 
 	camera( cam.x, cam.y )
 
-	self:eachactor( function( actor )
-		if actor.depth > 0 then
-			actor:draw()
-		end
-	end )
-
 	drawgrass()
 
 	camera( cam.x, cam.y )
@@ -1246,9 +1258,7 @@ function level:draw()
 	end
 
 	self:eachactor( function( actor )
-		if actor.depth <= 0 then
-			actor:draw()
-		end
+		actor:draw()
 	end )
 end
 
@@ -1258,16 +1268,15 @@ function creature:new( level, x )
 	local whichcreature = rand_int( 3, 3 )
 
 	local y = -16
-	local wid = 16
+	local wid = 14
 	local hgt = 7
 
 	if whichcreature == 3 then
-            hgt = 15
+        hgt = 14
 	end
 
 	local o = actor:new( level, x, y, wid, hgt )
 	o.do_dynamics = true
-	o.depth = -10
 	o.current_animation_name = 'run'
 	o.jumpforce = 1.5
 	o.whichcreature = whichcreature
@@ -1340,10 +1349,10 @@ function stone:new( level, x )
 	local sprite = { 136, 130, 164 }
 	local spritewidth =  { 1, 2, 3 }
 	local spriteheight = { 1, 2, 2 }
-	local spriteoffsetx = { -1, -4, -4 }
-	local spriteoffsety = { -1, -2, -2 }
-	local collisionwid = { 6, 12, 16 }
-	local collisionhgt = { 6, 12, 12 }
+	local spriteoffsetx = { -3, -4, -4 }
+	local spriteoffsety = { -3, -2, -2 }
+	local collisionwid = { 4, 12, 16 }
+	local collisionhgt = { 4, 12, 12 }
 	local damage = { 1, 2, 2 }
 
 	local o = actor:new( level, x, -collisionhgt[ size ], 0, 0 )
@@ -1412,7 +1421,9 @@ end
 
 
 function level:create_props()
-	local _, liveright = self:live_actor_span()
+	if self.last_creation_cell == self:creation_cell() then return end
+
+	self.last_creation_cell = self:creation_cell()
 
 	self:maybe_create( stone, 'stone' )
 	self:maybe_create( coin, 'coin' )
@@ -2228,15 +2239,14 @@ function draw_ui()
 	end
 
 
+	-- todo!!! debug
 	if false then
 		draw_shadowed( 124, 2, function(x,y)
+			print_rightaligned_text( 't: ' ..flr( current_level:time() ), x, y, 6 )
+			y += 8
+			print_rightaligned_text( 'x: ' .. flr( current_player.pos.x ), x, y, 6 )
+			y += 8
 			print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-			y += 8
-			print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
-			y += 8
-			print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
-			y += 8
-			print_rightaligned_text( 'coins : ' .. #current_level:actors_of_class( coin ), x, y, 6 )
 			y += 8
 		end )
 	end
@@ -2311,22 +2321,15 @@ behaviors = {
 		end,
 	maybe_jump = 
 		function(actor)
-			local willjump = rand_int( 1, 1 ) -- 0 = false, 1 = true
-			local restpos = 128
-
-			actor.pos.x = stage_right_appear_pos()
-			
-			actor.current_animation_name = 'run'
 			actor.vel.x = 0
+			actor.jumpforce = 3
 
-			wait( 0.2 )
-			standard_attack_warning( actor )
-
-			while deltafromplayer( actor ) < restpos do
+			while deltafromplayer( actor ) > 52 do
 				yield()
 			end
 
-			if willjump > 0 then
+			if pctchance(50) then
+				standard_attack_warning( actor )
 				actor:jump()
 			end
 		end,
