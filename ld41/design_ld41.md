@@ -229,21 +229,6 @@ Background sprites (e.g. trees, near hills)
 Ground tiles with platforms
 Actor sprites
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Items
 
 Auto Items (Get used the moment you pick them up)

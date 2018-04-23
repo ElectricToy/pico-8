@@ -848,14 +848,18 @@ end
 
 -- pickups
 local pickup = inheritsfrom( actor )
-function pickup:new( level, x, animframe, fn_on_pickup )
-    local newobj = actor:new( level, x, -16, 6, 6 )
-    newobj.animations[ 'idle' ] = animation:new( animframe ) 
+function pickup:new( level, itemname, item, x )
+    local newobj = actor:new( level, x, -10, 6, 6 )     -- todo randomize height somewhat
+
+    local sprite = item.sprite
+
+    newobj.itemname = itemname
+    newobj.item = item
+    newobj.animations[ 'idle' ] = animation:new( sprite ) 
     newobj.current_animation_name = 'idle'
     newobj.collision_planes_inc = 1
     newobj.may_player_pickup = true
     newobj.damage = 0
-    newobj.fn_on_pickup = fn_on_pickup
     newobj.floatbobamplitude = 1
 
     local swirl = animation:new( 25, 7, 1, 1 )
@@ -867,21 +871,141 @@ function pickup:new( level, x, animframe, fn_on_pickup )
 end
 
 function pickup:on_pickedup_by( other )
-    self.fn_on_pickup( self, other )
+    self.level.inventory:acquire( self.itemname )
+
     self:superclass().on_pickedup_by( self, other )
+end
+
+-- inventory
+local items = {
+    rawmeat = { 
+        sprite = 19,
+        showinv = true,
+    },
+    mushroom = { 
+        sprite = 20,
+        showinv = true,
+        shoulddrop = function(level)
+            return pctchance( 1 )
+        end
+    },
+    wheat = { 
+        sprite = 21,
+        showinv = true,
+        shoulddrop = function(level)
+            return pctchance( 1 )
+        end
+    },
+    stick = { 
+        sprite = 22,
+        showinv = true,
+        shoulddrop = function(level)
+            return pctchance( 1 )
+        end
+    },
+    oil = { 
+        sprite = 23,
+        showinv = true,
+        shoulddrop = function(level)
+            return pctchance( 1 )
+        end
+    },
+    metal = { 
+        sprite = 24,
+        showinv = true,
+        shoulddrop = function(level)
+            return pctchance( 1 )
+        end
+    },
+
+    --
+
+    bow = { 
+        sprite = 13,
+        requirements = { stick = 4, metal = 2 },
+        oncreated = function(level)
+        end 
+    },
+    arrow = { 
+        sprite = 14,      
+        showinv = true,
+        requirements = { stick = 1, metal = 1 },
+        oncreated = function(level)
+        end 
+    },
+    armor = { 
+        sprite =  7,      
+        requirements = { metal = 3, oil = 2 },
+        oncreated = function(level)
+        end 
+    },
+    cookedmeat = { 
+        sprite = 10, 
+        requirements = { rawmeat = 1, torch = 1 },
+        oncreated = function(level)
+        end 
+    },
+    stew = { 
+        sprite = 11,       
+        requirements = { mushroom = 5, rawmeat = 3 },
+        oncreated = function(level)
+        end 
+    },
+    pizza = { 
+        sprite = 12,      
+        requirements = { wheat = 3, mushroom = 3, rawmeat = 3 },
+        oncreated = function(level)
+        end 
+    },
+    torch = { 
+        sprite = 15,      
+        requirements = { oil = 1, stick = 2 },
+        oncreated = function(level) 
+        end 
+    },
+
+    home = { sprite = 74 },
+}
+
+local inventory = inheritsfrom( nil )
+function inventory:new()
+    local newobj = {
+        itemcounts = {}
+    }
+    return setmetatable( newobj, self )
+end
+
+function inventory:item_count( type )
+    return establish( self.itemcounts[ type ], 0 )
+end
+
+function inventory:acquire( type )
+    if not self.itemcounts[ type ] then
+        self.itemcounts[ type ] = 1
+    else
+        self.itemcounts[ type ] += 1
+
+        if self.itemcounts[ type ] > 9 then self.itemcounts[ type ] = 9 end
+    end
+end
+
+function inventory:use( type, count )
+    assert( self:item_count( type ) >= count )
+    self.itemcounts[ type ] -= count
 end
 
 -- level
 
 local level = inheritsfrom( nil )
-function level:new()
+function level:new( inventory )
     local newobj = {
         actors = {},
         mapsegments = {},
         ground_decorations = {},
         horizon_decorations = {},
         tick_count = 0,
-        pending_calls = {},        
+        pending_calls = {},
+        inventory = inventory,
     }
     newobj.creation_records = {
         coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( newobj:time() / 3 ) * sin( newobj:time() / 11 ) > 0.25 end },
@@ -889,10 +1013,14 @@ function level:new()
         tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end },
         shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end  },
         creature = { chance =    0.1, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
+        material = { chance =   100, earliestnext = 128, interval = 4 },
     }
 
-    newobj.player = player:new( newobj )
-    return setmetatable( newobj, self )
+    local finishedobject = setmetatable( newobj, self )
+
+    finishedobject.player = player:new( finishedobject )
+    
+    return finishedobject
 end
 
 function level:time()
@@ -1360,11 +1488,26 @@ function level:create_props()
     self:maybe_create( tree, 'tree' )
     self:maybe_create( shrub, 'shrub' )
 
-    if pctchance( 0.25 ) then
-        local pickup = pickup:new( self, liveright - 2, 7, function( pickup, actor )
-            actor.armor = actor.max_armor
-        end )
+    local _, liveright = self:live_actor_span()
+    local creation_point = liveright - 2
+
+    local record = self.creation_records[ 'material' ]
+    if record.earliestnext < creation_point then
+        for itemname, type in pairs( items ) do
+            if type.shoulddrop ~= nil then
+                if type.shoulddrop( self ) then
+                    local pickup = pickup:new( self, itemname, type, liveright - 2, type.sprite )
+                    -- todo
+                end
+            end
+        end
+        record.earliestnext = creation_point + record.interval
     end
+    -- if pctchance( 0.25 ) then
+    --     local pickup = pickup:new( self, liveright - 2, 7, function( pickup, actor )
+    --         actor.armor = actor.max_armor
+    --     end )
+    -- end
 end
 
 function level:create_coins()
@@ -1421,33 +1564,63 @@ end
 -->8
 --crafting
 
+local inventorydisplay = inheritsfrom( nil )
+function inventorydisplay:new( level )
+    local newobj = {
+        level = level,
+        itemdrawinfo = {},
+    }
+    return setmetatable( newobj, self )
+end
+
+function inventorydisplay:update()
+end
+
+function inventorydisplay:draw()
+
+    local left = 64
+    local top = 128 - 2 - 9 - 6
+    local i = 0
+    for itemname, item in pairs( items ) do
+        if item.showinv then
+            local x = left + i * 9
+            spr( item.sprite, x, top )
+            local count = self.level.inventory:item_count( itemname )
+            draw_shadowed( x + 2, top + 9, 0, 1, 2, function(x,y)
+                print( '' .. count, x, y, 12 )
+            end )
+            i += 1
+        end
+    end
+end
+
 local item_tree =
     -- root
-    { sprite = 0, action = nil,
+    { item = nil,
         children = {
             -- light
-            { sprite = 15, action = nil },          
+            { item = 'torch' },          
 
             -- food
-            { sprite = 10, action = nil,            
+            { item = 'cookedmeat',            
                 children = {
-                    { sprite = 12, action = nil },  
-                    { sprite = 10, action = nil },  
-                    { sprite = 11, action = nil },  
+                    { item = 'pizza' },  
+                    { item = 'cookedmeat' },  
+                    { item = 'stew' },  
                 }
             },
 
             -- weapons
-            { sprite = 14, action = nil,
+            { item = 'arrow',
                 children = {
-                    { sprite = 13, action = nil },      
-                    { sprite = 7, action = nil },      
-                    { sprite = 14, action = nil },      
+                    { item = 'bow' },      
+                    { item = 'armor' },      
+                    { item = 'arrow' },      
                 }
             },
 
             -- 'home'
-            { sprite = 74, action = nil },
+            { item = 'home' },
         }
     }
 
@@ -1456,8 +1629,9 @@ local thingy_spacing = 20
 local thingy = inheritsfrom( nil )
 
 local crafting = inheritsfrom( nil )
-function crafting:new( pos )
+function crafting:new( level, pos )
     local newobj = {
+        level = level,
         pos = pos,
         tick_count = 0,
         pending_calls = {},        
@@ -1582,8 +1756,8 @@ function thingy:new( crafting, parent, item_config )
     local newobj = {
         crafting = crafting,
         parent = parent,
-        sprite = item_config.sprite,
-        action = item_config.action,
+        item = items[ item_config.item ],
+        sprite = item_config.item ~= nil and items[ item_config.item ].sprite or nil,
         children = {},
         pos = vector:new( 0, 0 ),
         destination = nil,
@@ -1614,16 +1788,35 @@ function thingy:flashing()
     return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
 end
 
+function thingy:recursively_usable()
+    if self.homebutton then return true end
+    if #self.children == 0 and self:available() then return true end
+
+    -- i'm available if any of my children are available.
+    for child in all( self.children ) do
+        if child:recursively_usable() then
+            return true
+        end
+    end
+    return false
+end
+
 function thingy:available()
     if self.homebutton or #self.children > 0 then return true end
-    -- todo!!!
+
+    for itemname, count in pairs( self.item.requirements ) do
+        if self.crafting.level.inventory:item_count( itemname ) < count then
+            return false
+        end
+    end
+
     return true
 end
 
 function thingy:drawself( basepos )
     local selfpos = basepos + self.pos
 
-    if self.sprite == 0 then return end
+    if self.sprite == nil then return end
 
     local colorize = 0
     if self:flashing() and flicker( self:flash_age(), 2 ) then
@@ -1633,7 +1826,7 @@ function thingy:drawself( basepos )
     draw_color_shifted( colorize, function()
 
         local basecolorshift = colorize
-        if basecolorshift == 0 and not self:available() then
+        if basecolorshift == 0 and not self:recursively_usable() then
             basecolorshift = 1
         end
         draw_color_shifted( basecolorshift, function()        
@@ -1771,11 +1964,19 @@ function thingy:activate()
     local flashduration = 0.25
 
     -- leaf node?
-    if self.parent ~= nil and #self.children == 0 then
+    if self.parent ~= nil and #self.children == 0 and self.item ~= nil then
         -- yes. do what we do
 
-        if self.action ~= nil then
-            self.action()
+        -- remove ingredients
+        for itemname, count in pairs( self.item.requirements ) do
+            if self.crafting.level.inventory:use( itemname, count ) then
+                return false
+            end
+        end
+
+        local action = self.item.oncreated
+        if action ~= nil then
+            action()
         end
 
         self.crafting:on_activating_item( self, true )
@@ -1879,14 +2080,17 @@ end
 --level creation
 music()
 
-local crafting_ui = crafting:new( vector:new( 96, 2 + thingy_spacing + 2 ))
 local current_level = nil
+local crafting_ui = nil
+local inventory_display = nil
 
 local game_state = 'title'
 local current_level = nil
 
 function restart_world()
-    current_level = level:new()
+    current_level = level:new( inventory:new() )
+    crafting_ui = crafting:new( current_level, vector:new( 96, 2 + thingy_spacing + 2 ))
+    inventory_display = inventorydisplay:new( current_level )
 
     game_state = 'playing'
 end
@@ -1927,6 +2131,7 @@ function _update60()
             end
 
             crafting_ui:update()
+            inventory_display:update()
 
             -- manual movement
             if false then
@@ -2084,6 +2289,7 @@ function draw_ui()
         iconsy += 9
 
         crafting_ui:draw()
+        inventory_display:draw()
     end
 
     function draw_ui_title()
