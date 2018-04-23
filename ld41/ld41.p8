@@ -5,7 +5,7 @@ __lua__
 -- by jeff and liam wofford 
 -- http://www.electrictoy.co
 
--- u⬆️ d⬇️ l⬅️ r➡️ z🅾️ x❎
+-- uâ¬†ï¸ dâ¬‡ï¸ lâ¬…ï¸ râž¡ï¸ zðŸ…¾ï¸ xâŽ
 -->8
 -- general utilities
 
@@ -165,6 +165,10 @@ vector = inheritsfrom( nil )
 function vector:new( x, y )
     local newobj = { x = establish( x, 0 ), y = establish( y, establish( x, 0 )) }
     return setmetatable( newobj, self )
+end
+
+function vector:copy()
+    return vector:new( self.x, self.y )
 end
 
 function vector:tostring()
@@ -606,6 +610,9 @@ function actor:jump( amount )
     sfx(32)
 end
 
+function actor:postdraw( drawpos )
+end
+
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
@@ -628,6 +635,9 @@ function actor:draw()
                 sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
                       drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, self.flipx, self.flipy )
             end
+
+            self:postdraw( drawpos )
+
         end )
 
         --draw shadow
@@ -648,6 +658,7 @@ end
 local player = inheritsfrom( actor )
 function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
+    newobj.immortal = true
     newobj.do_dynamics = true
     newobj.want_shadow = true
     newobj.depth = -100
@@ -746,9 +757,9 @@ end
 
 function player:add_health( amount )
     if amount > 1 then
-	sfx(35)
+    sfx(35)
     else
-	sfx(34)
+    sfx(34)
     end
 
 
@@ -768,7 +779,7 @@ function player:start_invulnerable()
 end
 
 function player:take_damage( amount )
-    if self.invulnerable or self:dead() then return end
+    if self.invulnerable or self.immortal or self:dead() then return end
 
     if amount <= 0 then return end
 
@@ -806,7 +817,7 @@ function player:grab()
         ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
             or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
         pickup:on_pickedup_by( self )
-	sfx(33)
+    sfx(33)
     end
 end
 
@@ -1157,7 +1168,7 @@ local behaviors = {}
 
 -- creature
 function creature:new( level, x )
-    local whichcreature = rand_int( 1, 2 )
+    local whichcreature = 2 --todo!!! rand_int( 1, 2 )
 
     local y = -16
     local wid = 16
@@ -1169,6 +1180,7 @@ function creature:new( level, x )
     newobj.want_shadow = true
     newobj.current_animation_name = 'run'
     newobj.jumpforce = 1.5
+    newobj.whichcreature = whichcreature
 
     -- tiger
     if whichcreature == 1 then
@@ -1179,11 +1191,11 @@ function creature:new( level, x )
         newobj.animations[ 'pounce' ] = newobj.animations[ 'run' ]
         newobj.behavior = cocreate( behaviors.slide_left_fast )
     elseif whichcreature == 2 then
-        newobj.animations[ 'stop' ] = animation:new( 80, 1, 2, 1 )         
-        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
         newobj.animations[ 'run' ] = animation:new( 80, 3, 2, 1 ) 
         newobj.animations[ 'coil' ] = animation:new( 86, 1, 2, 1 ) 
         newobj.animations[ 'pounce' ] = animation:new( 88, 1, 2, 1 ) 
+        newobj.animations[ 'stop' ] = newobj.animations[ 'pounce' ]
+        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
         newobj.behavior = cocreate( behaviors.pounce_from_left )
     end
 
@@ -1211,6 +1223,16 @@ function creature:update( deltatime )
     end
 
     self:superclass().update( self, deltatime )    
+end
+
+function creature:postdraw( drawpos )
+    self:superclass().postdraw( self, drawpos  )
+
+    if self.whichcreature == 2 then -- snake
+        for i = 1,4 do
+            spr( 88, drawpos.x - 8*i, drawpos.y )
+        end
+    end
 end
 
 -- stone
@@ -1348,9 +1370,6 @@ function level:update_mapsegments()
     erase_elements( self.mapsegments, function(segment)
         segment:update()
         local farleft = segment:right() < left
-        if farleft then
-            -- debug_print( 'will delete segment ' .. segment.worldx )
-        end
         return farleft
     end )
 
@@ -1368,8 +1387,419 @@ function level:update_mapsegments()
 end
 
 -->8
---jeff's code
+--input
+local buttonstates = {}
+local lastbuttonstates = {}
+function wentdown( btn )
+    return buttonstates[ btn ] and not lastbuttonstates[ btn ]
+end
 
+function isdown( btn )
+    return buttonstates[ btn ]
+end
+
+function update_buttons()
+    lastbuttonstates = shallowcopy( buttonstates )
+
+    for i = 0,5 do
+        buttonstates[ i ] = btn( i )
+    end
+end
+
+-->8
+--crafting
+
+local item_tree =
+    -- root
+    { sprite = 0, action = nil,
+        children = {
+            -- light
+            { sprite = 15, action = nil },          
+
+            -- food
+            { sprite = 10, action = nil,            
+                children = {
+                    { sprite = 10, action = nil },  
+                    { sprite = 11, action = nil },  
+                    { sprite = 12, action = nil },  
+                }
+            },
+
+            -- weapons
+            { sprite = 13, action = nil,
+                children = {
+                    { sprite = 13, action = nil },      
+                    { sprite = 14, action = nil },      
+                }
+            },
+
+            -- 'home'
+            { sprite = 27, action = nil },
+        }
+    }
+
+local thingy_spacing = 16
+
+local thingy = inheritsfrom( nil )
+
+local crafting = inheritsfrom( nil )
+function crafting:new( pos )
+    local newobj = {
+        pos = pos,
+        tick_count = 0,
+        pending_calls = {},        
+        activated = nil,
+        homebutton = false,
+        lockout_input = false,
+    }
+
+    local resultself =  setmetatable( newobj, self )
+
+    resultself.rootthingy = thingy:new( resultself, nil, item_tree )
+    resultself.homebutton = resultself.rootthingy.children[ 4 ]
+    resultself.homebutton.homebutton = true
+    resultself.rootthingy:activate()
+
+    return resultself
+end
+
+function crafting:on_activating( thing )
+    self.activated = thing
+end
+
+function crafting:on_activating_item( thing )
+
+    self.lockout_input = true
+
+    if not thing.homebutton then
+        self:after_delay( 0.4, function()
+            self:reset()
+        end )
+    else
+        self:reset()
+    end
+end
+
+function crafting:update_pending_calls()
+    local now = self:time()
+
+    erase_elements( self.pending_calls, function(call)
+        if now >= call.deadline then
+            call.fn()
+            return true
+        end
+        return false
+    end )
+end
+
+function crafting:reset()
+    self.activated = nil
+    self.lockout_input = false
+    self.rootthingy:collapse( true )
+    self.rootthingy:activate()
+end
+
+function crafting:after_delay( delay, fn )
+    add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
+end
+
+function crafting:time()
+    return self.tick_count / 60.0
+end
+
+function crafting:update()
+    self.tick_count += 1
+
+    self:update_pending_calls()
+
+    if self.activated ~= nil then
+        self.activated:update_input()
+    end
+
+    self.rootthingy:update()
+end
+
+function crafting:draw()
+    self.rootthingy:draw( self.pos, false )
+
+    -- draw again, but only the activated branch
+    if self.activated ~= nil then
+        self.rootthingy:draw( self.pos, true )
+    end
+
+    if self.activated == self.rootthingy then
+        draw_shadowed( self.pos.x + 4, self.pos.y + 12, 0, 1, 2, function(x,y)
+            print_centered_text( 'craft', x, y, 4 )
+        end )
+    end
+end
+
+function thingy:new( crafting, parent, item_config )
+    local newobj = {
+        crafting = crafting,
+        parent = parent,
+        sprite = item_config.sprite,
+        action = item_config.action,
+        children = {},
+        pos = vector:new( 0, 0 ),
+        destination = nil,
+        lerpspeed = 0.1,
+        flashstarttime = nil,
+        flashendtime = nil,
+    }
+
+    local configchildren = item_config.children
+    for child in all( configchildren ) do
+        add( newobj.children, thingy:new( crafting, newobj, child ) )
+    end
+
+    return setmetatable( newobj, self )
+end
+
+function thingy:flash( duration )
+    self.flashstarttime = self.crafting:time()
+    self.flashendtime = self.flashstarttime + establish( duration, 1 )
+end
+
+function thingy:flash_age()
+    if self.flashstarttime == nil then return nil end
+    return self.crafting:time() - self.flashstarttime
+end
+
+function thingy:flashing()
+    return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
+end
+
+function thingy:available()
+    if self.homebutton or #self.children > 0 then return true end
+    -- todo!!!
+    return false
+end
+
+function thingy:drawself( basepos )
+    local selfpos = basepos + self.pos
+
+    if self.sprite == 0 then return end
+
+    local colorize = 0
+    if self:flashing() and flicker( self:flash_age(), 2 ) then
+        colorize = 8
+    end
+
+    draw_color_shifted( colorize, function()
+
+        local basecolorshift = colorize
+        if basecolorshift == 0 and not self:available() then
+            basecolorshift = 1
+        end
+        draw_color_shifted( basecolorshift, function()        
+            spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
+        end )
+
+        local iconcolorshift = colorize
+        if iconcolorshift == 0 and #self.children > 0 then
+            iconcolorshift = -1
+        end
+
+        draw_color_shifted( iconcolorshift, function()
+            spr( self.sprite, selfpos.x, selfpos.y )
+        end )
+    end )
+end
+
+
+function thingy:drawchildren( basepos, activatedonly )
+    for child in all( self.children ) do
+        child:draw( basepos, activatedonly )
+    end
+end
+
+function thingy:child_index( child )
+    for i = 1, #self.children do
+        if child == self.children[ i ] then
+            return i
+        end
+    end
+    return nil
+end
+
+function thingy:child_from_button( button )
+    if button == nil then return nil end
+
+    if button <= #self.children then
+        return self.children[ button ]
+    else
+        return nil
+    end
+end
+
+function thingy:has_activated_descendant()
+    if self.crafting.activated == self then return true end
+
+    for child in all( self.children ) do
+        if child:has_activated_descendant() then
+            return true
+        end
+    end
+    return false
+end
+
+function thingy:draw( basepos, activatedonly )
+    if activatedonly and not self:has_activated_descendant() then return end
+
+    local selfpos = basepos + self.pos
+
+    local drawselfontop = true
+
+    if not drawselfontop then
+        self:drawself( basepos )
+    end
+
+    self:drawchildren( selfpos:copy(), activatedonly )
+
+    if drawselfontop then
+        self:drawself( basepos )
+    end
+end
+
+function thingy:update()
+
+    if self.destination ~= nil then
+        function decisive_lerp( from, to, alpha )
+            local result = lerp( from, to, alpha )
+            if abs( to - result ) < 0.25 then
+                result = to
+            end
+            return result
+        end
+        self.pos.x = decisive_lerp( self.pos.x, self.destination.x, self.lerpspeed )
+        self.pos.y = decisive_lerp( self.pos.y, self.destination.y, self.lerpspeed )
+    end
+
+    for child in all( self.children ) do
+        child:update()
+    end    
+end
+
+function thingy:expand( parentindex, myindex )
+    -- 1 = left; 2 = right; 3 = up; 4 = down
+
+    local adjustedindex = myindex
+    -- todo!!!
+    -- if myindex == 1 then adjustedindex = parentindex end
+    -- if myindex == 3 then adjustedindex = ( parentindex == 1 ) and 3 or 1 end
+
+    if adjustedindex == 1 then
+        self.destination = vector:new( -thingy_spacing, 0 )
+    elseif adjustedindex == 2 then
+        self.destination = vector:new(  thingy_spacing, 0 )
+    elseif adjustedindex == 3 then
+        self.destination = vector:new( 0, -thingy_spacing )
+    elseif adjustedindex == 4 then
+        self.destination = vector:new( 0, 0 )
+    end
+end
+
+function thingy:collapse( recursive )
+    self.destination = vector:new( 0, 0 )
+
+    if self.homebutton then
+        self.destination = vector:new( 0, thingy_spacing )
+    end
+
+    if recursive then
+        for child in all( self.children ) do
+            child:collapse( recursive )
+        end
+    end
+end
+
+function thingy:activate()
+    if not self:available() then
+        -- unavailable
+        self:flash( 0.05 )
+        self.crafting:on_activating_item( self )
+        return
+    end
+
+    self.crafting:on_activating( self )
+
+    local flashduration = 0.25
+
+    -- leaf node?
+    if self.parent ~= nil and #self.children == 0 then
+        -- yes. do what we do
+
+        if self.action ~= nil then
+            self.action()
+        end
+
+        self.crafting:on_activating_item( self )
+    else
+        -- container. Expand children.
+
+        self.destination = vector:new( 0, 0 )
+
+        flashduration = 0.15
+        local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 0
+
+        for i = 1, #self.children do
+            local child = self.children[ i ]
+
+            child:expand( myindex, i )
+        end
+    end
+
+    if self.parent ~= nil then
+        self:flash( flashduration )
+    end
+
+end
+
+function thingy:update_input()
+
+    if self.crafting.lockout_input then return end
+
+    -- home button
+    if btnp( 3 ) and self.parent ~= nil then
+        self.crafting.homebutton:flash( 0.15 )
+        self.crafting:reset()
+    else 
+        local button = nil    
+        if btnp( 2 ) then
+            button = 3
+        elseif btnp( 1 ) then
+            button = 2
+        elseif btnp( 0 ) then
+            button = 1
+        end
+
+        local activated_child = self:child_from_button( button )
+
+        if activated_child ~= nil then
+
+            -- if non-leaf, collapse other children
+            if #activated_child.children > 0 then
+                for child in all( self.children ) do
+                    if activated_child ~= child then
+                        child:collapse()
+                    end
+                end
+            end
+
+            activated_child:activate()
+
+            -- if root, move down
+            if self.parent == nil then
+                -- todo
+                -- self.destination = vector:new( 0, thingy_spacing )
+            end
+        end
+
+    end
+end
+
+-->8
 --one-time setup
 
 function tidy_map()
@@ -1403,7 +1833,8 @@ end
 --level creation
 music()
 
-local current_level = level:new()
+local crafting_ui = crafting:new( vector:new( 96, 2 + thingy_spacing + 2 ))
+local current_level = nil
 
 local game_state = 'title'
 local current_level = nil
@@ -1432,24 +1863,9 @@ function level:update_creatures()
 end
 
 --main loops
-local buttonstates = {}
 function _update60()
 
-    -- convenient button processing
-
-    local lastbuttonstates = shallowcopy( buttonstates )
-
-    for i = 0,5 do
-        buttonstates[ i ] = btn( i )
-    end
-
-    function wentdown( btn )
-        return buttonstates[ btn ] and not lastbuttonstates[ btn ]
-    end
-
-    function isdown( btn )
-        return buttonstates[ btn ]
-    end
+    update_buttons()
 
     -- update game state logic
 
@@ -1463,6 +1879,8 @@ function _update60()
             if wentdown(5) then
                 player:grab()
             end
+
+            crafting_ui:update()
 
             -- manual movement
             if false then
@@ -1534,7 +1952,7 @@ function draw_ui()
         local iconstepx = 8
         
         local iconright = 126
-	local iconleft  = 19
+        local iconleft  = 19
 
         function draw_halveable_stat( pos, top, stat, max, full_sprite, half_sprite, empty_sprite )
 
@@ -1549,8 +1967,7 @@ function draw_ui()
 
                 if equivalent_x + 1 < stat then sprite = full_sprite 
                 elseif equivalent_x < stat then sprite = half_sprite
-		else sprite = empty_sprite end
-
+                else sprite = empty_sprite end
 
                 if sprite > 0 then
                     spr( sprite, left + x, top )
@@ -1558,23 +1975,23 @@ function draw_ui()
             end
         end
 
-	function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
-	
-	    local left = pos
+        function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
+        
+            local left = pos
 
-	    for i = 0, max - 1 do
-		local x = i * iconstepx
-		
-		local sprite = 0
+            for i = 0, max - 1 do
+            local x = i * iconstepx
+            
+            local sprite = 0
 
-		if i < stat then sprite = full_sprite
-		else sprite = empty_sprite end
+            if i < stat then sprite = full_sprite
+            else sprite = empty_sprite end
 
-		if sprite > 0 then
-		    spr( sprite, left + x, top )
-		end
-	    end
-	end
+            if sprite > 0 then
+                spr( sprite, left + x, top )
+            end
+            end
+        end
 
         local iconsy = 2
 
@@ -1597,7 +2014,7 @@ function draw_ui()
 
         -- draw player armor
 
-	draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
+        draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
         draw_shadowed( 6, iconsy + 1, 0, 1, 1, function(x,y)
             print( 'def', x, y, 13 )
         end )
@@ -1619,6 +2036,7 @@ function draw_ui()
 
         iconsy += 9
 
+        crafting_ui:draw()
     end
 
     function draw_ui_title()
@@ -1636,7 +2054,7 @@ function draw_ui()
         draw_ui_gameover()
 
         draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
-            print_centered_text( 'play again! z/x �✽�/❎', x, y, 12 )
+            print_centered_text( 'play again! z/x ????/âŽ', x, y, 12 )
         end )
 
     end
@@ -1654,16 +2072,16 @@ function draw_ui()
 
     -- draw debug
 
-    if true then
-        draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
+    if false then
+        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
             print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'coins : ' .. #current_level:actors_of_class( coin ), x, y, 6 )
-            y -= 8
+            y += 8
         end )
     end
 end
@@ -1748,6 +2166,7 @@ behaviors = {
     pounce_from_left =
         function(actor)
             local maxpounces = 3    -- todo based on level age
+            local restpos = -32
 
             local numpounces = rand_int( 1, maxpounces )
 
@@ -1759,7 +2178,7 @@ behaviors = {
             -- approach
             actor.current_animation_name = 'run'
             actor.vel.x = 1.25
-            while deltafromplayer( actor ) < -28 do
+            while deltafromplayer( actor ) < restpos do
                 yield()
             end
 
@@ -1798,7 +2217,7 @@ behaviors = {
                 
                 actor.colorshift = -1
 
-                while deltafromplayer( actor ) > -28 do
+                while deltafromplayer( actor ) > restpos do
                     yield()
                 end
             end
@@ -1818,25 +2237,25 @@ __gfx__
 007007000011122000111220002222209422222094222220022222200664dd2000222220009990000000dd004422222000094900000062000000c2d000000420
 00000000000122000001220000022200044420000444200002200000000622200022222000000000000006000222220000000900000002200000cd0000000020
 00000000000020000000200000002000002220000022200000222000000020000000200000000000000000000000000000000000000000000000000000000000
-d0d0d0d00000b000004000007000000000000000700a0000000b0000000dd0000000000040090009040090090000000000000000000000000000000000000000
-0000000d008b80000aa0000067e00000007cc0000a7a9000044b30000000dd000077700099990090099990090000000000000000000000000000000000000000
-d00000000878820009a000000eee000007cccd0009a9aa000045300000777d100766660079790090079790900000000000000000000000000000000000000000
-0000000d0888820009aa00000eee20000ccccd007a9a4a000004400007dddd100666660099994990099994900000000000000000000000000000000000000000
-d000000008822200009aa940002220000cccdd000aa4a490000055000dddd1100d666d0009949990099949900000000000000000000000000000000000000000
-0000000d00222000000444000000dd0000f4400000994900000005000011110000ddd00009999990099999900000000000000000000000000000000000000000
-d0000000000000000000000000000600000000000004900000000000000000000000000004094090409040900000000000000000000000000000000000000000
+d0d0d0d00000b000004000007000000000000000700a0000000b0000000dd0000000000040090009040090090004000000000000000000000000000000000000
+0000000d008b80000aa0000067e00000007cc0000a7a9000044b30000000dd000077700099990090099990090041400000000000000000000000000000000000
+d00000000878820009a000000eee000007cccd0009a9aa000045300000777d100766660079790090079790900414240000000000000000000000000000000000
+0000000d0888820009aa00000eee20000ccccd007a9a4a000004400007dddd100666660099994990099994904144424000000000000000000000000000000000
+d000000008822200009aa940002220000cccdd000aa4a490000055000dddd1100d666d0009949990099949900144420000000000000000000000000000000000
+0000000d00222000000444000000dd0000f4400000994900000005000011110000ddd00009999990099999900441440000000000000000000000000000000000
+d0000000000000000000000000000600000000000004900000000000000000000000000004094090409040900221220000000000000000000000000000000000
 0d0d0d0d000000000000000000000000000000000000000000000000000000000000000004094090409004090000000000000000000000000000000000000000
-00044400044440000044000000044400044440000004400000044400044440000044000000044400044440000004400011111111111010100000000000000000
-00444f004444f0ff4444400000444f004444f0440444440000444f004444f0ff4444400000444f004444f0dd0444440011111111010101010000000000000000
-0444ff00444ff0ff4444f0000444ff00444ff04404444f000444ff00444ff0f74444f0000444ff00444ff0d104444f0011111110101010000000000000000000
-044fff0000fff00f044ff000044fff0000fff0040044ff00044fff0000fff006044ff000044fff0000fff0010044ff0011110101000000000000000000000000
-000fff0044ffffff00fff000000fff00fffff444000fff0000076600d176676600fff00000076600767661110007660011101010000000000000000000000000
-004fff0040ff400000fff0f000ffff00f04ff000000fff040016760010666000007660f000766600606660000006760d11110000000000000000000000000000
-004fff0040fff00000fffff000ffff00f0fff000000fff4400166600106660000067667000f66600f06660000006661d11101000000000000000000000000000
-000fff0000fff00000fff000000fff0000fff000000fff0000066600006660000066600000066600006660000006660011010000000000000000000000000000
-000eee0000eee00000eee200000eee0000eee000000eee00000ddd0000ddd00000ddd100000ddd0000ddd000000ddd0010100000000000000000000000000000
-000eee2000eee20000eeee20000eeee000eeee00002eeee0000766d0007661000076661000076660007666000017666011000000000000000000000000000000
-000ee82008ee222000eeee80000ee880022ee880002eee80000666d0076611d00066666000066660011666600016666010100000000000000000000000000000
+00044400044440000044000000044400044440000004400000044400044440000044000000044400044440000004400011111111111010100555555555000000
+00444f004444f0ff4444400000444f004444f0440444440000444f004444f0ff4444400000444f004444f0dd0444440011111111010101015111111111500000
+0444ff00444ff0ff4444f0000444ff00444ff04404444f000444ff00444ff0f74444f0000444ff00444ff0d104444f0011111110101010005111111111500000
+044fff0000fff00f044ff000044fff0000fff0040044ff00044fff0000fff006044ff000044fff0000fff0010044ff0011110101000000005111111111500000
+000fff0044ffffff00fff000000fff00fffff444000fff0000076600d176676600fff00000076600767661110007660011101010000000005111111111500000
+004fff0040ff400000fff0f000ffff00f04ff000000fff040016760010666000007660f000766600606660000006760d11110000000000005111111111500000
+004fff0040fff00000fffff000ffff00f0fff000000fff4400166600106660000067667000f66600f06660000006661d11101000000000005111111111500000
+000fff0000fff00000fff000000fff0000fff000000fff0000066600006660000066600000066600006660000006660011010000000000005111111111500000
+000eee0000eee00000eee200000eee0000eee000000eee00000ddd0000ddd00000ddd100000ddd0000ddd000000ddd0010100000000000005111111111500000
+000eee2000eee20000eeee20000eeee000eeee00002eeee0000766d0007661000076661000076660007666000017666011000000000000005111111111500000
+000ee82008ee222000eeee80000ee880022ee880002eee80000666d0076611d00066666000066660011666600016666010100000000000000555555555000000
 00088840088e0244fff888800002e8f0022288ff4442e880000666d007660ddddd76666000017660011167661111676001000000000000000000000000000000
 0044f4400f80044000ffff4000fffff004200ff0004448f0001176d006600dd0006666d000ddd6600d10066000ddd66010000000000000000000000000000000
 0000f000ff00440000000040000040004400ff00000000f000006000d6001100000000d0000010001d00dd000000006001000000000000000000000000000000
