@@ -874,8 +874,8 @@ function level:new()
     newobj.creation_records = {
         coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( newobj:time() / 3 ) * sin( newobj:time() / 11 ) > 0.25 end },
         stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #newobj:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
-        tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 20 end },
-        shrub    = { chance =    1, earliestnext = -100, interval = 0 },
+        tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end },
+        shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end  },
         creature = { chance =    100, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
     }
 
@@ -1419,17 +1419,18 @@ local item_tree =
             -- food
             { sprite = 10, action = nil,            
                 children = {
+                    { sprite = 12, action = nil },  
                     { sprite = 10, action = nil },  
                     { sprite = 11, action = nil },  
-                    { sprite = 12, action = nil },  
                 }
             },
 
             -- weapons
             { sprite = 13, action = nil,
                 children = {
-                    { sprite = 13, action = nil },      
                     { sprite = 14, action = nil },      
+                    { sprite = 7, action = nil },      
+                    { sprite = 13, action = nil },      
                 }
             },
 
@@ -1543,7 +1544,7 @@ function thingy:new( crafting, parent, item_config )
         children = {},
         pos = vector:new( 0, 0 ),
         destination = nil,
-        lerpspeed = 0.1,
+        lerpspeed = 0.25,
         flashstarttime = nil,
         flashendtime = nil,
     }
@@ -1573,7 +1574,7 @@ end
 function thingy:available()
     if self.homebutton or #self.children > 0 then return true end
     -- todo!!!
-    return false
+    return true
 end
 
 function thingy:drawself( basepos )
