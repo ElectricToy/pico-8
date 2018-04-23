@@ -35,6 +35,7 @@ function establish( value, default )
 	return value
 end
 
+--todo!!
 local messagedur = 3
 local gamemessage = { text = '', time = nil }
 function message( text )
@@ -1008,8 +1009,6 @@ function level:new( inventory )
 	o.creation_records = {
 		coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
 		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
-		tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end },
-		shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end  },
 		creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
 		material = { chance =   80, earliestnext = 64, interval = 24 },
 	}
@@ -1277,7 +1276,7 @@ end
 
 local stone = inheritsfrom( actor )
 function stone:new( level, x )
-	local size = rand_int( 1, 3 )
+	local size = rand_int( 1, 2 )
 
 	local sprite = { 185, 167, 164 }
 	local spritewidth =  { 1, 2, 3 }
@@ -1328,41 +1327,6 @@ function coin:on_pickedup_by( other )
 	self:superclass().on_pickedup_by( self, other )
 end
 
-local tree = inheritsfrom( actor )
-function tree:new( level, x )
-	local scale = randinrange( 2, 4 )
-	local o = actor:new( level, x, -14 * scale, scale * 2 * 8, scale * 8 )
-	o.flipx = pctchance( 50 )
-	o.animations[ 'idle' ] = animation:new( 128, 1, 1, 2 )
-	o.current_animation_name = 'idle'
-	o.collision_planes_inc = 0
-	o.damage = 0
-	o.parallaxslide = randinrange( 0.5, 8.0 ) / (scale*scale)
-	o.depth = o.parallaxslide * 10
-	o.animations[ 'idle' ].drawscalex = scale
-	o.animations[ 'idle' ].drawscaley = scale
-
-	return setmetatable( o, self )
-end
-
-local shrub = inheritsfrom( actor )
-function shrub:new( level, x )
-	local scale = randinrange( 1, 2 )
-	local o = actor:new( level, x, 32 - 16 * scale, scale * 4 * 8, scale * 2 * 8 )
-	o.flipx = pctchance( 33 )
-	o.animations[ 'idle' ] = animation:new( 160, 1, 4, 2 )
-	o.current_animation_name = 'idle'
-	o.collision_planes_inc = 0
-	o.damage = 0
-	o.parallaxslide = -randinrange( 0.5, 1 ) / scale
-	o.depth = o.parallaxslide * 10
-	o.animations[ 'idle' ].drawscalex = scale
-	o.animations[ 'idle' ].drawscaley = scale
-
-	return setmetatable( o, self )
-end
-
-
 function level:maybe_create( class, classname )
 	local _, liveright = self:live_actor_span()
 	local creation_point = liveright - 2
@@ -1383,8 +1347,6 @@ function level:create_props()
 	local _, liveright = self:live_actor_span()
 
 	self:maybe_create( stone, 'stone' )
-	self:maybe_create( tree, 'tree' )
-	self:maybe_create( shrub, 'shrub' )
 	self:maybe_create( coin, 'coin' )
 
 	local _, liveright = self:live_actor_span()
@@ -1395,7 +1357,8 @@ function level:create_props()
 		for itemname, type in pairs( items ) do
 			if type.shoulddrop ~= nil then
 				if type.shoulddrop( self ) then
-					local pickup = pickup:new( self, itemname, type, liveright - 2, type.sprite )
+					pickup:new( self, itemname, type, liveright - 2, type.sprite )
+					break	-- drop just one thing at a time
 				end
 			end
 		end
@@ -1886,6 +1849,7 @@ function thingy:activate()
 		self.crafting:on_activating_item( self, true )
 		sfx(41)
 		inventory_display:on_tried_to_use( self.item.requirements )
+		message( 'for ' .. self.item.name )
 		return
 	end
 
@@ -1894,15 +1858,6 @@ function thingy:activate()
 	local flashduration = 0.25
 
 	if self.parent ~= nil and #self.children == 0 and self.item ~= nil then
-		-- have the requirements?
-		for itemname, count in pairs( self.item.requirements ) do
-			if count > self.crafting.level.inventory:item_count( itemname ) then
-				debug_print( 'failed ' .. itemname)
-				inventory_display:on_tried_to_use( self.item.requirements )
-				return false
-			end
-		end
-
 		-- yes
 		for itemname, count in pairs( self.item.requirements ) do
 			self.crafting.level.inventory:use( itemname, count )
