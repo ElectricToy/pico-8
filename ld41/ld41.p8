@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
 -- game title here
--- by jeff and liam wofford 
+-- by jeff and liam wofford
 -- http://www.electrictoy.co
 
 -->8
@@ -10,1450 +10,1324 @@ __lua__
 
 debug_lines = {}
 function debug_print( text )
-    add( debug_lines, text )
+	add( debug_lines, text )
 
-    while #debug_lines > 10 do
-        del_index( debug_lines, 1 )
-    end
+	while #debug_lines > 10 do
+		del_index( debug_lines, 1 )
+	end
 end
 
 function draw_debug_lines()
-    for i = 1, #debug_lines do
-        local line = debug_lines[ #debug_lines - i + 1 ]
-        print( line, 2, 7 * i, rel_color( 8, 1 - i ) )
-    end
-    print( '', 0, (#debug_lines+1) *7 )
+	for i = 1, #debug_lines do
+		local line = debug_lines[ #debug_lines - i + 1 ]
+		print( line, 2, 7 * i, rel_color( 8, 1 - i ) )
+	end
+	print( '', 0, (#debug_lines+1) *7 )
 end
 
 function establish( value, default )
-    if value == nil then return default end
-    return value
+	if value == nil then return default end
+	return value
 end
 
 function rel_color( base, change )
-    local brighten_table = { 5, 13,  8, 11,  8,  6,  7,  7, 14, 10,  7,  7,  6, 12, 15,  7 }
+	local brighten_table = { 5, 13,  8, 11,  8,  6,  7,  7, 14, 10,  7,  7,  6, 12, 15,  7 }
 
-    local darken_table =   { 0,  0,  0,  0,  0,  0,  5,  6,  2,  4,  9,  3, 13,  1,  8, 14 }
+	local darken_table =   { 0,  0,  0,  0,  0,  0,  5,  6,  2,  4,  9,  3, 13,  1,  8, 14 }
 
-    if change == 0 then 
-        return base
-    elseif change > 0 then
-        return rel_color( brighten_table[base+1], change - 1 )
-    else
-        return rel_color(   darken_table[base+1], change + 1 )
-    end
+	if change == 0 then
+		return base
+	elseif change > 0 then
+		return rel_color( brighten_table[base+1], change - 1 )
+	else
+		return rel_color(   darken_table[base+1], change + 1 )
+	end
 end
 
 function maptoworld( x )
-    return x * 8
+	return x * 8
 end
 
 function worldtomap( x )
-    return flr( x / 8 )
+	return flr( x / 8 )
 end
 
 -- insertion sort
--- see https://www.lexaloffle.com/bbs/?tid=2477
 function sort(a, compare)
-    for i=1,#a do
-        local j = i
-        while j > 1 and compare( a[j-1], a[j] ) do
-            a[j],a[j-1] = a[j-1],a[j]
-            j = j - 1
-        end
-    end
+	for i=1,#a do
+		local j = i
+		while j > 1 and compare( a[j-1], a[j] ) do
+			a[j],a[j-1] = a[j-1],a[j]
+			j = j - 1
+		end
+	end
 end
 
 function erase_elements(array, predicate)
-    for i = #array, 1, -1 do
-        local element = array[ i ]
-        if predicate( element ) then
-            del( array, element )
-        end
-    end
+	for i = #array, 1, -1 do
+		local element = array[ i ]
+		if predicate( element ) then
+			del( array, element )
+		end
+	end
 end
 
--- see http://lua-users.org/wiki/copytable
 function shallowcopy(orig)
-    local orig_type = type(orig)
-    local copy
-    if orig_type == 'table' then
-        copy = {}
-        for orig_key, orig_value in pairs(orig) do
-            copy[orig_key] = orig_value
-        end
-    else -- number, string, boolean, etc
-        copy = orig
-    end
-    return copy
+	local orig_type = type(orig)
+	local copy
+	if orig_type == 'table' then
+		copy = {}
+		for orig_key, orig_value in pairs(orig) do
+			copy[orig_key] = orig_value
+		end
+	else -- number, string, boolean, etc
+		copy = orig
+	end
+	return copy
 end
 
 function flicker( time, hertz, cutoff )
-    return ( time * hertz ) % 1 <= establish( cutoff, 0.5 )
+	return ( time * hertz ) % 1 <= establish( cutoff, 0.5 )
 end
 
 function dither_color( base, dither )
-    return bor( base, shl( dither, 4 ))
+	return bor( base, shl( dither, 4 ))
 end
 
 function del_index( table, index )
-    del( table, table[ index ])
+	del( table, table[ index ])
 end
-
-function range_to_array( min, maxexclusive )
-    arr = {}
-
-    if min == nil or maxexclusive == nil then return arr end
-
-    for i = 0, maxexclusive - min - 1 do
-        arr[ i + 1 ] = min + i
-    end
-    return arr
-end
-
-
--- object oriented infrastructure. see http://lua-users.org/wiki/inheritancetutorial
 
 function inheritsfrom( baseclass )
 
-    local new_class = {}
-    new_class.__index = new_class
+	local new_class = {}
+	new_class.__index = new_class
 
-    if nil ~= baseclass then
-        setmetatable( new_class, { __index = baseclass } )
-    end
+	if nil ~= baseclass then
+		setmetatable( new_class, { __index = baseclass } )
+	end
 
-    -- implementation of additional oo properties starts here --
+	function new_class:class()
+		return new_class
+	end
 
-    -- return the class object of the instance
-    function new_class:class()
-        return new_class
-    end
+	function new_class:superclass()
+		return baseclass
+	end
 
-    -- return the super class object of the instance
-    function new_class:superclass()
-        return baseclass
-    end
+	function new_class:isa( theclass )
+		local b_isa = false
 
-    -- return true if the caller is an instance of theclass
-    function new_class:isa( theclass )
-        local b_isa = false
+		local cur_class = new_class
 
-        local cur_class = new_class
+		while nil ~= cur_class do
+			if cur_class == theclass then
+				b_isa = true
+				break
+			else
+				cur_class = cur_class:superclass()
+			end
+		end
 
-        while nil ~= cur_class do
-            if cur_class == theclass then
-                b_isa = true
-                break
-            else
-                cur_class = cur_class:superclass()
-            end
-        end
+		return b_isa
+	end
 
-        return b_isa
-    end
-
-    return new_class
+	return new_class
 end
 
-
--- vector class
 
 vector = inheritsfrom( nil )
 
 function vector:new( x, y )
-    local newobj = { x = establish( x, 0 ), y = establish( y, establish( x, 0 )) }
-    return setmetatable( newobj, self )
+	local o = { x = establish( x, 0 ), y = establish( y, establish( x, 0 )) }
+	return setmetatable( o, self )
 end
 
 function vector:copy()
-    return vector:new( self.x, self.y )
+	return vector:new( self.x, self.y )
 end
 
 function vector:tostring()
-    return self.x .. "," .. self.y
+	return self.x .. "," .. self.y
 end
 
 function vector:__unm()
-    return vector:new( -self.x, -self.y )
+	return vector:new( -self.x, -self.y )
 end
 
 function vector:__add( other )
-    return vector:new( self.x + other.x, self.y + other.y )
+	return vector:new( self.x + other.x, self.y + other.y )
 end
 
 function vector:__sub( other )
-    return vector:new( self.x - other.x, self.y - other.y )
+	return vector:new( self.x - other.x, self.y - other.y )
 end
 
 function vector:__mul( other )
-    return vector:new( self.x * other.x, self.y * other.y )
+	return vector:new( self.x * other.x, self.y * other.y )
 end
 
 function vector:__div( other )
-    return vector:new( self.x / other.x, self.y / other.y )
+	return vector:new( self.x / other.x, self.y / other.y )
 end
 
 function vector:__eq( other )
-    return self.x == other.x and self.y == other.y
+	return self.x == other.x and self.y == other.y
 end
 
 function vector:dot( other )
-    -- todo abort on overflow
-    return self.x * other.x + self.y * other.y
+	return self.x * other.x + self.y * other.y
 end
 
 function vector:lengthsquared()
-    return self:dot( self )
+	return self:dot( self )
 end
 
 function vector:length()
-    return sqrt( self:lengthsquared() )
+	return sqrt( self:lengthsquared() )
 end
 
 function vector:manhattanlength()
-    return abs( self.x ) + abs( self.y )
+	return abs( self.x ) + abs( self.y )
 end
 
-function vector:normal()
-    local len = self:length()
-    if len > 0 then
-        return vector:new( self.x / len, self.y / len )
-    end
-
-    return vector:new( 0, 0 )
-end
-
-function vector:perpendicular()
-    return vector:new( -self.y, self.x )
-end
-
--- utilities 
+-- utilities
 
 function rand_int( min, maxinclusive )
-    return flr( randinrange( min, maxinclusive + 1 ) )
+	return flr( randinrange( min, maxinclusive + 1 ) )
 end
 
 function randinrange( min, maxexclusive )
-    assert( maxexclusive >= min )
-    return min + rnd( maxexclusive - min )
+	assert( maxexclusive >= min )
+	return min + rnd( maxexclusive - min )
 end
 
 function pctchance( pct )
-    return rnd( 100 ) < pct
+	return rnd( 100 ) < pct
 end
 
 function wrap( x, min, maxexclusive )
-    assert( maxexclusive > min )
-    return min + ( x - min ) % ( maxexclusive - min )
+	assert( maxexclusive > min )
+	return min + ( x - min ) % ( maxexclusive - min )
 end
 
 function clamp( x, least, greatest )
-    assert( greatest >= least )
-    return min( greatest, max( least, x ))
+	assert( greatest >= least )
+	return min( greatest, max( least, x ))
 end
 
 function lerp( a, b, alpha )
-    return a + (( b - a ) * alpha )
+	return a + (( b - a ) * alpha )
 end
 
 function proportion( x, min, max )
-    return ( x - min ) / ( max - min )
-end
-
-function sign( x )
-    return x > 0 and 1 or ( x < 0 and -1 or 0 )
-end
-
-function sign_no_zero( x )
-    return x >= 0 and 1 or -1
+	return ( x - min ) / ( max - min )
 end
 
 function is_close( a, b, maxdist )
-    local delta = b - a
+	local delta = b - a
 
-    local manhattanlength = delta:manhattanlength()
-    if manhattanlength > maxdist * 1.8 then     -- adding a fudge factor to account for diagonals.
-        return false
-    end
+	local manhattanlength = delta:manhattanlength()
+	if manhattanlength > maxdist * 1.8 then     -- adding a fudge factor to account for diagonals.
+		return false
+	end
 
-    if manhattanlength > 180 then
-        printh( "objects may be close but we don't have the numeric precision to decide. ignoring." )
-        return false
-    end
+	if manhattanlength > 180 then
+		printh( "objects may be close but we don't have the numeric precision to decide. ignoring." )
+		return false
+	end
 
-    local distsquared = delta:lengthsquared()
+	local distsquared = delta:lengthsquared()
 
-    return distsquared <= maxdist * maxdist
+	return distsquared <= maxdist * maxdist
 end
 
 -->8
 --systems
 
 function rects_overlap( recta, rectb )
-    function edges_overlap( la, ra, lb, rb )
-        return not (
-                la > rb or
-                ra < lb
-            )
-    end
+	function edges_overlap( la, ra, lb, rb )
+		return not (
+				la > rb or
+				ra < lb
+			)
+	end
 
-    return  edges_overlap( recta.l, recta.r, rectb.l, rectb.r )
-        and edges_overlap( recta.t, recta.b, rectb.t, rectb.b )
+	return  edges_overlap( recta.l, recta.r, rectb.l, rectb.r )
+		and edges_overlap( recta.t, recta.b, rectb.t, rectb.b )
 end
 
 -- global constants
 
 local mapsegment_tile_size = vector:new( 16, 16 )
 local mapsegment_tiles_across_map = 8
-local shadow_y_divisor = 6
 local weapon_check_distance = 32
 
 
--- mapsegment
 local mapsegment = inheritsfrom( nil )
 function mapsegment:new( segment_num, worldx )
-    local newobj = {
-        segment_num = segment_num,
-        worldx = worldx,
-    }
-    return setmetatable( newobj, self )
+	local o = {
+		segment_num = segment_num,
+		worldx = worldx,
+	}
+	return setmetatable( o, self )
 end
 
 function mapsegment:collision_rect()
-    return { 
-        l = self.worldx,
-        r = self.worldx + maptoworld( mapsegment_tile_size.x ),
-        t = maptoworld( -mapsegment_tile_size.y ),
-        b = 0,
-    }
+	return {
+		l = self.worldx,
+		r = self.worldx + maptoworld( mapsegment_tile_size.x ),
+		t = maptoworld( -mapsegment_tile_size.y ),
+		b = 0,
+	}
 end
 
 function mapsegment:right()
-    return self:collision_rect().r
+	return self:collision_rect().r
 end
 
 function mapsegment:colliding_tile( withactor )
 
-    local myrect = self:collision_rect()
-    local rect = withactor:collision_rect()
+	local myrect = self:collision_rect()
+	local rect = withactor:collision_rect()
 
-    -- move into my frame of reference, still in world units
-    rect.l -= myrect.l
-    rect.t -= myrect.t
-    rect.r -= myrect.l
-    rect.b -= myrect.t
+	rect.l -= myrect.l
+	rect.t -= myrect.t
+	rect.r -= myrect.l
+	rect.b -= myrect.t
 
-    -- move into map units, still in my frame of reference, ensuring
-    -- we don't go out of bounds
-    rect.l = max( worldtomap( rect.l ), 0 )
-    rect.t = max( worldtomap( rect.t ), 0 )
-    rect.r = min( worldtomap( rect.r ), mapsegment_tile_size.x - 1 )
-    rect.b = min( worldtomap( rect.b ), mapsegment_tile_size.y - 1 )
+	rect.l = max( worldtomap( rect.l ), 0 )
+	rect.t = max( worldtomap( rect.t ), 0 )
+	rect.r = min( worldtomap( rect.r ), mapsegment_tile_size.x - 1 )
+	rect.b = min( worldtomap( rect.b ), mapsegment_tile_size.y - 1 )
 
-    local my_mapspace_ul = { x =    ( self.segment_num % mapsegment_tiles_across_map ) * mapsegment_tile_size.x, 
-                             y = flr( self.segment_num / mapsegment_tiles_across_map ) * mapsegment_tile_size.y }
+	local my_mapspace_ul = { x =    ( self.segment_num % mapsegment_tiles_across_map ) * mapsegment_tile_size.x,
+							 y = flr( self.segment_num / mapsegment_tiles_across_map ) * mapsegment_tile_size.y }
 
-    -- move into map space
-    rect.l += my_mapspace_ul.x
-    rect.t += my_mapspace_ul.y
-    rect.r += my_mapspace_ul.x
-    rect.b += my_mapspace_ul.y
+	rect.l += my_mapspace_ul.x
+	rect.t += my_mapspace_ul.y
+	rect.r += my_mapspace_ul.x
+	rect.b += my_mapspace_ul.y
 
-    -- debug_print( withactor.pos.x .. ',' .. withactor.pos.y .. ' ' .. myrect.l .. ',' .. myrect.t .. ' ' .. rect.l .. ',' .. rect.t .. ',' .. rect.r .. ',' .. rect.b )
+	for y = rect.t, rect.b do
+		for x = rect.l, rect.r do
+			if fget( mget( x, y ), 7 ) then
+				local tileworldspace = vector:new(
+					myrect.l + maptoworld( x - my_mapspace_ul.x ),
+					myrect.t + maptoworld( y - my_mapspace_ul.y ) )
 
-    for y = rect.t, rect.b do
-        for x = rect.l, rect.r do
-            if fget( mget( x, y ), 7 ) then
-                local tileworldspace = vector:new( 
-                    myrect.l + maptoworld( x - my_mapspace_ul.x ), 
-                    myrect.t + maptoworld( y - my_mapspace_ul.y ) )
+				return tileworldspace
+			end
+		end
+	end
 
-                return tileworldspace
-            end
-        end
-    end
-
-    return nil
+	return nil
 end
 
 function mapsegment:update()
 end
 
 function mapsegment:draw()
-    if self.segment_num > 0 then
-        local segmentul_mapspace = { 
-            x =    ( self.segment_num % mapsegment_tiles_across_map ) * mapsegment_tile_size.x,
-            y = flr( self.segment_num / mapsegment_tiles_across_map ) * mapsegment_tile_size.y
-        }
+	if self.segment_num > 0 then
+		local segmentul_mapspace = {
+			x =    ( self.segment_num % mapsegment_tiles_across_map ) * mapsegment_tile_size.x,
+			y = flr( self.segment_num / mapsegment_tiles_across_map ) * mapsegment_tile_size.y
+		}
 
-        mapdraw( segmentul_mapspace.x,
-                 segmentul_mapspace.y, 
-                 self.worldx, maptoworld( -mapsegment_tile_size.y ), 
-                 mapsegment_tile_size.x, mapsegment_tile_size.y )
-    end
+		mapdraw( segmentul_mapspace.x,
+				 segmentul_mapspace.y,
+				 self.worldx, maptoworld( -mapsegment_tile_size.y ),
+				 mapsegment_tile_size.x, mapsegment_tile_size.y )
+	end
 end
-
--- animation
 
 local animation = inheritsfrom( nil )
 function animation:new( min, count, ssizex, ssizey )
-    count = establish( count, 1 )
-    local newobj = { 
-        frames = {},
-        current_frame=1,
-        frame_rate_hz=10,
-        ssizex = establish( ssizex, 1 ),
-        ssizey = establish( ssizey, establish( ssizex, 1 )),
-        style = 'loop',
-        drawscalex = 1,
-        drawscaley = 1,
-    }
+	count = establish( count, 1 )
+	local o = {
+		frames = {},
+		current_frame=1,
+		frame_rate_hz=10,
+		ssizex = establish( ssizex, 1 ),
+		ssizey = establish( ssizey, establish( ssizex, 1 )),
+		style = 'loop',
+		drawscalex = 1,
+		drawscaley = 1,
+	}
 
-    for i = 0, count - 1 do
-        newobj.frames[ i + 1 ] = min + i * newobj.ssizex
-    end
+	for i = 0, count - 1 do
+		o.frames[ i + 1 ] = min + i * o.ssizex
+	end
 
-    return setmetatable( newobj, self )
+	return setmetatable( o, self )
 end
 
 function animation:update( deltatime )
-    if #self.frames < 1 then return end
-    self.current_frame += deltatime * self.frame_rate_hz
+	if #self.frames < 1 then return end
+	self.current_frame += deltatime * self.frame_rate_hz
 end
 
 function animation:frame()
-    if #self.frames < 1 then return nil end
+	if #self.frames < 1 then return nil end
 
-    local fr = wrap( self.current_frame, 1, #self.frames + 1 )
+	local fr = wrap( self.current_frame, 1, #self.frames + 1 )
 
-    if self.style == 'stop' then
-        fr = clamp( self.current_frame, 1, #self.frames )
-    end
+	if self.style == 'stop' then
+		fr = clamp( self.current_frame, 1, #self.frames )
+	end
 
-    return self.frames[ flr( fr ) ]
+	return self.frames[ flr( fr ) ]
 end
-
--- actor
 
 local actor = inheritsfrom( nil )
 local creature = inheritsfrom( actor )
 
 function actor:new( level, x, y, wid, hgt )
-    local newobj = { 
-        level = level,
-        tick_count = 0,
-        active = true,
-        alive = true,
-        pos = vector:new( x, y ),
-        vel = vector:new(),
-        depth = 0,
-        offset = vector:new(),
-        collision_size = vector:new( establish( wid, 0 ), establish( hgt, 0 )),
-        collision_planes_inc = 1,
-        collision_planes_exc = 15,
-        do_dynamics = false,
-        landed_tick = nil,
-        does_collide_with_ground = true,
-        gravity_scalar = 1.0,
-        jumpforce = 3,
-        animations = {},
-        current_animation_name = nil,
-        flipx = false,
-        flipy = false,
-        want_shadow = false,
-        damage = 2,
-        parallaxslide = 0,
-        deathcolorshift = -1,
-        colorshift = 0,
-        flashamount = 0,
-        flashhertz = 6,
-        floatbobamplitude = 0,
-        floatbobfrequency = 1.2,
-    }
+	local o = {
+		level = level,
+		tick_count = 0,
+		active = true,
+		alive = true,
+		pos = vector:new( x, y ),
+		vel = vector:new(),
+		depth = 0,
+		offset = vector:new(),
+		collision_size = vector:new( establish( wid, 0 ), establish( hgt, 0 )),
+		collision_planes_inc = 1,
+		collision_planes_exc = 15,
+		do_dynamics = false,
+		landed_tick = nil,
+		does_collide_with_ground = true,
+		gravity_scalar = 1.0,
+		jumpforce = 3,
+		animations = {},
+		current_animation_name = nil,
+		flipx = false,
+		flipy = false,
+		want_shadow = false,
+		damage = 2,
+		parallaxslide = 0,
+		deathcolorshift = -1,
+		colorshift = 0,
+		flashamount = 0,
+		flashhertz = 6,
+		floatbobamplitude = 0,
+		floatbobfrequency = 1.2,
+	}
 
-    add( level.actors, newobj )
+	add( level.actors, o )
 
-    return setmetatable( newobj, self )
+	return setmetatable( o, self )
 end
 
 function actor:flash( time, hz, amount )
-    if self.flashamount ~= 0 then return end  -- one at a time please
+	if self.flashamount ~= 0 then return end
 
-    if hz == nil then hz = 6 end
-    if amount == nil then amount = 8 end
+	if hz == nil then hz = 6 end
+	if amount == nil then amount = 8 end
 
-    self.flashamount = amount
-    self.flashhertz = hz
+	self.flashamount = amount
+	self.flashhertz = hz
 
-    self.level:after_delay( time, function()
-        self.flashamount = 0
-    end )
+	self.level:after_delay( time, function()
+		self.flashamount = 0
+	end )
 end
 
 function actor:dead()
-    return not self.alive
+	return not self.alive
 end
 
 function actor:die( cause )
-    if self:dead() then return end
+	if self:dead() then return end
 
-    self.colorshift = self.deathcolorshift
-    self.flashamount = 0
-    self.alive = false
-    self.vel.x = 0
-    self.collision_planes_inc = 0
-    self.animations[ 'death' ].current_frame = 1
-    self.current_animation_name = 'death'
+	self.colorshift = self.deathcolorshift
+	self.flashamount = 0
+	self.alive = false
+	self.vel.x = 0
+	self.collision_planes_inc = 0
+	self.animations[ 'death' ].current_frame = 1
+	self.current_animation_name = 'death'
 end
 
 function actor:age()
-    return self.tick_count / 60.0
+	return self.tick_count / 60.0
 end
 
 function actor:may_collide( other )
-    -- these collide if their inclusion planes overlap
-    -- and their exclusion planes don't
-    -- so to collide with the player (plane 1) without colliding with other obstacles (plane 2)
-    -- inc 1 but exc 2
-    return  self.active
-            and other.active
-            and 0 ~= band( self.collision_planes_inc, other.collision_planes_inc ) 
-            and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
+	return  self.active
+			and other.active
+			and 0 ~= band( self.collision_planes_inc, other.collision_planes_inc )
+			and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
 end
 
 function actor:collision_ul()
-    return self.pos
+	return self.pos
 end
 
 function actor:collision_br()
-    return self:collision_ul() + self.collision_size
+	return self:collision_ul() + self.collision_size
 end
 
 function actor:collision_center()
-    return self:collision_ul() + self.collision_size * vector:new( 0.5 )
+	return self:collision_ul() + self.collision_size * vector:new( 0.5 )
 end
 
 function actor:collision_rect()
-    return { l = self.pos.x,
-             t = self.pos.y,
-             r = self.pos.x + self.collision_size.x,
-             b = self.pos.y + self.collision_size.y }
+	return { l = self.pos.x,
+			 t = self.pos.y,
+			 r = self.pos.x + self.collision_size.x,
+			 b = self.pos.y + self.collision_size.y }
 end
 
 function actor:does_collide( other )
-    return self:may_collide( other )
-        and rects_overlap( self:collision_rect(), other:collision_rect() )
+	return self:may_collide( other )
+		and rects_overlap( self:collision_rect(), other:collision_rect() )
 end
 
 function actor:on_collision( other )
-    -- override
 end
 
 function actor:update( deltatime )
 
-    self.tick_count += 1
+	self.tick_count += 1
 
-    if self.do_dynamics then
-        self.vel.y += self.gravity_scalar * 0.125
+	if self.do_dynamics then
+		self.vel.y += self.gravity_scalar * 0.125
 
-        self.pos.x += self.vel.x
-        self.pos.y += self.vel.y
+		self.pos.x += self.vel.x
+		self.pos.y += self.vel.y
 
-        local footheight = self:collision_br().y
-        if self.does_collide_with_ground and footheight >= 0 then
-            self.pos.y = -self.collision_size.y
-            self:landed()
-        end
-    end
+		local footheight = self:collision_br().y
+		if self.does_collide_with_ground and footheight >= 0 then
+			self.pos.y = -self.collision_size.y
+			self:landed()
+		end
+	end
 
-    self.pos.x += self.parallaxslide * self.level.player.vel.x
+	self.pos.x += self.parallaxslide * self.level.player.vel.x
 
-    -- die if too far left
-    local liveleft, liveright = self.level:live_actor_span()
-    if self:collision_br().x + 8 < liveleft then
-        self.active = false
-    end
+	local liveleft, liveright = self.level:live_actor_span()
+	if self:collision_br().x + 8 < liveleft then
+		self.active = false
+	end
 
-    -- die if too far right and rightbound
-    if self.vel.x > 0 and self:collision_ul().x > liveright then
-        self.active = false
-    end
+	if self.vel.x > 0 and self:collision_ul().x > liveright then
+		self.active = false
+	end
 
-    -- update animation
-    local anim = self:current_animation()
-    if anim ~= nil then 
-        anim:update( deltatime ) 
-    end
+	local anim = self:current_animation()
+	if anim ~= nil then
+		anim:update( deltatime )
+	end
 end
 
 function actor:current_animation()
-    if self.current_animation_name == nil then return nil end
-    return self.animations[ self.current_animation_name ]
+	if self.current_animation_name == nil then return nil end
+	return self.animations[ self.current_animation_name ]
 end
 
 function actor:landed()
-    if not self:grounded() then
+	if not self:grounded() then
 	sfx(40)
-    end
+	end
 
-    self.vel.y = 0
-    self.landed_tick = self.level.tick_count
+	self.vel.y = 0
+	self.landed_tick = self.level.tick_count
 end
 
 function actor:grounded()
-    return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 2
+	return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 2
 end
 
 function actor:jump( amount )
-    if self:dead() or not self:grounded() then return end
+	if self:dead() or not self:grounded() then return end
 
-    self.vel.y = -self.jumpforce * establish( amount, 1.0 )
-    self.landed_tick = nil
-    sfx(32)
+	self.vel.y = -self.jumpforce * establish( amount, 1.0 )
+	self.landed_tick = nil
+	sfx(32)
 end
 
 function actor:postdraw( drawpos )
 end
 
 function actor:draw()
-    local anim = self:current_animation()
-    if anim ~= nil then 
-        local floatbobadjustment = sin( self:age() * self.floatbobfrequency ) * self.floatbobamplitude
-        local drawpos = self.pos + self.offset + vector:new( 0, floatbobadjustment )
-        local frame = anim:frame()
-        local drawscalex = anim.drawscalex
-        local drawscaley = anim.drawscaley
+	local anim = self:current_animation()
+	if anim ~= nil then
+		local floatbobadjustment = sin( self:age() * self.floatbobfrequency ) * self.floatbobamplitude
+		local drawpos = self.pos + self.offset + vector:new( 0, floatbobadjustment )
+		local frame = anim:frame()
+		local drawscalex = anim.drawscalex
+		local drawscaley = anim.drawscaley
 
-        local colorize = self.colorshift + ( flicker( self.level:time(), self.flashhertz ) and self.flashamount or 0 )
+		local colorize = self.colorshift + ( flicker( self.level:time(), self.flashhertz ) and self.flashamount or 0 )
 
-        draw_color_shifted( colorize, function()
-            if drawscalex == 1 and drawscaley == 1 then
-                spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey, self.flipx, self.flipy )
-            else
-                local spritesheetleft = frame % 16 * 8
-                local spritesheettop  = flr( frame / 16 ) * 8
-                local spritesheetwid = anim.ssizex * 8
-                local spritesheethgt = anim.ssizey * 8
-                sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
-                      drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, self.flipx, self.flipy )
-            end
+		draw_color_shifted( colorize, function()
+			if drawscalex == 1 and drawscaley == 1 then
+				spr( frame, drawpos.x, drawpos.y, anim.ssizex, anim.ssizey, self.flipx, self.flipy )
+			else
+				local spritesheetleft = frame % 16 * 8
+				local spritesheettop  = flr( frame / 16 ) * 8
+				local spritesheetwid = anim.ssizex * 8
+				local spritesheethgt = anim.ssizey * 8
+				sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
+					  drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, self.flipx, self.flipy )
+			end
 
-            self:postdraw( drawpos )
+			self:postdraw( drawpos )
 
-        end )
-
-        --draw shadow
-        -- if self.want_shadow then
-        --     draw_color_shifted( -4, function()
-        --         spr( frame, drawpos.x, (-self:collision_br().y) / shadow_y_divisor, anim.ssizex, anim.ssizey, false, true )
-        --     end )
-        -- end
-    end
+		end )
+	end
 end
 
 function actor:on_pickedup_by( other )
-    self.current_animation_name = 'swirl'
+	self.current_animation_name = 'swirl'
 
-    --disable any further pickup
-    self.may_player_pickup = false
-    self.collision_planes_inc = 0
+	self.may_player_pickup = false
+	self.collision_planes_inc = 0
 end
-
---player
 
 local player = inheritsfrom( actor )
 function player:new( level )
-    local newobj = actor:new( level, 0, -64, 8, 14 )
-    newobj.immortal = true
-    newobj.do_dynamics = true
-    newobj.want_shadow = true
-    newobj.depth = -100
-    newobj.vel.x = 1    -- player run speed
-    newobj.animations[ 'run' ] = animation:new( 32, 6, 1, 2 ) 
-    newobj.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 ) 
-    newobj.current_animation_name = 'run'
-    newobj.collision_planes_exc = 0
+	local o = actor:new( level, 0, -64, 8, 14 )
+	o.immortal = true
+	o.do_dynamics = true
+	o.want_shadow = true
+	o.depth = -100
+	o.vel.x = 1
+	o.animations[ 'run' ] = animation:new( 32, 6, 1, 2 )
+	o.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 )
+	o.current_animation_name = 'run'
+	o.collision_planes_exc = 0
 
-    newobj.coins = 0
-    newobj.max_health = 6
-    newobj.health = newobj.max_health
+	o.coins = 0
+	o.max_health = 6
+	o.health = o.max_health
 
-    newobj.max_satiation = 10
-    newobj.satiation = newobj.max_satiation
+	o.max_satiation = 10
+	o.satiation = o.max_satiation
 
-    newobj.reach_distance = 12
+	o.reach_distance = 12
 
-    newobj.max_armor = 3
-    newobj.armor = 0
-    newobj.armorflicker = false
+	o.max_armor = 3
+	o.armor = 0
+	o.armorflicker = false
 
-    newobj.deathcolorshift = 0
-    newobj.deathcause = ''
+	o.deathcolorshift = 0
+	o.deathcause = ''
 
-    local death_anim = animation:new( 224, 7, 2, 2 )
-    death_anim.style = 'stop'
+	local death_anim = animation:new( 224, 7, 2, 2 )
+	death_anim.style = 'stop'
 
-    -- death frames
-    death_anim.frames = { 224, 226, 228, 230, 230, 230, 230, 230, 232, 232, 232, 232, 232, 232, 232, 234, 236 }
-    newobj.animations[ 'death' ] = death_anim
-    
-    return setmetatable( newobj, self )
+	death_anim.frames = { 224, 226, 228, 230, 230, 230, 230, 230, 232, 232, 232, 232, 232, 232, 232, 234, 236 }
+	o.animations[ 'death' ] = death_anim
+
+	return setmetatable( o, self )
 end
 
 function player:maybe_shoot( other )
-    -- todo and we have a weapon and ammo!!!
-    if abs( other.pos.x - self.pos.x ) < weapon_check_distance then
-        -- todo!!!
-        -- other:die()
-    end 
+	-- todo and we have a weapon and ammo!!!
+	if abs( other.pos.x - self.pos.x ) < weapon_check_distance then
+		-- todo!!!
+		-- other:die()
+	end
 end
 
 function player:add_coins( amount )
-    self.coins += amount
-    sfx(36)
+	self.coins += amount
+	sfx(36)
 end
 
 function player:drain_satiation( amount )
-    if self:dead() then return end
-    self.satiation -= amount
+	if self:dead() then return end
+	self.satiation -= amount
 
-    if self.satiation < 0 then
-        self.satiation = 0
-        self:die( 'died from hunger' )
-    end
+	if self.satiation < 0 then
+		self.satiation = 0
+		self:die( 'died from hunger' )
+	end
 end
 
 function player:jump( amount )
-    self:superclass().jump( self, amount )
-    self:drain_satiation( 0.01 )
+	self:superclass().jump( self, amount )
+	self:drain_satiation( 0.01 )
 end
 
 function player:update( deltatime )
-    self:superclass().update( self, deltatime )
+	self:superclass().update( self, deltatime )
 
-    -- fire weapon if appropriate
-    local creatures = self.level:actors_of_class( creature )
-    for creature in all( creatures ) do
-        self:maybe_shoot( creature )
-    end
+	local creatures = self.level:actors_of_class( creature )
+	for creature in all( creatures ) do
+		self:maybe_shoot( creature )
+	end
 
-    -- update satiation
+	self:drain_satiation( 0.002 + ( self.armor > 0 and 0.001 or 0 ))
 
-    self:drain_satiation( 0.002 + ( self.armor > 0 and 0.001 or 0 ))
+	if self.current_animation_name ~= 'run' then
+		self.animations[ 'run' ]:update( deltatime )
+	end
 
-    -- sync anims
-    if self.current_animation_name ~= 'run' then
-        self.animations[ 'run' ]:update( deltatime )
-    end
-
-    local frame = self.animations[ 'run' ].current_frame
-    self.animations[ 'run_armor' ].current_frame = frame
+	local frame = self.animations[ 'run' ].current_frame
+	self.animations[ 'run_armor' ].current_frame = frame
 end
 
 function player:die( cause )
-    if self:dead() then return end
+	if self:dead() then return end
 
-    self.deathcause = cause
-    self.vel.x = 0
-    self.armorflicker = false
-    self.armor = 0
+	self.deathcause = cause
+	self.vel.x = 0
+	self.armorflicker = false
+	self.armor = 0
 
-    self:superclass().die( self, cause )
+	self:superclass().die( self, cause )
 end
 
 function player:add_health( amount )
-    if amount > 1 then
-    sfx(35)
-    else
-    sfx(34)
-    end
+	if amount > 1 then
+	sfx(35)
+	else
+	sfx(34)
+	end
 
 
-    if self:dead() then return end
-    self.health = clamp( self.health + amount, 0, self.max_health )
-    if self.health == 0 then
-        self:die( 'died from wounds' )
-    end
+	if self:dead() then return end
+	self.health = clamp( self.health + amount, 0, self.max_health )
+	if self.health == 0 then
+		self:die( 'died from wounds' )
+	end
 end
 
 function player:start_invulnerable()
-    if self:dead() then return end
-    self.invulnerable = true
-    self.level:after_delay( 4.0, function()
-        self.invulnerable = false
-    end )
+	if self:dead() then return end
+	self.invulnerable = true
+	self.level:after_delay( 4.0, function()
+		self.invulnerable = false
+	end )
 end
 
 function player:take_damage( amount )
-    if self.invulnerable or self.immortal or self:dead() then return end
+	if self.invulnerable or self.immortal or self:dead() then return end
 
-    if amount <= 0 then return end
+	if amount <= 0 then return end
 
-    self:flash( 0.25, 2, 5 )
+	self:flash( 0.25, 2, 5 )
 
-    if self.armor > 0 then
-        amount = 1
+	if self.armor > 0 then
+		amount = 1
 
-        self:start_invulnerable()
-        self.armor -= 1
+		self:start_invulnerable()
+		self.armor -= 1
 
-        self.armorflicker = self.armor == 0
+		self.armorflicker = self.armor == 0
 
-        if self.armorflicker then
-            self.level:after_delay( 4, function()
-                self.armorflicker = false
-            end)
-        end
-    end    
+		if self.armorflicker then
+			self.level:after_delay( 4, function()
+				self.armorflicker = false
+			end)
+		end
+	end
 
-    self:add_health( -amount )
-    if self.health > 0 then
-        self:start_invulnerable()
-    end
+	self:add_health( -amount )
+	if self.health > 0 then
+		self:start_invulnerable()
+	end
 end
 
 function player:grab()
-    if self:dead() then return end
+	if self:dead() then return end
 
-    local pickup, distsqr = self.level:closest_actor( self:collision_center(), function(actor)
-        return actor.may_player_pickup
-    end )
+	local pickup, distsqr = self.level:closest_actor( self:collision_center(), function(actor)
+		return actor.may_player_pickup
+	end )
 
-    if pickup ~= nil and 
-        ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
-            or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
-        pickup:on_pickedup_by( self )
-    sfx(33)
-    end
+	if pickup ~= nil and
+		( rects_overlap( self:collision_rect(), pickup:collision_rect() )
+			or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
+		pickup:on_pickedup_by( self )
+	sfx(33)
+	end
 end
 
 function player:draw()
-    if self:dead() or not self.invulnerable or self.armorflicker or flicker( self.level:time(), 8 ) then
+	if self:dead() or not self.invulnerable or self.armorflicker or flicker( self.level:time(), 8 ) then
 
-        if not self:dead() then
-            self.current_animation_name = 
-                ( self.armor > 0 or ( self.armorflicker and flicker( self.level:time(), 6 ))) and 'run_armor' or 'run'
-        end
+		if not self:dead() then
+			self.current_animation_name =
+				( self.armor > 0 or ( self.armorflicker and flicker( self.level:time(), 6 ))) and 'run_armor' or 'run'
+		end
 
-        self:superclass().draw( self )
-    end
+		self:superclass().draw( self )
+	end
 end
 
 function player:on_collision( other )
-    if other.damage > 0 then
-        self:take_damage( other.damage )
-    end
+	if other.damage > 0 then
+		self:take_damage( other.damage )
+	end
 end
 
--- pickups
 local pickup = inheritsfrom( actor )
 function pickup:new( level, itemname, item, x )
-    local newobj = actor:new( level, x, -10, 6, 6 )     -- todo randomize height somewhat
+	local o = actor:new( level, x, -10, 6, 6 )     -- todo randomize height somewhat
 
-    local sprite = item.sprite
+	local sprite = item.sprite
 
-    newobj.itemname = itemname
-    newobj.item = item
-    newobj.animations[ 'idle' ] = animation:new( sprite ) 
-    newobj.current_animation_name = 'idle'
-    newobj.collision_planes_inc = 1
-    newobj.may_player_pickup = true
-    newobj.damage = 0
-    newobj.floatbobamplitude = 1
+	o.itemname = itemname
+	o.item = item
+	o.animations[ 'idle' ] = animation:new( sprite )
+	o.current_animation_name = 'idle'
+	o.collision_planes_inc = 1
+	o.may_player_pickup = true
+	o.damage = 0
+	o.floatbobamplitude = 1
 
-    local swirl = animation:new( 25, 7, 1, 1 )
-    swirl.style = 'stop'
-    swirl.frames = { 25, 26, 27, 28, 29, 30, 31, 61 }
-    newobj.animations[ 'pickup' ] = swirl
+	local swirl = animation:new( 25, 7, 1, 1 )
+	swirl.style = 'stop'
+	swirl.frames = { 25, 26, 27, 28, 29, 30, 31, 61 }
+	o.animations[ 'pickup' ] = swirl
 
-    return setmetatable( newobj, self )    
+	return setmetatable( o, self )
 end
 
 function pickup:on_pickedup_by( other )
-    self.level.inventory:acquire( self.itemname )
+	self.level.inventory:acquire( self.itemname )
 
-    self:superclass().on_pickedup_by( self, other )
+	self:superclass().on_pickedup_by( self, other )
 end
 
--- inventory
 local items = {
-    rawmeat = { 
-        sprite = 19,
-        showinv = true,
-    },
-    mushroom = { 
-        sprite = 20,
-        showinv = true,
-        shoulddrop = function(level)
-            return pctchance( 1 )
-        end
-    },
-    wheat = { 
-        sprite = 21,
-        showinv = true,
-        shoulddrop = function(level)
-            return pctchance( 1 )
-        end
-    },
-    stick = { 
-        sprite = 22,
-        showinv = true,
-        shoulddrop = function(level)
-            return pctchance( 1 )
-        end
-    },
-    oil = { 
-        sprite = 23,
-        showinv = true,
-        shoulddrop = function(level)
-            return pctchance( 1 )
-        end
-    },
-    metal = { 
-        sprite = 24,
-        showinv = true,
-        shoulddrop = function(level)
-            return pctchance( 1 )
-        end
-    },
+	rawmeat = {
+		sprite = 19,
+		showinv = true,
+	},
+	mushroom = {
+		sprite = 20,
+		showinv = true,
+		shoulddrop = function(level)
+			return pctchance( 1 )
+		end
+	},
+	wheat = {
+		sprite = 21,
+		showinv = true,
+		shoulddrop = function(level)
+			return pctchance( 1 )
+		end
+	},
+	stick = {
+		sprite = 22,
+		showinv = true,
+		shoulddrop = function(level)
+			return pctchance( 1 )
+		end
+	},
+	oil = {
+		sprite = 23,
+		showinv = true,
+		shoulddrop = function(level)
+			return pctchance( 1 )
+		end
+	},
+	metal = {
+		sprite = 24,
+		showinv = true,
+		shoulddrop = function(level)
+			return pctchance( 1 )
+		end
+	},
 
-    --
+	--
 
-    bow = { 
-        sprite = 13,
-        requirements = { stick = 4, metal = 2 },
-        oncreated = function(level)
-        end 
-    },
-    arrow = { 
-        sprite = 14,      
-        showinv = true,
-        requirements = { stick = 1, metal = 1 },
-        oncreated = function(level)
-        end 
-    },
-    armor = { 
-        sprite =  7,      
-        requirements = { metal = 3, oil = 2 },
-        oncreated = function(level)
-        end 
-    },
-    cookedmeat = { 
-        sprite = 10, 
-        requirements = { rawmeat = 1, torch = 1 },
-        oncreated = function(level)
-        end 
-    },
-    stew = { 
-        sprite = 11,       
-        requirements = { mushroom = 5, rawmeat = 3 },
-        oncreated = function(level)
-        end 
-    },
-    pizza = { 
-        sprite = 12,      
-        requirements = { wheat = 3, mushroom = 3, rawmeat = 3 },
-        oncreated = function(level)
-        end 
-    },
-    torch = { 
-        sprite = 15,      
-        requirements = { oil = 1, stick = 2 },
-        oncreated = function(level) 
-        end 
-    },
+	bow = {
+		sprite = 13,
+		requirements = { stick = 4, metal = 2 },
+		oncreated = function(level)
+		end
+	},
+	arrow = {
+		sprite = 14,
+		showinv = true,
+		requirements = { stick = 1, metal = 1 },
+		oncreated = function(level)
+		end
+	},
+	armor = {
+		sprite =  7,
+		requirements = { metal = 3, oil = 2 },
+		oncreated = function(level)
+		end
+	},
+	cookedmeat = {
+		sprite = 10,
+		requirements = { rawmeat = 1, torch = 1 },
+		oncreated = function(level)
+		end
+	},
+	stew = {
+		sprite = 11,
+		requirements = { mushroom = 5, rawmeat = 3 },
+		oncreated = function(level)
+		end
+	},
+	pizza = {
+		sprite = 12,
+		requirements = { wheat = 3, mushroom = 3, rawmeat = 3 },
+		oncreated = function(level)
+		end
+	},
+	torch = {
+		sprite = 15,
+		requirements = { oil = 1, stick = 2 },
+		oncreated = function(level)
+		end
+	},
 
-    home = { sprite = 74 },
+	home = { sprite = 74 },
 }
 
 local inventory = inheritsfrom( nil )
 function inventory:new()
-    local newobj = {
-        itemcounts = {}
-    }
-    return setmetatable( newobj, self )
+	local o = {
+		itemcounts = {}
+	}
+	return setmetatable( o, self )
 end
 
 function inventory:item_count( type )
-    return establish( self.itemcounts[ type ], 0 )
+	return establish( self.itemcounts[ type ], 0 )
 end
 
 function inventory:acquire( type )
-    if not self.itemcounts[ type ] then
-        self.itemcounts[ type ] = 1
-    else
-        self.itemcounts[ type ] += 1
+	if not self.itemcounts[ type ] then
+		self.itemcounts[ type ] = 1
+	else
+		self.itemcounts[ type ] += 1
 
-        if self.itemcounts[ type ] > 9 then self.itemcounts[ type ] = 9 end
-    end
+		if self.itemcounts[ type ] > 9 then self.itemcounts[ type ] = 9 end
+	end
 end
 
 function inventory:use( type, count )
-    assert( self:item_count( type ) >= count )
-    self.itemcounts[ type ] -= count
+	assert( self:item_count( type ) >= count )
+	self.itemcounts[ type ] -= count
 end
-
--- level
 
 local level = inheritsfrom( nil )
 function level:new( inventory )
-    local newobj = {
-        actors = {},
-        mapsegments = {},
-        ground_decorations = {},
-        horizon_decorations = {},
-        tick_count = 0,
-        pending_calls = {},
-        inventory = inventory,
-    }
-    newobj.creation_records = {
-        coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( newobj:time() / 3 ) * sin( newobj:time() / 11 ) > 0.25 end },
-        stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #newobj:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
-        tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end },
-        shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end  },
-        creature = { chance =    0.1, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
-        material = { chance =   100, earliestnext = 128, interval = 4 },
-    }
+	local o = {
+		actors = {},
+		mapsegments = {},
+		ground_decorations = {},
+		horizon_decorations = {},
+		tick_count = 0,
+		pending_calls = {},
+		inventory = inventory,
+	}
+	o.creation_records = {
+		coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
+		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
+		tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end },
+		shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end  },
+		creature = { chance =    0.1, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
+		material = { chance =   100, earliestnext = 128, interval = 4 },
+	}
 
-    local finishedobject = setmetatable( newobj, self )
+	local finishedobject = setmetatable( o, self )
 
-    finishedobject.player = player:new( finishedobject )
-    
-    return finishedobject
+	finishedobject.player = player:new( finishedobject )
+
+	return finishedobject
 end
 
 function level:time()
-    return self.tick_count / 60.0
+	return self.tick_count / 60.0
 end
 
 function level:after_delay( delay, fn )
-    add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
+	add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
 end
 
 function level:viewspan()
-    local cam = self:camera_position()
-    return cam.x, cam.x + 128
+	local cam = self:camera_position()
+	return cam.x, cam.x + 128
 end
 
 function level:live_actor_span()
-    local left, right = self:viewspan()
-    return left - 16, right + 32
+	local left, right = self:viewspan()
+	return left - 16, right + 32
 end
 
 function level:actors_of_class( class )
-    local arr = {}
-    for actor in all( self.actors ) do
-        if actor.active and ( class == nil or getmetatable( actor ) == class ) then
-            add( arr, actor )
-        end
-    end
-    return arr
+	local arr = {}
+	for actor in all( self.actors ) do
+		if actor.active and ( class == nil or getmetatable( actor ) == class ) then
+			add( arr, actor )
+		end
+	end
+	return arr
 end
 
 function level:closest_actor( pos, filter )
-    local closest = nil
-    local closest_dist_sqr = nil
+	local closest = nil
+	local closest_dist_sqr = nil
 
-    for actor in all( self.actors ) do
-        if actor.active and filter( actor ) and is_close( actor.pos, pos, 180 ) then
-            local distsqr = ( actor.pos - pos ):lengthsquared()
-            if closest_dist_sqr == nil or distsqr < closest_dist_sqr then
-                closest = actor
-                closest_dist_sqr = distsqr
-            end
-        end
-    end
+	for actor in all( self.actors ) do
+		if actor.active and filter( actor ) and is_close( actor.pos, pos, 180 ) then
+			local distsqr = ( actor.pos - pos ):lengthsquared()
+			if closest_dist_sqr == nil or distsqr < closest_dist_sqr then
+				closest = actor
+				closest_dist_sqr = distsqr
+			end
+		end
+	end
 
-    return closest, closest_dist_sqr
+	return closest, closest_dist_sqr
 end
 
 function level:update_pending_calls()
-    local now = self:time()
+	local now = self:time()
 
-    erase_elements( self.pending_calls, function(call)
-        if now >= call.deadline then
-            call.fn()
-            return true
-        end
-        return false
-    end )
+	erase_elements( self.pending_calls, function(call)
+		if now >= call.deadline then
+			call.fn()
+			return true
+		end
+		return false
+	end )
 end
 
 function level:eachactor( apply )
-    for actor in all( self.actors ) do
-        if actor.active then
-            apply( actor )
-        end
-    end
+	for actor in all( self.actors ) do
+		if actor.active then
+			apply( actor )
+		end
+	end
 end
 
 function update_actor_collision( a, b )
-    if a:does_collide( b ) then
-        a:on_collision( b )
-        b:on_collision( a )
-    end
+	if a:does_collide( b ) then
+		a:on_collision( b )
+		b:on_collision( a )
+	end
 end
 
 function level:update_collision()
 
-    -- actor collision
-    for i = 1, #self.actors - 1 do
-        for j = i + 1, #self.actors do
-            update_actor_collision( self.actors[ i ], self.actors[ j ])
-        end
-    end
+	for i = 1, #self.actors - 1 do
+		local actor = self.actors[ i ]
+		if self.player ~= actor then 
+			update_actor_collision( actor, self.player )
+		end
+	end
 
-    -- mapsegment collision with player
-    local footheight = self.player:collision_rect().b
-    if self.player.vel.y >= 0 then
-        for segment in all( self.mapsegments ) do
-            local collision = segment:colliding_tile( self.player )
-            if collision ~= nil and footheight < collision.y + 4 then
-                self.player.pos.y = collision.y - self.player.collision_size.y
-                self.player:landed()
-            end
-        end
-    end
+	local footheight = self.player:collision_rect().b
+	if self.player.vel.y >= 0 then
+		for segment in all( self.mapsegments ) do
+			local collision = segment:colliding_tile( self.player )
+			if collision ~= nil and footheight < collision.y + 4 then
+				self.player.pos.y = collision.y - self.player.collision_size.y
+				self.player:landed()
+			end
+		end
+	end
 end
 
 function level:update()
 
-    local deltatime = 1.0 / 60.0
+	local deltatime = 1.0 / 60.0
 
-    self.tick_count += 1
+	self.tick_count += 1
 
-    self:update_pending_calls()
+	self:update_pending_calls()
 
-    self:update_creatures()
+	self:maybe_create( creature, 'creature' )
 
-    if self.player.alive then
-        self:create_props()
-        self:create_coins()
-        self:update_mapsegments()
-    end
+	if self.player.alive then
+		self:create_props()
+		self:update_mapsegments()
+	end
 
-    self:update_collision()
+	self:update_collision()
 
-    -- update actors and remove dead ones
-    erase_elements( self.actors, function(actor)
-        actor:update( deltatime )
-        return not actor.active
-    end)
+	erase_elements( self.actors, function(actor)
+		actor:update( deltatime )
+		return not actor.active
+	end)
 
-    sort( self.actors, function( a, b )
-        return a.depth < b.depth
-    end )
+	sort( self.actors, function( a, b )
+		return a.depth < b.depth
+	end )
 end
 
 function level:camera_position()
-    return vector:new( -64, -96 ) + vector:new( self.player.pos.x + 32, 0 )
-end
-
-function nibblerot( bits, offset )
-    offset = wrap( offset, 0, 4 )
-                                            -- 00001001
-    bits = shl( bits, 4 )                   -- 10010000
-
-    bits = shr( bits, offset )              -- 01001000
-    local upper = shr( bits, 4)             -- 00000100
-    bits = bor( bits, upper )               -- 01001100
-
-    return band( bits, 0b1111 )             -- 00001100
+	return vector:new( -64, -96 ) + vector:new( self.player.pos.x + 32, 0 )
 end
 
 function level:timeofday()
-    return 0.5 + sin( self:time() / 50 ) * 0.5
+	return 0.5 + sin( self:time() / 50 ) * 0.5
 end
 
 function level:categoricaltimeofday()
-    local thetime = self:timeofday()
-    return thetime < 0.7 and 1 or ( thetime < 0.9 and 2 or 3 )
+	local thetime = self:timeofday()
+	return thetime < 0.7 and 1 or ( thetime < 0.9 and 2 or 3 )
 end
 
 function level:draw()
 
-    local cam = self:camera_position()
+	local cam = self:camera_position()
 
-    -- draw background
-    camera( 0, cam.y )
+	camera( 0, cam.y )
 
-    -- grass
+	local thetime = self:timeofday()
+	local categoricaltime = self:categoricaltimeofday()
 
-    local thetime = self:timeofday()
-    local categoricaltime = self:categoricaltimeofday()
+	function drawgrass()
+		camera( 0, cam.y)
+		rectfill( 0, 0, 128, 32, 3 )
+		line( 0, 0, 128, 0, 0 )
+	end
 
-    function drawgrass()
-        camera( 0, cam.y)
-        rectfill( 0, 0, 128, 32, 3 )
-        line( 0, 0, 128, 0, 0 )
-    end
+	rectfill( 0, -96, 128, 0, 1 )
 
-    -- sky
+	camera( cam.x, cam.y )
 
-    rectfill( 0, -96, 128, 0, 1 )
+	self:eachactor( function( actor )
+		if actor.depth > 0 then
+			actor:draw()
+		end
+	end )
 
-    camera( cam.x, cam.y )
+	drawgrass()
 
-    -- draw behind-grass actors
-    self:eachactor( function( actor )
-        if actor.depth > 0 then
-            actor:draw()
-        end
-    end )
+	camera( cam.x, cam.y )
 
-    drawgrass()
- 
-    camera( cam.x, cam.y )
+	for segment in all( self.mapsegments ) do
+		segment:draw()
+	end
 
-    -- draw mapsegments
-
-    for segment in all( self.mapsegments ) do
-        segment:draw()
-    end
-
-    -- draw in-front-of-grass actors
-    self:eachactor( function( actor )
-        if actor.depth <= 0 then
-            actor:draw()
-        end
-    end )
+	self:eachactor( function( actor )
+		if actor.depth <= 0 then
+			actor:draw()
+		end
+	end )
 end
 
 local behaviors = {}
 
--- creature
 function creature:new( level, x )
-    local whichcreature = 2 --todo!!! rand_int( 1, 2 )
+	local whichcreature = 2 --todo!!! rand_int( 1, 2 )
 
-    local y = -16
-    local wid = 16
-    local hgt = 7
+	local y = -16
+	local wid = 16
+	local hgt = 7
 
-    local newobj = actor:new( level, x, y, wid, hgt )
-    newobj.do_dynamics = true
-    newobj.depth = -10
-    newobj.want_shadow = true
-    newobj.current_animation_name = 'run'
-    newobj.jumpforce = 1.5
-    newobj.whichcreature = whichcreature
+	local o = actor:new( level, x, y, wid, hgt )
+	o.do_dynamics = true
+	o.depth = -10
+	o.want_shadow = true
+	o.current_animation_name = 'run'
+	o.jumpforce = 1.5
+	o.whichcreature = whichcreature
 
-    -- tiger
-    if whichcreature == 1 then
-        newobj.animations[ 'stop' ] = animation:new( 64, 1, 2, 1 )         
-        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
-        newobj.animations[ 'run' ] = animation:new( 64, 3, 2, 1 ) 
-        newobj.animations[ 'coil' ] = newobj.animations[ 'run' ]
-        newobj.animations[ 'pounce' ] = newobj.animations[ 'run' ]
-        newobj.behavior = cocreate( behaviors.slide_left_fast )
-    elseif whichcreature == 2 then
-        newobj.animations[ 'run' ] = animation:new( 80, 3, 2, 1 ) 
-        newobj.animations[ 'coil' ] = animation:new( 86, 1, 2, 1 ) 
-        newobj.animations[ 'pounce' ] = animation:new( 88, 1, 2, 1 ) 
-        newobj.animations[ 'stop' ] = newobj.animations[ 'pounce' ]
-        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
-        newobj.behavior = cocreate( behaviors.pounce_from_left )
-    end
+	if whichcreature == 1 then
+		o.animations[ 'stop' ] = animation:new( 64, 1, 2, 1 )
+		o.animations[ 'death' ] = o.animations[ 'stop' ]
+		o.animations[ 'run' ] = animation:new( 64, 3, 2, 1 )
+		o.animations[ 'coil' ] = o.animations[ 'run' ]
+		o.animations[ 'pounce' ] = o.animations[ 'run' ]
+		o.behavior = cocreate( behaviors.slide_left_fast )
+	elseif whichcreature == 2 then
+		o.animations[ 'run' ] = animation:new( 80, 3, 2, 1 )
+		o.animations[ 'coil' ] = animation:new( 86, 1, 2, 1 )
+		o.animations[ 'pounce' ] = animation:new( 88, 1, 2, 1 )
+		o.animations[ 'stop' ] = o.animations[ 'pounce' ]
+		o.animations[ 'death' ] = o.animations[ 'stop' ]
+		o.behavior = cocreate( behaviors.pounce_from_left )
+	end
 
-    return setmetatable( newobj, self )
+	return setmetatable( o, self )
 end
 
 function creature:die( cause )
-    if self:dead() then return end
+	if self:dead() then return end
 
-    self:superclass().die( self, cause )
+	self:superclass().die( self, cause )
 
-    self:flash( 0.2, 2, 5 )
+	self:flash( 0.2, 2, 5 )
 
-    self.flipy = true
-    self.landed_tick = nil
-    self.collision_size.y -= 4
+	self.flipy = true
+	self.landed_tick = nil
+	self.collision_size.y -= 4
 end
 
 function creature:update( deltatime )
-    if self.behavior ~= nil then
-        coresume( self.behavior, self )
-        if not costatus( self.behavior ) then
-            self.behavior = nil
-        end
-    end
+	if self.behavior ~= nil then
+		coresume( self.behavior, self )
+		if not costatus( self.behavior ) then
+			self.behavior = nil
+		end
+	end
 
-    self:superclass().update( self, deltatime )    
+	self:superclass().update( self, deltatime )
 end
 
 function creature:postdraw( drawpos )
-    self:superclass().postdraw( self, drawpos  )
+	self:superclass().postdraw( self, drawpos  )
 
-    if self.whichcreature == 2 then -- snake
-        for i = 1,4 do
-            spr( 88, drawpos.x - 8*i, drawpos.y )
-        end
-    end
+	if self.whichcreature == 2 then -- snake
+		for i = 1,4 do
+			spr( 88, drawpos.x - 8*i, drawpos.y )
+		end
+	end
 end
-
--- stone
 
 local stone = inheritsfrom( actor )
 function stone:new( level, x )
-    local size = rand_int( 1, 2 )
+	local size = rand_int( 1, 2 )
 
-    local sprite = { 185, 167, 164 }
-    local spritewidth =  { 1, 2, 3 }
-    local spriteheight = { 1, 2, 2 }
-    local spriteoffsetx = { -1, -4, -4 }
-    local spriteoffsety = { -1, -2, -2 }
-    local collisionwid = { 6, 12, 16 }
-    local collisionhgt = { 6, 12, 12 }
+	local sprite = { 185, 167, 164 }
+	local spritewidth =  { 1, 2, 3 }
+	local spriteheight = { 1, 2, 2 }
+	local spriteoffsetx = { -1, -4, -4 }
+	local spriteoffsety = { -1, -2, -2 }
+	local collisionwid = { 6, 12, 16 }
+	local collisionhgt = { 6, 12, 12 }
 
-    local newobj = actor:new( level, x, -collisionhgt[ size ], 0, 0 )
-    newobj.animations[ 'idle' ] = animation:new( sprite[size], 1, spritewidth[size], spriteheight[size] ) 
-    newobj.current_animation_name = 'idle'
-    newobj.do_dynamics = false
-    newobj.offset.x = spriteoffsetx[ size ]
-    newobj.offset.y = spriteoffsety[ size ]
-    newobj.collision_size.x = collisionwid[ size ]
-    newobj.collision_size.y = collisionhgt[ size ]
+	local o = actor:new( level, x, -collisionhgt[ size ], 0, 0 )
+	o.animations[ 'idle' ] = animation:new( sprite[size], 1, spritewidth[size], spriteheight[size] )
+	o.current_animation_name = 'idle'
+	o.do_dynamics = false
+	o.offset.x = spriteoffsetx[ size ]
+	o.offset.y = spriteoffsety[ size ]
+	o.collision_size.x = collisionwid[ size ]
+	o.collision_size.y = collisionhgt[ size ]
 
-    return setmetatable( newobj, self )        
+	return setmetatable( o, self )
 end
-
--- coin
 
 local coin = inheritsfrom( actor )
 function coin:new( level, x )
-    local y = -48 + 8 * flr( sin( x / 300 ) * 5 )
-    local newobj = actor:new( level, x, y, 4, 4 )
-    newobj.animations[ 'idle' ] = animation:new( 16 ) 
-    newobj.current_animation_name = 'idle'
-    newobj.collision_planes_inc = 1
-    newobj.may_player_pickup = true
-    newobj.damage = 0
-    newobj.floatbobamplitude = 1
+	local y = -48 + 8 * flr( sin( x / 300 ) * 5 )
+	local o = actor:new( level, x, y, 4, 4 )
+	o.animations[ 'idle' ] = animation:new( 16 )
+	o.current_animation_name = 'idle'
+	o.collision_planes_inc = 1
+	o.may_player_pickup = true
+	o.damage = 0
+	o.floatbobamplitude = 1
 
-    newobj.value = 1
+	o.value = 1
 
-    return setmetatable( newobj, self )    
+	return setmetatable( o, self )
 end
 
 function coin:on_collision( other )
-    self:on_pickedup_by( other )
-    self:superclass().on_collision( self, other )
+	self:on_pickedup_by( other )
+	self:superclass().on_collision( self, other )
 end
 
 function coin:on_pickedup_by( other )
-    other:add_coins( self.value )
-    self.value = 0
-    self:superclass().on_pickedup_by( self, other )
+	other:add_coins( self.value )
+	self.value = 0
+	self:superclass().on_pickedup_by( self, other )
 end
 
 local tree = inheritsfrom( actor )
 function tree:new( level, x )
-    local scale = randinrange( 2, 4 )
-    local newobj = actor:new( level, x, -14 * scale, scale * 2 * 8, scale * 8 )
-    newobj.flipx = pctchance( 50 )
-    newobj.animations[ 'idle' ] = animation:new( 128, 1, 1, 2 )
-    newobj.current_animation_name = 'idle'
-    newobj.collision_planes_inc = 0
-    newobj.damage = 0
-    newobj.parallaxslide = randinrange( 0.5, 8.0 ) / (scale*scale)
-    newobj.depth = newobj.parallaxslide * 10
-    newobj.animations[ 'idle' ].drawscalex = scale
-    newobj.animations[ 'idle' ].drawscaley = scale
+	local scale = randinrange( 2, 4 )
+	local o = actor:new( level, x, -14 * scale, scale * 2 * 8, scale * 8 )
+	o.flipx = pctchance( 50 )
+	o.animations[ 'idle' ] = animation:new( 128, 1, 1, 2 )
+	o.current_animation_name = 'idle'
+	o.collision_planes_inc = 0
+	o.damage = 0
+	o.parallaxslide = randinrange( 0.5, 8.0 ) / (scale*scale)
+	o.depth = o.parallaxslide * 10
+	o.animations[ 'idle' ].drawscalex = scale
+	o.animations[ 'idle' ].drawscaley = scale
 
-    return setmetatable( newobj, self )    
+	return setmetatable( o, self )
 end
 
 local shrub = inheritsfrom( actor )
 function shrub:new( level, x )
-    local scale = randinrange( 1, 2 )
-    local newobj = actor:new( level, x, 32 - 16 * scale, scale * 4 * 8, scale * 2 * 8 )
-    newobj.flipx = pctchance( 33 )
-    newobj.animations[ 'idle' ] = animation:new( 160, 1, 4, 2 )
-    newobj.current_animation_name = 'idle'
-    newobj.collision_planes_inc = 0
-    newobj.damage = 0
-    newobj.parallaxslide = -randinrange( 0.5, 1 ) / scale
-    newobj.depth = newobj.parallaxslide * 10
-    newobj.animations[ 'idle' ].drawscalex = scale
-    newobj.animations[ 'idle' ].drawscaley = scale
+	local scale = randinrange( 1, 2 )
+	local o = actor:new( level, x, 32 - 16 * scale, scale * 4 * 8, scale * 2 * 8 )
+	o.flipx = pctchance( 33 )
+	o.animations[ 'idle' ] = animation:new( 160, 1, 4, 2 )
+	o.current_animation_name = 'idle'
+	o.collision_planes_inc = 0
+	o.damage = 0
+	o.parallaxslide = -randinrange( 0.5, 1 ) / scale
+	o.depth = o.parallaxslide * 10
+	o.animations[ 'idle' ].drawscalex = scale
+	o.animations[ 'idle' ].drawscaley = scale
 
-    return setmetatable( newobj, self )    
+	return setmetatable( o, self )
 end
 
 
 function level:maybe_create( class, classname )
-    local _, liveright = self:live_actor_span()
-    local creation_point = liveright - 2
+	local _, liveright = self:live_actor_span()
+	local creation_point = liveright - 2
 
-    local record = self.creation_records[ classname ]
-    if record.earliestnext < creation_point
-        and ( record.predicate == nil or record.predicate() )
-        and pctchance( record.chance ) then
-        local obj = class:new( self, creation_point )
-        record.earliestnext = creation_point + record.interval
-        return obj
-    end
-    return nil
+	local record = self.creation_records[ classname ]
+	if record.earliestnext < creation_point
+		and ( record.predicate == nil or record.predicate() )
+		and pctchance( record.chance ) then
+		local obj = class:new( self, creation_point )
+		record.earliestnext = creation_point + record.interval
+		return obj
+	end
+	return nil
 end
 
 
 function level:create_props()
-    local _, liveright = self:live_actor_span()
+	local _, liveright = self:live_actor_span()
 
-    self:maybe_create( stone, 'stone' )
-    self:maybe_create( tree, 'tree' )
-    self:maybe_create( shrub, 'shrub' )
+	self:maybe_create( stone, 'stone' )
+	self:maybe_create( tree, 'tree' )
+	self:maybe_create( shrub, 'shrub' )
+	self:maybe_create( coin, 'coin' )
 
-    local _, liveright = self:live_actor_span()
-    local creation_point = liveright - 2
+	local _, liveright = self:live_actor_span()
+	local creation_point = liveright - 2
 
-    local record = self.creation_records[ 'material' ]
-    if record.earliestnext < creation_point then
-        for itemname, type in pairs( items ) do
-            if type.shoulddrop ~= nil then
-                if type.shoulddrop( self ) then
-                    local pickup = pickup:new( self, itemname, type, liveright - 2, type.sprite )
-                    -- todo
-                end
-            end
-        end
-        record.earliestnext = creation_point + record.interval
-    end
-    -- if pctchance( 0.25 ) then
-    --     local pickup = pickup:new( self, liveright - 2, 7, function( pickup, actor )
-    --         actor.armor = actor.max_armor
-    --     end )
-    -- end
-end
-
-function level:create_coins()
-    self:maybe_create( coin, 'coin' )
+	local record = self.creation_records[ 'material' ]
+	if record.earliestnext < creation_point then
+		for itemname, type in pairs( items ) do
+			if type.shoulddrop ~= nil then
+				if type.shoulddrop( self ) then
+					local pickup = pickup:new( self, itemname, type, liveright - 2, type.sprite )
+				end
+			end
+		end
+		record.earliestnext = creation_point + record.interval
+	end
 end
 
 function world_to_mapsegment_cell_x( x )
-    return flr( x / maptoworld( mapsegment_tile_size.x ) )
+	return flr( x / maptoworld( mapsegment_tile_size.x ) )
 end
 
 function level:update_mapsegments()
-    local left, right = self:viewspan()
+	local left, right = self:viewspan()
 
-    -- update and remove any expired (too far left) segments
-    erase_elements( self.mapsegments, function(segment)
-        segment:update()
-        local farleft = segment:right() < left
-        return farleft
-    end )
+	erase_elements( self.mapsegments, function(segment)
+		segment:update()
+		local farleft = segment:right() < left
+		return farleft
+	end )
 
-    -- create new segments to fill screen.
-
-    firstopenleft = right
-    if #self.mapsegments > 0 then
-        firstopenleft = max( firstopenleft, self.mapsegments[ #self.mapsegments ].worldx + maptoworld( mapsegment_tile_size.x ) )
-    end
-    for worldcellx = world_to_mapsegment_cell_x( firstopenleft ), world_to_mapsegment_cell_x( right ) do
-        local segment = mapsegment:new( rand_int( 0, 5 ), maptoworld( worldcellx * mapsegment_tile_size.x ) )
-        add( self.mapsegments, segment )
-    end
+	firstopenleft = right
+	if #self.mapsegments > 0 then
+		firstopenleft = max( firstopenleft, self.mapsegments[ #self.mapsegments ].worldx + maptoworld( mapsegment_tile_size.x ) )
+	end
+	for worldcellx = world_to_mapsegment_cell_x( firstopenleft ), world_to_mapsegment_cell_x( right ) do
+		local segment = mapsegment:new( rand_int( 0, 5 ), maptoworld( worldcellx * mapsegment_tile_size.x ) )
+		add( self.mapsegments, segment )
+	end
 
 end
 
@@ -1462,19 +1336,19 @@ end
 local buttonstates = {}
 local lastbuttonstates = {}
 function wentdown( btn )
-    return buttonstates[ btn ] and not lastbuttonstates[ btn ]
+	return buttonstates[ btn ] and not lastbuttonstates[ btn ]
 end
 
 function isdown( btn )
-    return buttonstates[ btn ]
+	return buttonstates[ btn ]
 end
 
 function update_buttons()
-    lastbuttonstates = shallowcopy( buttonstates )
+	lastbuttonstates = shallowcopy( buttonstates )
 
-    for i = 0,5 do
-        buttonstates[ i ] = btn( i )
-    end
+	for i = 0,5 do
+		buttonstates[ i ] = btn( i )
+	end
 end
 
 -->8
@@ -1482,11 +1356,11 @@ end
 
 local inventorydisplay = inheritsfrom( nil )
 function inventorydisplay:new( level )
-    local newobj = {
-        level = level,
-        itemdrawinfo = {},
-    }
-    return setmetatable( newobj, self )
+	local o = {
+		level = level,
+		itemdrawinfo = {},
+	}
+	return setmetatable( o, self )
 end
 
 function inventorydisplay:update()
@@ -1494,51 +1368,43 @@ end
 
 function inventorydisplay:draw()
 
-    local left = 64
-    local top = 128 - 2 - 9 - 6
-    local i = 0
-    for itemname, item in pairs( items ) do
-        if item.showinv then
-            local x = left + i * 9
-            spr( item.sprite, x, top )
-            local count = self.level.inventory:item_count( itemname )
-            draw_shadowed( x + 2, top + 9, 0, 1, 2, function(x,y)
-                print( '' .. count, x, y, 12 )
-            end )
-            i += 1
-        end
-    end
+	local left = 64
+	local top = 128 - 2 - 9 - 6
+	local i = 0
+	for itemname, item in pairs( items ) do
+		if item.showinv then
+			local x = left + i * 9
+			spr( item.sprite, x, top )
+			local count = self.level.inventory:item_count( itemname )
+			draw_shadowed( x + 2, top + 9, 0, 1, 2, function(x,y)
+				print( '' .. count, x, y, 12 )
+			end )
+			i += 1
+		end
+	end
 end
 
 local item_tree =
-    -- root
-    { item = nil,
-        children = {
-            -- light
-            { item = 'torch' },          
-
-            -- food
-            { item = 'cookedmeat',            
-                children = {
-                    { item = 'pizza' },  
-                    { item = 'cookedmeat' },  
-                    { item = 'stew' },  
-                }
-            },
-
-            -- weapons
-            { item = 'arrow',
-                children = {
-                    { item = 'bow' },      
-                    { item = 'armor' },      
-                    { item = 'arrow' },      
-                }
-            },
-
-            -- 'home'
-            { item = 'home' },
-        }
-    }
+	{ item = nil,
+		children = {
+			{ item = 'torch' },
+			{ item = 'cookedmeat',
+				children = {
+					{ item = 'pizza' },
+					{ item = 'cookedmeat' },
+					{ item = 'stew' },
+				}
+			},
+			{ item = 'arrow',
+				children = {
+					{ item = 'bow' },
+					{ item = 'armor' },
+					{ item = 'arrow' },
+				}
+			},
+			{ item = 'home' },
+		}
+	}
 
 local thingy_spacing = 20
 
@@ -1546,451 +1412,425 @@ local thingy = inheritsfrom( nil )
 
 local crafting = inheritsfrom( nil )
 function crafting:new( level, pos )
-    local newobj = {
-        level = level,
-        pos = pos,
-        tick_count = 0,
-        pending_calls = {},        
-        activated = nil,
-        homebutton = false,
-        lockout_input = false,
-        last_activate_time = nil,
-    }
+	local o = {
+		level = level,
+		pos = pos,
+		tick_count = 0,
+		pending_calls = {},
+		activated = nil,
+		homebutton = false,
+		lockout_input = false,
+		last_activate_time = nil,
+	}
 
-    local resultself =  setmetatable( newobj, self )
+	local resultself =  setmetatable( o, self )
 
-    resultself.rootthingy = thingy:new( resultself, nil, item_tree )
-    resultself.homebutton = resultself.rootthingy.children[ 4 ]
-    resultself.homebutton.homebutton = true
-    resultself.rootthingy:activate()
+	resultself.rootthingy = thingy:new( resultself, nil, item_tree )
+	resultself.homebutton = resultself.rootthingy.children[ 4 ]
+	resultself.homebutton.homebutton = true
+	resultself.rootthingy:activate()
 
-    return resultself
+	return resultself
 end
 
 function crafting:on_activating( thing )
-    self.activated = thing
+	self.activated = thing
 end
 
 function crafting:on_activating_item( thing, takingaction )
 
-    self.last_activate_time = self:time()
+	self.last_activate_time = self:time()
 
-    if not takingaction then return end
+	if not takingaction then return end
 
-    self.lockout_input = true
+	self.lockout_input = true
 
-    if not thing.homebutton then
-        self:after_delay( 0.4, function()
-            self:reset()
-        end )
-    else
-        self:reset()
-    end
+	if not thing.homebutton then
+		self:after_delay( 0.4, function()
+			self:reset()
+		end )
+	else
+		self:reset()
+	end
 end
 
 function crafting:update_pending_calls()
-    local now = self:time()
+	local now = self:time()
 
-    erase_elements( self.pending_calls, function(call)
-        if now >= call.deadline then
-            call.fn()
-            return true
-        end
-        return false
-    end )
+	erase_elements( self.pending_calls, function(call)
+		if now >= call.deadline then
+			call.fn()
+			return true
+		end
+		return false
+	end )
 end
 
 function crafting:reset()
-    self.last_activate_time = nil
-    self.activated = nil
-    self.lockout_input = false
-    self.rootthingy:collapse( true )
-    self.rootthingy:activate()
+	self.last_activate_time = nil
+	self.activated = nil
+	self.lockout_input = false
+	self.rootthingy:collapse( true )
+	self.rootthingy:activate()
 end
 
 function crafting:after_delay( delay, fn )
-    add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
+	add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
 end
 
 function crafting:time()
-    return self.tick_count / 60.0
+	return self.tick_count / 60.0
 end
 
 function crafting:update()
-    self.tick_count += 1
+	self.tick_count += 1
 
-    self:update_pending_calls()
+	self:update_pending_calls()
 
-    if self.activated ~= nil then
-        self.activated:update_input()
-    end
+	if self.activated ~= nil then
+		self.activated:update_input()
+	end
 
-    if self.last_activate_time ~= nil then
-        if self:time() - self.last_activate_time > 6 then
-            self:reset()
-        end
-    end
+	if self.last_activate_time ~= nil then
+		if self:time() - self.last_activate_time > 6 then
+			self:reset()
+		end
+	end
 
-    self.rootthingy:update()
+	self.rootthingy:update()
 end
 
 function crafting:draw()
 
-    local rootbasis = self.pos
+	local rootbasis = self.pos
 
-    self.rootthingy:draw( rootbasis, false )
+	self.rootthingy:draw( rootbasis, false )
 
-    -- draw again, but only the activated branch
-    if self.activated ~= nil then
-        self.rootthingy:draw( rootbasis, true )
-    end
+	if self.activated ~= nil then
+		self.rootthingy:draw( rootbasis, true )
+	end
 
-    -- draw hint arrows
-    function special_shadow( x, y, col1, col2, drawfn )
-        drawfn( x, y+1, col1 )
-        drawfn( x, y, col2 )
-    end
+	function special_shadow( x, y, col1, col2, drawfn )
+		drawfn( x, y+1, col1 )
+		drawfn( x, y, col2 )
+	end
 
-    draw_shadowed( rootbasis.x, rootbasis.y, 0, 1, 2, function(x,y,col)
-        print( '⬅️', x - 10, y, 8 )
-        print( '➡️', x + 10, y, 9 )
-        print( '⬆️', x, y - 10, 10 )
+	draw_shadowed( rootbasis.x, rootbasis.y, 0, 1, 2, function(x,y,col)
+		print( '⬅️', x - 10, y, 8 )
+		print( '➡️', x + 10, y, 9 )
+		print( '⬆️', x, y - 10, 10 )
 
-        if self.activated ~= self.rootthingy then
-            print( '⬇️', x, y + 10, 11 )
-        end
-    end )
+		if self.activated ~= self.rootthingy then
+			print( '⬇️', x, y + 10, 11 )
+		end
+	end )
 
-    if self.activated == self.rootthingy then
-        draw_shadowed( rootbasis.x + 4, rootbasis.y + 12, 0, 1, 2, function(x,y)
-            print_centered_text( 'craft', x, y, 4 )
-        end )
-    end
+	if self.activated == self.rootthingy then
+		draw_shadowed( rootbasis.x + 4, rootbasis.y + 12, 0, 1, 2, function(x,y)
+			print_centered_text( 'craft', x, y, 4 )
+		end )
+	end
 end
 
 function thingy:new( crafting, parent, item_config )
-    local newobj = {
-        crafting = crafting,
-        parent = parent,
-        item = items[ item_config.item ],
-        sprite = item_config.item ~= nil and items[ item_config.item ].sprite or nil,
-        children = {},
-        pos = vector:new( 0, 0 ),
-        destination = nil,
-        lerpspeed = 0.25,
-        flashstarttime = nil,
-        flashendtime = nil,
-    }
+	local o = {
+		crafting = crafting,
+		parent = parent,
+		item = items[ item_config.item ],
+		sprite = item_config.item ~= nil and items[ item_config.item ].sprite or nil,
+		children = {},
+		pos = vector:new( 0, 0 ),
+		destination = nil,
+		lerpspeed = 0.25,
+		flashstarttime = nil,
+		flashendtime = nil,
+	}
 
-    local configchildren = item_config.children
-    for child in all( configchildren ) do
-        add( newobj.children, thingy:new( crafting, newobj, child ) )
-    end
+	local configchildren = item_config.children
+	for child in all( configchildren ) do
+		add( o.children, thingy:new( crafting, o, child ) )
+	end
 
-    return setmetatable( newobj, self )
+	return setmetatable( o, self )
 end
 
 function thingy:flash( duration )
-    self.flashstarttime = self.crafting:time()
-    self.flashendtime = self.flashstarttime + establish( duration, 1 )
+	self.flashstarttime = self.crafting:time()
+	self.flashendtime = self.flashstarttime + establish( duration, 1 )
 end
 
 function thingy:flash_age()
-    if self.flashstarttime == nil then return nil end
-    return self.crafting:time() - self.flashstarttime
+	if self.flashstarttime == nil then return nil end
+	return self.crafting:time() - self.flashstarttime
 end
 
 function thingy:flashing()
-    return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
+	return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
 end
 
 function thingy:recursively_usable()
-    if self.homebutton then return true end
-    if #self.children == 0 and self:available() then return true end
+	if self.homebutton then return true end
+	if #self.children == 0 and self:available() then return true end
 
-    -- i'm available if any of my children are available.
-    for child in all( self.children ) do
-        if child:recursively_usable() then
-            return true
-        end
-    end
-    return false
+	for child in all( self.children ) do
+		if child:recursively_usable() then
+			return true
+		end
+	end
+	return false
 end
 
 function thingy:available()
-    if self.homebutton or #self.children > 0 then return true end
+	if self.homebutton or #self.children > 0 then return true end
 
-    for itemname, count in pairs( self.item.requirements ) do
-        if self.crafting.level.inventory:item_count( itemname ) < count then
-            return false
-        end
-    end
+	for itemname, count in pairs( self.item.requirements ) do
+		if self.crafting.level.inventory:item_count( itemname ) < count then
+			return false
+		end
+	end
 
-    return true
+	return true
 end
 
 function thingy:drawself( basepos )
-    local selfpos = basepos + self.pos
+	local selfpos = basepos + self.pos
 
-    if self.sprite == nil then return end
+	if self.sprite == nil then return end
 
-    local colorize = 0
-    if self:flashing() and flicker( self:flash_age(), 2 ) then
-        colorize = 8
-    end
+	local colorize = 0
+	if self:flashing() and flicker( self:flash_age(), 2 ) then
+		colorize = 8
+	end
 
-    draw_color_shifted( colorize, function()
+	draw_color_shifted( colorize, function()
 
-        local basecolorshift = colorize
-        if basecolorshift == 0 and not self:recursively_usable() then
-            basecolorshift = 1
-        end
-        draw_color_shifted( basecolorshift, function()        
-            spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
-        end )
+		local basecolorshift = colorize
+		if basecolorshift == 0 and not self:recursively_usable() then
+			basecolorshift = 1
+		end
+		draw_color_shifted( basecolorshift, function()
+			spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
+		end )
 
-        local iconcolorshift = colorize
-        if iconcolorshift == 0 and #self.children > 0 then
-            iconcolorshift = -1
-        end
+		local iconcolorshift = colorize
+		if iconcolorshift == 0 and #self.children > 0 then
+			iconcolorshift = -1
+		end
 
-        draw_color_shifted( iconcolorshift, function()
-            spr( self.sprite, selfpos.x, selfpos.y )
-        end )
-    end )
+		draw_color_shifted( iconcolorshift, function()
+			spr( self.sprite, selfpos.x, selfpos.y )
+		end )
+	end )
 end
 
 
 function thingy:drawchildren( basepos, activatedonly )
-    for child in all( self.children ) do
-        child:draw( basepos, activatedonly )
-    end
+	for child in all( self.children ) do
+		child:draw( basepos, activatedonly )
+	end
 end
 
 function thingy:child_index( child )
-    for i = 1, #self.children do
-        if child == self.children[ i ] then
-            return i
-        end
-    end
-    return nil
+	for i = 1, #self.children do
+		if child == self.children[ i ] then
+			return i
+		end
+	end
+	return nil
 end
 
 function thingy:child_from_button( button )
-    if button == nil then return nil end
+	if button == nil then return nil end
 
-    if button <= #self.children then
-        return self.children[ button ]
-    else
-        return nil
-    end
+	if button <= #self.children then
+		return self.children[ button ]
+	else
+		return nil
+	end
 end
 
 function thingy:has_activated_descendant()
-    if self.crafting.activated == self then return true end
+	if self.crafting.activated == self then return true end
 
-    for child in all( self.children ) do
-        if child:has_activated_descendant() then
-            return true
-        end
-    end
-    return false
+	for child in all( self.children ) do
+		if child:has_activated_descendant() then
+			return true
+		end
+	end
+	return false
 end
 
 function thingy:draw( basepos, activatedonly )
-    if activatedonly and not self:has_activated_descendant() then return end
+	if activatedonly and not self:has_activated_descendant() then return end
 
-    local selfpos = basepos + self.pos
+	local selfpos = basepos + self.pos
 
-    local drawselfontop = true
+	local drawselfontop = true
 
-    if not drawselfontop then
-        self:drawself( basepos )
-    end
+	if not drawselfontop then
+		self:drawself( basepos )
+	end
 
-    self:drawchildren( selfpos:copy(), activatedonly )
+	self:drawchildren( selfpos:copy(), activatedonly )
 
-    if drawselfontop then
-        self:drawself( basepos )
-    end
+	if drawselfontop then
+		self:drawself( basepos )
+	end
 end
 
 function thingy:update()
 
-    if self.destination ~= nil then
-        function decisive_lerp( from, to, alpha )
-            local result = lerp( from, to, alpha )
-            if abs( to - result ) < 0.25 then
-                result = to
-            end
-            return result
-        end
-        self.pos.x = decisive_lerp( self.pos.x, self.destination.x, self.lerpspeed )
-        self.pos.y = decisive_lerp( self.pos.y, self.destination.y, self.lerpspeed )
-    end
+	if self.destination ~= nil then
+		function decisive_lerp( from, to, alpha )
+			local result = lerp( from, to, alpha )
+			if abs( to - result ) < 0.25 then
+				result = to
+			end
+			return result
+		end
+		self.pos.x = decisive_lerp( self.pos.x, self.destination.x, self.lerpspeed )
+		self.pos.y = decisive_lerp( self.pos.y, self.destination.y, self.lerpspeed )
+	end
 
-    for child in all( self.children ) do
-        child:update()
-    end    
+	for child in all( self.children ) do
+		child:update()
+	end
 end
 
 function thingy:expand( parentindex, myindex )
-    -- 1 = left; 2 = right; 3 = up; 4 = down
-
-    local adjustedindex = myindex
-    -- todo!!!
-    -- if myindex == 1 then adjustedindex = parentindex end
-    -- if myindex == 3 then adjustedindex = ( parentindex == 1 ) and 3 or 1 end
-
-    if adjustedindex == 1 then
-        self.destination = vector:new( -thingy_spacing, 0 )
-    elseif adjustedindex == 2 then
-        self.destination = vector:new(  thingy_spacing, 0 )
-    elseif adjustedindex == 3 then
-        self.destination = vector:new( 0, -thingy_spacing )
-    elseif adjustedindex == 4 then
-        self.destination = vector:new( 0, 0 )
-    end
+	if myindex == 1 then
+		self.destination = vector:new( -thingy_spacing, 0 )
+	elseif myindex == 2 then
+		self.destination = vector:new(  thingy_spacing, 0 )
+	elseif myindex == 3 then
+		self.destination = vector:new( 0, -thingy_spacing )
+	elseif myindex == 4 then
+		self.destination = vector:new( 0, 0 )
+	end
 end
 
 function thingy:collapse( recursive )
-    self.destination = vector:new( 0, 0 )
+	self.destination = vector:new( 0, 0 )
 
-    if self.homebutton then
-        self.destination = vector:new( 0, thingy_spacing )
-    end
+	if self.homebutton then
+		self.destination = vector:new( 0, thingy_spacing )
+	end
 
-    if recursive then
-        for child in all( self.children ) do
-            child:collapse( recursive )
-        end
-    end
+	if recursive then
+		for child in all( self.children ) do
+			child:collapse( recursive )
+		end
+	end
 end
 
 function thingy:activate()
-    if not self:available() then
-        -- unavailable
-        self:flash( 0.05 )
-        self.crafting:on_activating_item( self, true )
-        return
-    end
+	if not self:available() then
+		self:flash( 0.05 )
+		self.crafting:on_activating_item( self, true )
+		return
+	end
 
-    self.crafting:on_activating( self )
+	self.crafting:on_activating( self )
 
-    local flashduration = 0.25
+	local flashduration = 0.25
 
-    -- leaf node?
-    if self.parent ~= nil and #self.children == 0 and self.item ~= nil then
-        -- yes. do what we do
+	if self.parent ~= nil and #self.children == 0 and self.item ~= nil then
+		for itemname, count in pairs( self.item.requirements ) do
+			if self.crafting.level.inventory:use( itemname, count ) then
+				return false
+			end
+		end
 
-        -- remove ingredients
-        for itemname, count in pairs( self.item.requirements ) do
-            if self.crafting.level.inventory:use( itemname, count ) then
-                return false
-            end
-        end
+		local action = self.item.oncreated
+		if action ~= nil then
+			action()
+		end
 
-        local action = self.item.oncreated
-        if action ~= nil then
-            action()
-        end
+		self.crafting:on_activating_item( self, true )
+	else
+		self.crafting:on_activating_item( self, false )
 
-        self.crafting:on_activating_item( self, true )
-    else
-        -- container. expand children.
+		self.destination = vector:new( 0, 0 )
 
-        self.crafting:on_activating_item( self, false )
+		flashduration = 0.15
+		local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 0
 
-        self.destination = vector:new( 0, 0 )
+		for i = 1, #self.children do
+			local child = self.children[ i ]
 
-        flashduration = 0.15
-        local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 0
+			child:expand( myindex, i )
+		end
+	end
 
-        for i = 1, #self.children do
-            local child = self.children[ i ]
-
-            child:expand( myindex, i )
-        end
-    end
-
-    if self.parent ~= nil then
-        self:flash( flashduration )
-    end
+	if self.parent ~= nil then
+		self:flash( flashduration )
+	end
 
 end
 
 function thingy:update_input()
 
-    if self.crafting.lockout_input then return end
+	if self.crafting.lockout_input then return end
 
-    -- home button
-    if btnp( 3 ) and self.parent ~= nil then
-        self.crafting.homebutton:flash( 0.15 )
-        self.crafting:reset()
-    else 
-        local button = nil    
-        if btnp( 2 ) then
-            button = 3
-        elseif btnp( 1 ) then
-            button = 2
-        elseif btnp( 0 ) then
-            button = 1
-        end
+	if btnp( 3 ) and self.parent ~= nil then
+		self.crafting.homebutton:flash( 0.15 )
+		self.crafting:reset()
+	else
+		local button = nil
+		if btnp( 2 ) then
+			button = 3
+		elseif btnp( 1 ) then
+			button = 2
+		elseif btnp( 0 ) then
+			button = 1
+		end
 
-        local activated_child = self:child_from_button( button )
+		local activated_child = self:child_from_button( button )
 
-        if activated_child ~= nil then
+		if activated_child ~= nil then
 
-            -- if non-leaf, collapse other children
-            if #activated_child.children > 0 then
-                for child in all( self.children ) do
-                    if activated_child ~= child then
-                        child:collapse()
-                    end
-                end
-            end
+			if #activated_child.children > 0 then
+				for child in all( self.children ) do
+					if activated_child ~= child then
+						child:collapse()
+					end
+				end
+			end
 
-            activated_child:activate()
+			activated_child:activate()
+		end
 
-            -- if root, move down
-            if self.parent == nil then
-                -- todo
-                -- self.destination = vector:new( 0, thingy_spacing )
-            end
-        end
-
-    end
+	end
 end
 
 -->8
 --one-time setup
 
 function tidy_map()
-    for mapx = 0, 127 do
-        for mapy = 0, 32 do
+	for mapx = 0, 127 do
+		for mapy = 0, 32 do
 
-            -- fixup platform ends
-            function platformsprite( sprite )
-                return 132 <= sprite and sprite <= 135
-            end
+			function platformsprite( sprite )
+				return 132 <= sprite and sprite <= 135
+			end
 
-            local mapsprite = mget( mapx, mapy )
-            local segmentx = mapx % mapsegment_tile_size.x
-            local segmenty = mapy % mapsegment_tile_size.y
-            if platformsprite( mapsprite ) then
-                local leftplatform = segmentx > 0 and platformsprite( mget( mapx - 1, mapy ))
-                local rigtplatform = segmentx < mapsegment_tile_size.x - 1 and platformsprite( mget( mapx + 1, mapy ))
+			local mapsprite = mget( mapx, mapy )
+			local segmentx = mapx % mapsegment_tile_size.x
+			local segmenty = mapy % mapsegment_tile_size.y
+			if platformsprite( mapsprite ) then
+				local leftplatform = segmentx > 0 and platformsprite( mget( mapx - 1, mapy ))
+				local rigtplatform = segmentx < mapsegment_tile_size.x - 1 and platformsprite( mget( mapx + 1, mapy ))
 
-                local newsprite = 132
-                if not leftplatform then
-                    newsprite = not rigtplatform and 135 or 133
-                elseif not rigtplatform then
-                    newsprite = 134
-                end
-                mset( mapx, mapy, newsprite )
-            end
-        end
-    end
+				local newsprite = 132
+				if not leftplatform then
+					newsprite = not rigtplatform and 135 or 133
+				elseif not rigtplatform then
+					newsprite = 134
+				end
+				mset( mapx, mapy, newsprite )
+			end
+		end
+	end
 end
 
 --level creation
@@ -2004,398 +1844,347 @@ local game_state = 'title'
 local current_level = nil
 
 function restart_world()
-    current_level = level:new( inventory:new() )
-    crafting_ui = crafting:new( current_level, vector:new( 96, 2 + thingy_spacing + 2 ))
-    inventory_display = inventorydisplay:new( current_level )
+	current_level = level:new( inventory:new() )
+	crafting_ui = crafting:new( current_level, vector:new( 96, 2 + thingy_spacing + 2 ))
+	inventory_display = inventorydisplay:new( current_level )
 
-    game_state = 'playing'
+	game_state = 'playing'
 end
 
 function player_run_distance()
-    return flr(( current_level.player.pos.x - 0 ) / 40 )
+	return flr(( current_level.player.pos.x - 0 ) / 40 )
 end
 
 function deltafromplayer( actor )
-    return actor.pos.x - current_level.player.pos.x
+	return actor.pos.x - current_level.player.pos.x
 end
 
 tidy_map()
 restart_world()
 
-
-function level:update_creatures()
-    -- create new creature if desired
-    self:maybe_create( creature, 'creature' )
-end
-
 --main loops
 function _update60()
 
-    update_buttons()
+	update_buttons()
 
-    -- update game state logic
+	if game_state == 'playing' then
+		function update_input()
+			local player = current_level.player
+			if wentdown(4) then
+				player:jump()
+			end
 
-    if game_state == 'playing' then
-        function update_input()
-            local player = current_level.player
-            if wentdown(4) then
-                player:jump()
-            end
+			if wentdown(5) then
+				player:grab()
+			end
 
-            if wentdown(5) then
-                player:grab()
-            end
+			crafting_ui:update()
+			inventory_display:update()
 
-            crafting_ui:update()
-            inventory_display:update()
-
-            -- manual movement
-            if false then
-                local move = 0
-                if isdown( 0 ) then
-                    move += -1
-                end
-                if isdown( 1 ) then
-                    move += 1
-                end
-                player.vel.x = move
-            end
-        end
+			-- manual movement
+			if false then
+				local move = 0
+				if isdown( 0 ) then
+					move += -1
+				end
+				if isdown( 1 ) then
+					move += 1
+				end
+				player.vel.x = move
+			end
+		end
 
 
-        if current_level.player:dead() then
-            game_state = 'gameover_dying'
-            current_level:after_delay( 2.0, function()
-                game_state = 'gameover'
-            end )
-        else
-            update_input()
-        end
+		if current_level.player:dead() then
+			game_state = 'gameover_dying'
+			current_level:after_delay( 2.0, function()
+				game_state = 'gameover'
+			end )
+		else
+			update_input()
+		end
 
-    elseif game_state == 'gameover' or game_state == 'title' then
+	elseif game_state == 'gameover' or game_state == 'title' then
 
-        -- update input
-        if wentdown( 4 ) or wentdown( 5 ) then
-            restart_world()
-        end
-    end
+		if wentdown( 4 ) or wentdown( 5 ) then
+			restart_world()
+		end
+	end
 
-    if current_level ~= nil then
-        current_level:update()
-    end
+	if current_level ~= nil then
+		current_level:update()
+	end
 end
 
 function draw_color_shifted( shift, fn )
-    for i = 0,15 do
-        pal( i, rel_color( i, shift ))
-    end
+	for i = 0,15 do
+		pal( i, rel_color( i, shift ))
+	end
 
-    fn()
+	fn()
 
-    pal()
+	pal()
 end
 
 function draw_shadowed( x, y, offsetx, offsety, darkness, fn )
-    draw_color_shifted( -darkness, function()
-        fn( x + offsetx, y + offsety )
-    end )
+	draw_color_shifted( -darkness, function()
+		fn( x + offsetx, y + offsety )
+	end )
 
-    fn( x, y )
+	fn( x, y )
 end
 
 function print_centered_text( text, x, y, color )
-    print( text, x - #text / 2 * 4, y, color )
+	print( text, x - #text / 2 * 4, y, color )
 end
 
 function print_rightaligned_text( text, x, y, color )
-    print( text, x - #text * 4, y, color )
+	print( text, x - #text * 4, y, color )
 end
 
 function draw_ui()
 
-    function draw_ui_playing()
-        local player = current_level.player
+	function draw_ui_playing()
+		local player = current_level.player
 
-        local iconstepx = 8
-        
-        local iconright = 126
-        local iconleft  = 19
+		local iconstepx = 8
 
-        function draw_halveable_stat( pos, top, stat, max, full_sprite, half_sprite, empty_sprite )
+		local iconright = 126
+		local iconleft  = 19
 
-            local left = pos
-            
-            for i = 0, (max - 1) / 2 do
-                local x = i * iconstepx
+		function draw_halveable_stat( pos, top, stat, max, full_sprite, half_sprite, empty_sprite )
 
-                local equivalent_x = i * 2
+			local left = pos
 
-                local sprite = 0
+			for i = 0, (max - 1) / 2 do
+				local x = i * iconstepx
 
-                if equivalent_x + 1 < stat then sprite = full_sprite 
-                elseif equivalent_x < stat then sprite = half_sprite
-                else sprite = empty_sprite end
+				local equivalent_x = i * 2
 
-                if sprite > 0 then
-                    spr( sprite, left + x, top )
-                end
-            end
-        end
+				local sprite = 0
 
-        function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
-        
-            local left = pos
+				if equivalent_x + 1 < stat then sprite = full_sprite
+				elseif equivalent_x < stat then sprite = half_sprite
+				else sprite = empty_sprite end
 
-            for i = 0, max - 1 do
-            local x = i * iconstepx
-            
-            local sprite = 0
+				if sprite > 0 then
+					spr( sprite, left + x, top )
+				end
+			end
+		end
 
-            if i < stat then sprite = full_sprite
-            else sprite = empty_sprite end
+		function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
 
-            if sprite > 0 then
-                spr( sprite, left + x, top )
-            end
-            end
-        end
+			local left = pos
 
-        local iconsy = 2
+			for i = 0, max - 1 do
+			local x = i * iconstepx
 
+			local sprite = 0
 
-        -- draw player health
-        
-        draw_halveable_stat( iconleft, iconsy, player.health, player.max_health, 1, 2, 3 )
-        draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
-            print( 'life', x, y, 8 )
-        end )
-        iconsy += 9
+			if i < stat then sprite = full_sprite
+			else sprite = empty_sprite end
 
-        -- draw player distance
+			if sprite > 0 then
+				spr( sprite, left + x, top )
+			end
+			end
+		end
 
-        -- local dist = player_run_distance()
-        -- draw_shadowed( iconright, iconsy, 0, 1, 2, function(x,y)
-        --     print_rightaligned_text( '' .. dist .. ' m', x, y, 11 )
-        -- end )
-        -- iconsy += 9
-
-        -- draw player armor
-
-        draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
-        draw_shadowed( 6, iconsy + 1, 0, 1, 1, function(x,y)
-            print( 'def', x, y, 13 )
-        end )
-        iconsy += 9
-
-        -- draw player satiation
-
-        draw_halveable_stat( iconleft, iconsy, player.satiation, player.max_satiation, 4, 5, 6 )
-        draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
-            print( 'food', x, y, 9 )
-        end )
-
-        iconsy += 9
-
-        -- draw player coins
-
-        draw_shadowed( 2, 128 - 2 - 6, 0, 1, 2, function(x,y)
-            print( 'gold ' .. player.coins, x, y, 10 )
-        end )
-
-        iconsy += 9
-
-        crafting_ui:draw()
-        inventory_display:draw()
-    end
-
-    function draw_ui_title()
-        -- todo
-    end
-
-    function draw_ui_gameover()
-        -- todo
-        draw_shadowed( 64, 64, 0, 1, 2, function(x,y)
-            print_centered_text( current_level.player.deathcause, x, y, 8 )
-        end )
-    end
-
-    function draw_ui_gameover_fully()
-        draw_ui_gameover()
-
-        draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
-            print_centered_text( 'play again! z/x ????/âŽ', x, y, 12 )
-        end )
-
-    end
-
-    if game_state == 'playing' then
-        draw_ui_playing()
-    elseif game_state == 'title' then
-        draw_ui_title()
-    elseif game_state == 'gameover_dying' then
-        draw_ui_gameover()
-    elseif game_state == 'gameover' then
-        draw_ui_gameover_fully()
-    end
+		local iconsy = 2
 
 
-    -- draw debug
+		draw_halveable_stat( iconleft, iconsy, player.health, player.max_health, 1, 2, 3 )
+		draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
+			print( 'life', x, y, 8 )
+		end )
+		iconsy += 9
 
-    if false then
-        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
-            print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            y += 8
-            print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
-            y += 8
-            print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
-            y += 8
-            print_rightaligned_text( 'coins : ' .. #current_level:actors_of_class( coin ), x, y, 6 )
-            y += 8
-        end )
-    end
+		draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
+		draw_shadowed( 6, iconsy + 1, 0, 1, 1, function(x,y)
+			print( 'def', x, y, 13 )
+		end )
+		iconsy += 9
+
+		draw_halveable_stat( iconleft, iconsy, player.satiation, player.max_satiation, 4, 5, 6 )
+		draw_shadowed( 2, iconsy + 1, 0, 1, 1, function(x,y)
+			print( 'food', x, y, 9 )
+		end )
+
+		iconsy += 9
+
+		draw_shadowed( 2, 128 - 2 - 6, 0, 1, 2, function(x,y)
+			print( 'gold ' .. player.coins, x, y, 10 )
+		end )
+
+		iconsy += 9
+
+		crafting_ui:draw()
+		inventory_display:draw()
+	end
+
+	function draw_ui_title()
+		-- todo
+	end
+
+	function draw_ui_gameover()
+		-- todo
+		draw_shadowed( 64, 64, 0, 1, 2, function(x,y)
+			print_centered_text( current_level.player.deathcause, x, y, 8 )
+		end )
+	end
+
+	function draw_ui_gameover_fully()
+		draw_ui_gameover()
+
+		draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
+			print_centered_text( 'play again! z/x ????/âŽ', x, y, 12 )
+		end )
+
+	end
+
+	if game_state == 'playing' then
+		draw_ui_playing()
+	elseif game_state == 'title' then
+		draw_ui_title()
+	elseif game_state == 'gameover_dying' then
+		draw_ui_gameover()
+	elseif game_state == 'gameover' then
+		draw_ui_gameover_fully()
+	end
+
+
+	if false then
+		draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
+			print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
+			y += 8
+			print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
+			y += 8
+			print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
+			y += 8
+			print_rightaligned_text( 'coins : ' .. #current_level:actors_of_class( coin ), x, y, 6 )
+			y += 8
+		end )
+	end
 end
 
 function _draw()
 
-    -- world
-
-    current_level:draw()
-
-    -- ui
-
-    camera( 0, 0 )
-
-    draw_ui()
-
-    -- debug
-    draw_debug_lines()
-    -- print( stat(0) )
+	current_level:draw()
+	camera( 0, 0 )
+	draw_ui()
+	draw_debug_lines()
 end
 
--- creature ai
-
 function wait( seconds )
-    for i = 0, seconds * 60 do
-        yield()
-    end
+	for i = 0, seconds * 60 do
+		yield()
+	end
 end
 
 function stage_left_appear_pos()
-    local left, _ = current_level:live_actor_span()
-    return left + 2
+	local left, _ = current_level:live_actor_span()
+	return left + 2
 end
 
 function standard_attack_warning( actor, delay )
-    delay = establish( delay, 0.5 )
-    actor:flash( delay )
-    wait( delay )
+	delay = establish( delay, 0.5 )
+	actor:flash( delay )
+	wait( delay )
 end
 
 behaviors = {
-    still = function() end,
-    hopping = 
-        function(actor)
-            while true do
-                actor:jump()
-                yield()
-            end
-        end,
-    slide_left_slow =
-        function(actor)
-            actor.vel.x = -0.5
-            actor.flipx = true
-        end,
-    slide_left_fast =
-        function(actor)
-            actor.flipx = true
-            actor.vel.x = -2
-            while deltafromplayer( actor ) > 64 do                
-                yield()
-            end
-            actor.vel.x = 1
-            wait( 0.4 )
-            actor.vel.x = 0.8
+	still = function() end,
+	hopping =
+		function(actor)
+			while true do
+				actor:jump()
+				yield()
+			end
+		end,
+	slide_left_slow =
+		function(actor)
+			actor.vel.x = -0.5
+			actor.flipx = true
+		end,
+	slide_left_fast =
+		function(actor)
+			actor.flipx = true
+			actor.vel.x = -2
+			while deltafromplayer( actor ) > 64 do
+				yield()
+			end
+			actor.vel.x = 1
+			wait( 0.4 )
+			actor.vel.x = 0.8
 
-            standard_attack_warning( actor )
-            actor.vel.x = -3
-        end,
-    slide_right_fast =
-        function(actor)
-            actor.pos.x = stage_left_appear_pos()
-            actor.flipx = false
-            actor.vel.x = 1.5
-            while deltafromplayer( actor ) < -24 do
-                yield()
-            end
-            actor.vel.x = 0.9
-            wait( 0.2 )
-            standard_attack_warning( actor )
-            actor.vel.x = 4
-        end,
-    pounce_from_left =
-        function(actor)
-            local maxpounces = 3    -- todo based on level age
-            local restpos = -32
+			standard_attack_warning( actor )
+			actor.vel.x = -3
+		end,
+	slide_right_fast =
+		function(actor)
+			actor.pos.x = stage_left_appear_pos()
+			actor.flipx = false
+			actor.vel.x = 1.5
+			while deltafromplayer( actor ) < -24 do
+				yield()
+			end
+			actor.vel.x = 0.9
+			wait( 0.2 )
+			standard_attack_warning( actor )
+			actor.vel.x = 4
+		end,
+	pounce_from_left =
+		function(actor)
+			local maxpounces = 3    -- todo based on level age
+			local restpos = -32
 
-            local numpounces = rand_int( 1, maxpounces )
+			local numpounces = rand_int( 1, maxpounces )
 
-            --setup
-            actor.pos.x = stage_left_appear_pos()
-            actor.flipx = false
-            local stored_collision_planes = actor.collision_planes_inc
+			actor.pos.x = stage_left_appear_pos()
+			actor.flipx = false
+			local stored_collision_planes = actor.collision_planes_inc
 
-            -- approach
-            actor.current_animation_name = 'run'
-            actor.vel.x = 1.25
-            while deltafromplayer( actor ) < restpos do
-                yield()
-            end
+			actor.current_animation_name = 'run'
+			actor.vel.x = 1.25
+			while deltafromplayer( actor ) < restpos do
+				yield()
+			end
 
-            -- loop
-            for i = 1, numpounces do
+			for i = 1, numpounces do
 
-                actor.colorshift = 0
+				actor.colorshift = 0
 
-                -- wait
-                actor.current_animation_name = 'run'
-                actor.vel.x = 0.95
-                wait( 1 )
+				actor.current_animation_name = 'run'
+				actor.vel.x = 0.95
+				wait( 1 )
 
-                --flash
-                actor.current_animation_name = 'coil'
-                actor:flash( 0.5 )
-                wait( 0.5 )
+				actor.current_animation_name = 'coil'
+				actor:flash( 0.5 )
+				wait( 0.5 )
 
-                --pounce
-                actor.collision_planes_inc = stored_collision_planes
-                actor.current_animation_name = 'pounce'
-                actor:jump()
-                actor.vel.x = 2.5
+				actor.collision_planes_inc = stored_collision_planes
+				actor.current_animation_name = 'pounce'
+				actor:jump()
+				actor.vel.x = 2.5
 
-                -- wait to land
+				while not actor:grounded() do
+					yield()
+				end
 
-                while not actor:grounded() do
-                    yield()
-                end
+				actor.current_animation_name = 'stop'
+				actor.vel.x = 0
+				stored_collision_planes = actor.collision_planes_inc
+				actor.collision_planes_inc = 0
 
-                -- fall back
-                actor.current_animation_name = 'stop'
-                actor.vel.x = 0
-                stored_collision_planes = actor.collision_planes_inc
-                actor.collision_planes_inc = 0
-                
-                actor.colorshift = -1
+				actor.colorshift = -1
 
-                while deltafromplayer( actor ) > restpos do
-                    yield()
-                end
-            end
-        end,
+				while deltafromplayer( actor ) > restpos do
+					yield()
+				end
+			end
+		end,
 }
-
--->8
--- liam's code
-
 
 __gfx__
 00000000088088000880000000000000000004000000000000000000777666d000000000000000007000000000000000009900004000000076000000700a0000
