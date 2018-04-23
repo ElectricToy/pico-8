@@ -5,7 +5,7 @@ __lua__
 -- by jeff and liam wofford 
 -- http://www.electrictoy.co
 
--- u⬆️ d⬇️ l⬅️ r➡️ z🅾️ x❎
+-- uâ¬†ï¸ dâ¬‡ï¸ lâ¬…ï¸ râž¡ï¸ zðŸ…¾ï¸ xâŽ
 -->8
 -- general utilities
 
@@ -165,6 +165,10 @@ vector = inheritsfrom( nil )
 function vector:new( x, y )
     local newobj = { x = establish( x, 0 ), y = establish( y, establish( x, 0 )) }
     return setmetatable( newobj, self )
+end
+
+function vector:copy()
+    return vector:new( self.x, self.y )
 end
 
 function vector:tostring()
@@ -610,6 +614,9 @@ function actor:jump( amount )
     sfx(32)
 end
 
+function actor:postdraw( drawpos )
+end
+
 function actor:draw()
     local anim = self:current_animation()
     if anim ~= nil then 
@@ -632,6 +639,9 @@ function actor:draw()
                 sspr( spritesheetleft, spritesheettop, spritesheetwid, spritesheethgt,
                       drawpos.x, drawpos.y, drawscalex * anim.ssizex * 8, drawscaley * anim.ssizey * 8, self.flipx, self.flipy )
             end
+
+            self:postdraw( drawpos )
+
         end )
 
         --draw shadow
@@ -652,6 +662,7 @@ end
 local player = inheritsfrom( actor )
 function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
+    newobj.immortal = true
     newobj.do_dynamics = true
     newobj.want_shadow = true
     newobj.depth = -100
@@ -750,9 +761,9 @@ end
 
 function player:add_health( amount )
     if amount > 1 then
-	sfx(35)
+    sfx(35)
     else
-	sfx(34)
+    sfx(34)
     end
 
 
@@ -772,7 +783,7 @@ function player:start_invulnerable()
 end
 
 function player:take_damage( amount )
-    if self.invulnerable or self:dead() then return end
+    if self.invulnerable or self.immortal or self:dead() then return end
 
     if amount <= 0 then return end
 
@@ -810,8 +821,7 @@ function player:grab()
         ( rects_overlap( self:collision_rect(), pickup:collision_rect() ) 
             or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
         pickup:on_pickedup_by( self )
-	sfx(33)
-
+    sfx(33)
     end
 end
 
@@ -873,8 +883,8 @@ function level:new()
     newobj.creation_records = {
         coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( newobj:time() / 3 ) * sin( newobj:time() / 11 ) > 0.25 end },
         stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #newobj:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
-        tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 20 end },
-        shrub    = { chance =    1, earliestnext = -100, interval = 0 },
+        tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end },
+        shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #newobj.actors < 10 end  },
         creature = { chance =    100, earliestnext = 256, interval = 256, predicate = function() return #newobj:actors_of_class( creature ) == 0 end },
     }
 
@@ -1167,7 +1177,7 @@ local behaviors = {}
 
 -- creature
 function creature:new( level, x )
-    local whichcreature = rand_int( 1, 2 )
+    local whichcreature = 2 --todo!!! rand_int( 1, 2 )
 
     local y = -16
     local wid = 16
@@ -1179,6 +1189,7 @@ function creature:new( level, x )
     newobj.want_shadow = true
     newobj.current_animation_name = 'run'
     newobj.jumpforce = 1.5
+    newobj.whichcreature = whichcreature
 
     -- tiger
     if whichcreature == 1 then
@@ -1189,11 +1200,11 @@ function creature:new( level, x )
         newobj.animations[ 'pounce' ] = newobj.animations[ 'run' ]
         newobj.behavior = cocreate( behaviors.slide_left_fast )
     elseif whichcreature == 2 then
-        newobj.animations[ 'stop' ] = animation:new( 80, 1, 2, 1 )         
-        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
         newobj.animations[ 'run' ] = animation:new( 80, 3, 2, 1 ) 
         newobj.animations[ 'coil' ] = animation:new( 86, 1, 2, 1 ) 
         newobj.animations[ 'pounce' ] = animation:new( 88, 1, 2, 1 ) 
+        newobj.animations[ 'stop' ] = newobj.animations[ 'pounce' ]
+        newobj.animations[ 'death' ] = newobj.animations[ 'stop' ]
         newobj.behavior = cocreate( behaviors.pounce_from_left )
     end
 
@@ -1221,6 +1232,16 @@ function creature:update( deltatime )
     end
 
     self:superclass().update( self, deltatime )    
+end
+
+function creature:postdraw( drawpos )
+    self:superclass().postdraw( self, drawpos  )
+
+    if self.whichcreature == 2 then -- snake
+        for i = 1,4 do
+            spr( 88, drawpos.x - 8*i, drawpos.y )
+        end
+    end
 end
 
 -- stone
@@ -1358,9 +1379,6 @@ function level:update_mapsegments()
     erase_elements( self.mapsegments, function(segment)
         segment:update()
         local farleft = segment:right() < left
-        if farleft then
-            -- debug_print( 'will delete segment ' .. segment.worldx )
-        end
         return farleft
     end )
 
@@ -1378,8 +1396,420 @@ function level:update_mapsegments()
 end
 
 -->8
---jeff's code
+--input
+local buttonstates = {}
+local lastbuttonstates = {}
+function wentdown( btn )
+    return buttonstates[ btn ] and not lastbuttonstates[ btn ]
+end
 
+function isdown( btn )
+    return buttonstates[ btn ]
+end
+
+function update_buttons()
+    lastbuttonstates = shallowcopy( buttonstates )
+
+    for i = 0,5 do
+        buttonstates[ i ] = btn( i )
+    end
+end
+
+-->8
+--crafting
+
+local item_tree =
+    -- root
+    { sprite = 0, action = nil,
+        children = {
+            -- light
+            { sprite = 15, action = nil },          
+
+            -- food
+            { sprite = 10, action = nil,            
+                children = {
+                    { sprite = 12, action = nil },  
+                    { sprite = 10, action = nil },  
+                    { sprite = 11, action = nil },  
+                }
+            },
+
+            -- weapons
+            { sprite = 13, action = nil,
+                children = {
+                    { sprite = 14, action = nil },      
+                    { sprite = 7, action = nil },      
+                    { sprite = 13, action = nil },      
+                }
+            },
+
+            -- 'home'
+            { sprite = 27, action = nil },
+        }
+    }
+
+local thingy_spacing = 16
+
+local thingy = inheritsfrom( nil )
+
+local crafting = inheritsfrom( nil )
+function crafting:new( pos )
+    local newobj = {
+        pos = pos,
+        tick_count = 0,
+        pending_calls = {},        
+        activated = nil,
+        homebutton = false,
+        lockout_input = false,
+    }
+
+    local resultself =  setmetatable( newobj, self )
+
+    resultself.rootthingy = thingy:new( resultself, nil, item_tree )
+    resultself.homebutton = resultself.rootthingy.children[ 4 ]
+    resultself.homebutton.homebutton = true
+    resultself.rootthingy:activate()
+
+    return resultself
+end
+
+function crafting:on_activating( thing )
+    self.activated = thing
+end
+
+function crafting:on_activating_item( thing )
+
+    self.lockout_input = true
+
+    if not thing.homebutton then
+        self:after_delay( 0.4, function()
+            self:reset()
+        end )
+    else
+        self:reset()
+    end
+end
+
+function crafting:update_pending_calls()
+    local now = self:time()
+
+    erase_elements( self.pending_calls, function(call)
+        if now >= call.deadline then
+            call.fn()
+            return true
+        end
+        return false
+    end )
+end
+
+function crafting:reset()
+    self.activated = nil
+    self.lockout_input = false
+    self.rootthingy:collapse( true )
+    self.rootthingy:activate()
+end
+
+function crafting:after_delay( delay, fn )
+    add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
+end
+
+function crafting:time()
+    return self.tick_count / 60.0
+end
+
+function crafting:update()
+    self.tick_count += 1
+
+    self:update_pending_calls()
+
+    if self.activated ~= nil then
+        self.activated:update_input()
+    end
+
+    self.rootthingy:update()
+end
+
+function crafting:draw()
+    self.rootthingy:draw( self.pos, false )
+
+    -- draw again, but only the activated branch
+    if self.activated ~= nil then
+        self.rootthingy:draw( self.pos, true )
+    end
+
+    if self.activated == self.rootthingy then
+        draw_shadowed( self.pos.x + 4, self.pos.y + 12, 0, 1, 2, function(x,y)
+            print_centered_text( 'craft', x, y, 4 )
+        end )
+    end
+end
+
+function thingy:new( crafting, parent, item_config )
+    local newobj = {
+        crafting = crafting,
+        parent = parent,
+        sprite = item_config.sprite,
+        action = item_config.action,
+        children = {},
+        pos = vector:new( 0, 0 ),
+        destination = nil,
+        lerpspeed = 0.25,
+        flashstarttime = nil,
+        flashendtime = nil,
+    }
+
+    local configchildren = item_config.children
+    for child in all( configchildren ) do
+        add( newobj.children, thingy:new( crafting, newobj, child ) )
+    end
+
+    return setmetatable( newobj, self )
+end
+
+function thingy:flash( duration )
+    self.flashstarttime = self.crafting:time()
+    self.flashendtime = self.flashstarttime + establish( duration, 1 )
+end
+
+function thingy:flash_age()
+    if self.flashstarttime == nil then return nil end
+    return self.crafting:time() - self.flashstarttime
+end
+
+function thingy:flashing()
+    return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
+end
+
+function thingy:available()
+    if self.homebutton or #self.children > 0 then return true end
+    -- todo!!!
+    return true
+end
+
+function thingy:drawself( basepos )
+    local selfpos = basepos + self.pos
+
+    if self.sprite == 0 then return end
+
+    local colorize = 0
+    if self:flashing() and flicker( self:flash_age(), 2 ) then
+        colorize = 8
+    end
+
+    draw_color_shifted( colorize, function()
+
+        local basecolorshift = colorize
+        if basecolorshift == 0 and not self:available() then
+            basecolorshift = 1
+        end
+        draw_color_shifted( basecolorshift, function()        
+            spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
+        end )
+
+        local iconcolorshift = colorize
+        if iconcolorshift == 0 and #self.children > 0 then
+            iconcolorshift = -1
+        end
+
+        draw_color_shifted( iconcolorshift, function()
+            spr( self.sprite, selfpos.x, selfpos.y )
+        end )
+    end )
+end
+
+
+function thingy:drawchildren( basepos, activatedonly )
+    for child in all( self.children ) do
+        child:draw( basepos, activatedonly )
+    end
+end
+
+function thingy:child_index( child )
+    for i = 1, #self.children do
+        if child == self.children[ i ] then
+            return i
+        end
+    end
+    return nil
+end
+
+function thingy:child_from_button( button )
+    if button == nil then return nil end
+
+    if button <= #self.children then
+        return self.children[ button ]
+    else
+        return nil
+    end
+end
+
+function thingy:has_activated_descendant()
+    if self.crafting.activated == self then return true end
+
+    for child in all( self.children ) do
+        if child:has_activated_descendant() then
+            return true
+        end
+    end
+    return false
+end
+
+function thingy:draw( basepos, activatedonly )
+    if activatedonly and not self:has_activated_descendant() then return end
+
+    local selfpos = basepos + self.pos
+
+    local drawselfontop = true
+
+    if not drawselfontop then
+        self:drawself( basepos )
+    end
+
+    self:drawchildren( selfpos:copy(), activatedonly )
+
+    if drawselfontop then
+        self:drawself( basepos )
+    end
+end
+
+function thingy:update()
+
+    if self.destination ~= nil then
+        function decisive_lerp( from, to, alpha )
+            local result = lerp( from, to, alpha )
+            if abs( to - result ) < 0.25 then
+                result = to
+            end
+            return result
+        end
+        self.pos.x = decisive_lerp( self.pos.x, self.destination.x, self.lerpspeed )
+        self.pos.y = decisive_lerp( self.pos.y, self.destination.y, self.lerpspeed )
+    end
+
+    for child in all( self.children ) do
+        child:update()
+    end    
+end
+
+function thingy:expand( parentindex, myindex )
+    -- 1 = left; 2 = right; 3 = up; 4 = down
+
+    local adjustedindex = myindex
+    -- todo!!!
+    -- if myindex == 1 then adjustedindex = parentindex end
+    -- if myindex == 3 then adjustedindex = ( parentindex == 1 ) and 3 or 1 end
+
+    if adjustedindex == 1 then
+        self.destination = vector:new( -thingy_spacing, 0 )
+    elseif adjustedindex == 2 then
+        self.destination = vector:new(  thingy_spacing, 0 )
+    elseif adjustedindex == 3 then
+        self.destination = vector:new( 0, -thingy_spacing )
+    elseif adjustedindex == 4 then
+        self.destination = vector:new( 0, 0 )
+    end
+end
+
+function thingy:collapse( recursive )
+    self.destination = vector:new( 0, 0 )
+
+    if self.homebutton then
+        self.destination = vector:new( 0, thingy_spacing )
+    end
+
+    if recursive then
+        for child in all( self.children ) do
+            child:collapse( recursive )
+        end
+    end
+end
+
+function thingy:activate()
+    if not self:available() then
+        -- unavailable
+        self:flash( 0.05 )
+        self.crafting:on_activating_item( self )
+        return
+    end
+
+    self.crafting:on_activating( self )
+
+    local flashduration = 0.25
+
+    -- leaf node?
+    if self.parent ~= nil and #self.children == 0 then
+        -- yes. do what we do
+
+        if self.action ~= nil then
+            self.action()
+        end
+
+        self.crafting:on_activating_item( self )
+    else
+        -- container. Expand children.
+
+        self.destination = vector:new( 0, 0 )
+
+        flashduration = 0.15
+        local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 0
+
+        for i = 1, #self.children do
+            local child = self.children[ i ]
+
+            child:expand( myindex, i )
+        end
+    end
+
+    if self.parent ~= nil then
+        self:flash( flashduration )
+    end
+
+end
+
+function thingy:update_input()
+
+    if self.crafting.lockout_input then return end
+
+    -- home button
+    if btnp( 3 ) and self.parent ~= nil then
+        self.crafting.homebutton:flash( 0.15 )
+        self.crafting:reset()
+    else 
+        local button = nil    
+        if btnp( 2 ) then
+            button = 3
+        elseif btnp( 1 ) then
+            button = 2
+        elseif btnp( 0 ) then
+            button = 1
+        end
+
+        local activated_child = self:child_from_button( button )
+
+        if activated_child ~= nil then
+
+            -- if non-leaf, collapse other children
+            if #activated_child.children > 0 then
+                for child in all( self.children ) do
+                    if activated_child ~= child then
+                        child:collapse()
+                    end
+                end
+            end
+
+            activated_child:activate()
+
+            -- if root, move down
+            if self.parent == nil then
+                -- todo
+                -- self.destination = vector:new( 0, thingy_spacing )
+            end
+        end
+
+    end
+end
+
+-->8
 --one-time setup
 
 function tidy_map()
@@ -1413,7 +1843,8 @@ end
 --level creation
 music()
 
-local current_level = level:new()
+local crafting_ui = crafting:new( vector:new( 96, 2 + thingy_spacing + 2 ))
+local current_level = nil
 
 local game_state = 'title'
 local current_level = nil
@@ -1442,24 +1873,9 @@ function level:update_creatures()
 end
 
 --main loops
-local buttonstates = {}
 function _update60()
 
-    -- convenient button processing
-
-    local lastbuttonstates = shallowcopy( buttonstates )
-
-    for i = 0,5 do
-        buttonstates[ i ] = btn( i )
-    end
-
-    function wentdown( btn )
-        return buttonstates[ btn ] and not lastbuttonstates[ btn ]
-    end
-
-    function isdown( btn )
-        return buttonstates[ btn ]
-    end
+    update_buttons()
 
     -- update game state logic
 
@@ -1473,6 +1889,8 @@ function _update60()
             if wentdown(5) then
                 player:grab()
             end
+
+            crafting_ui:update()
 
             -- manual movement
             if false then
@@ -1544,7 +1962,7 @@ function draw_ui()
         local iconstepx = 8
         
         local iconright = 126
-	local iconleft  = 19
+        local iconleft  = 19
 
         function draw_halveable_stat( pos, top, stat, max, full_sprite, half_sprite, empty_sprite )
 
@@ -1559,8 +1977,7 @@ function draw_ui()
 
                 if equivalent_x + 1 < stat then sprite = full_sprite 
                 elseif equivalent_x < stat then sprite = half_sprite
-		else sprite = empty_sprite end
-
+                else sprite = empty_sprite end
 
                 if sprite > 0 then
                     spr( sprite, left + x, top )
@@ -1568,23 +1985,23 @@ function draw_ui()
             end
         end
 
-	function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
-	
-	    local left = pos
+        function draw_fullicon_stat( pos, top, stat, max, full_sprite, empty_sprite )
+        
+            local left = pos
 
-	    for i = 0, max - 1 do
-		local x = i * iconstepx
-		
-		local sprite = 0
+            for i = 0, max - 1 do
+            local x = i * iconstepx
+            
+            local sprite = 0
 
-		if i < stat then sprite = full_sprite
-		else sprite = empty_sprite end
+            if i < stat then sprite = full_sprite
+            else sprite = empty_sprite end
 
-		if sprite > 0 then
-		    spr( sprite, left + x, top )
-		end
-	    end
-	end
+            if sprite > 0 then
+                spr( sprite, left + x, top )
+            end
+            end
+        end
 
         local iconsy = 2
 
@@ -1607,7 +2024,7 @@ function draw_ui()
 
         -- draw player armor
 
-	draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
+        draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
         draw_shadowed( 6, iconsy + 1, 0, 1, 1, function(x,y)
             print( 'def', x, y, 13 )
         end )
@@ -1629,6 +2046,7 @@ function draw_ui()
 
         iconsy += 9
 
+        crafting_ui:draw()
     end
 
     function draw_ui_title()
@@ -1646,7 +2064,7 @@ function draw_ui()
         draw_ui_gameover()
 
         draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
-            print_centered_text( 'play again! z/x �✽�/❎', x, y, 12 )
+            print_centered_text( 'play again! z/x ????/âŽ', x, y, 12 )
         end )
 
     end
@@ -1664,16 +2082,16 @@ function draw_ui()
 
     -- draw debug
 
-    if true then
-        draw_shadowed( 124, 120, 0, 1, 2, function(x,y)
+    if false then
+        draw_shadowed( 124, 2, 0, 1, 2, function(x,y)
             print_rightaligned_text( 'actors: ' .. #current_level.actors, x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'segmts: ' .. #current_level.mapsegments, x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'creats: ' .. #current_level:actors_of_class( creature ), x, y, 6 )
-            y -= 8
+            y += 8
             print_rightaligned_text( 'coins : ' .. #current_level:actors_of_class( coin ), x, y, 6 )
-            y -= 8
+            y += 8
         end )
     end
 end
@@ -1758,6 +2176,7 @@ behaviors = {
     pounce_from_left =
         function(actor)
             local maxpounces = 3    -- todo based on level age
+            local restpos = -32
 
             local numpounces = rand_int( 1, maxpounces )
 
@@ -1769,7 +2188,7 @@ behaviors = {
             -- approach
             actor.current_animation_name = 'run'
             actor.vel.x = 1.25
-            while deltafromplayer( actor ) < -28 do
+            while deltafromplayer( actor ) < restpos do
                 yield()
             end
 
@@ -1808,7 +2227,7 @@ behaviors = {
                 
                 actor.colorshift = -1
 
-                while deltafromplayer( actor ) > -28 do
+                while deltafromplayer( actor ) > restpos do
                     yield()
                 end
             end
