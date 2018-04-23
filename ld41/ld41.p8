@@ -959,7 +959,7 @@ local items = {
 		name = 'a torch',
 		sprite = 15,
 		showinv = true,
-		requirements = { oil = 1, stick = 2 },
+		requirements = { oil = 1, stick = 1 },
 		oncreated = function(level)
 			level.inventory:acquire( 'torch' )
 		end
