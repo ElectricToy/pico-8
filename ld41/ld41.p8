@@ -404,7 +404,6 @@ function actor:new( level, x, y, wid, hgt )
 		current_animation_name = nil,
 		flipx = false,
 		flipy = false,
-		want_shadow = false,
 		damage = 2,
 		parallaxslide = 0,
 		deathcolorshift = -1,
@@ -592,7 +591,6 @@ function player:new( level )
 	local o = actor:new( level, 0, -64, 8, 14 )
 	o.immortal = true
 	o.do_dynamics = true
-	o.want_shadow = true
 	o.depth = -100
 	o.vel.x = 1
 	o.animations[ 'run' ] = animation:new( 32, 6, 1, 2 )
@@ -948,7 +946,7 @@ function level:after_delay( delay, fn )
 end
 
 function level:viewspan()
-	local cam = self:camera_position()
+	local cam = self:camera_pos()
 	return cam.x, cam.x + 128
 end
 
@@ -1059,7 +1057,7 @@ function level:update()
 	end )
 end
 
-function level:camera_position()
+function level:camera_pos()
 	return vector:new( -64, -96 ) + vector:new( self.player.pos.x + 32, 0 )
 end
 
@@ -1074,7 +1072,7 @@ end
 
 function level:draw()
 
-	local cam = self:camera_position()
+	local cam = self:camera_pos()
 
 	camera( 0, cam.y )
 
@@ -1124,7 +1122,6 @@ function creature:new( level, x )
 	local o = actor:new( level, x, y, wid, hgt )
 	o.do_dynamics = true
 	o.depth = -10
-	o.want_shadow = true
 	o.current_animation_name = 'run'
 	o.jumpforce = 1.5
 	o.whichcreature = whichcreature
@@ -2038,7 +2035,7 @@ function draw_ui()
 		draw_ui_gameover()
 
 		draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
-			print_centered_text( 'play again! z/x ????/âŽ', x, y, 12 )
+			print_centered_text( 'play again? z/x', x, y, 12 )
 		end )
 
 	end

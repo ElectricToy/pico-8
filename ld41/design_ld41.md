@@ -198,8 +198,9 @@ X Pickup button
 X Platforms
 X Creature
 X Environment with motion
-- Craft one item with blank rest of crafting tree
+X Craft one item with blank rest of crafting tree
 - Owned item inventory
+    + Used/Need hints
 - Light/dark
 - Jump hint
 - Grab button hint
