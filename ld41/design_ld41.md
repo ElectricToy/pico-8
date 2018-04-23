@@ -227,14 +227,21 @@ X SFX
 
 ## FINAL POLISH
 
+X Apples (Jeff)
+X Bananas (Jeff)
+X Small rock (Liam/Jeff)
+X Mushroom art
+X hunger flash when nearly dead (and health etc)
+~~- Day/night cycle with darkness, torch (Jeff)~~
+~~- Snake (Jeff/Liam??)~~
 - Item distribution (Liam): look for 'shoulddrop = function(level)'
     + craft balancing (Liam): look for 'requirements'
     + item power (Liam): look for 'oncreated'
 - Apples (Jeff)
 - Bananas (Jeff)
-- Day/night cycle with darkness, torch (Jeff)
 - fast/slow
-- Snake (Jeff/Liam??)
+- Title screen (Jeff)
+- Fast/slow run periods (Jeff)
 - Difficulty ramp (Jeff)
     + jump quest: no creatures, rocks only, until jump
     + torch quest: no creatures, small rocks only, specific items for torch, done when create torch, then sunset immediately
@@ -244,7 +251,7 @@ X SFX
     + fourth day: snake
     + PERPETUAL DIFFICULTY RAMP
     + Subsequent plays start on second day
-+ performance when you craft something
+- performance problem when you craft something
 
 # Draw Tech
 
@@ -259,7 +266,6 @@ Actor sprites
 Auto Items (Get used the moment you pick them up)
 	• Apple = Instantly heals one heart - uncommon
 	• Banana = Instantly heals one half hunger - uncommon
-
 
 Craftable Items
 	• Raw Meat - rare pickup, obtained from enemies when shot
