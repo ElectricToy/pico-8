@@ -1183,8 +1183,6 @@ function level:update()
 
 	self:update_pending_calls()
 
-	self:maybe_create( creature, 'creature' )
-
 	if self.player.alive then
 		self:create_props()
 		self:update_mapsegments()
@@ -1425,9 +1423,13 @@ function level:create_props()
 
 	self.last_creation_cell = self:creation_cell()
 
-	self:maybe_create( stone, 'stone' )
-	self:maybe_create( coin, 'coin' )
-	self:maybe_create( material, 'material' )
+	if not self:maybe_create( coin, 'coin' ) then
+		if not self:maybe_create( creature, 'creature' ) then
+			if not self:maybe_create( stone, 'stone' ) then
+				self:maybe_create( material, 'material' )
+			end
+		end
+	end
 end
 
 function world_to_mapsegment_cell_x( x )
