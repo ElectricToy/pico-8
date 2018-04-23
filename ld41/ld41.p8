@@ -1178,104 +1178,20 @@ function level:draw()
     -- draw background
     camera( 0, cam.y )
 
-    function ditherpattern( topdensity, bottomdensity, offsetx )
-        local patterns = {
-            0b0000,
-            0b0000,
-            0b0010,
-            0b1000,
-            0b0101,
-            0b1010,
-            0b1101,
-            0b0111,
-            0b1111,
-            0b1111,
-        }
-
-        local pattern = 0
-        for y = 0, 3 do
-            local ydensity = lerp( topdensity, bottomdensity, y / 3.0 )
-            local patternindex = 1 + 2*flr( ydensity * 4 + 0.5 ) + ( band( y, 1 ) == 0 and 1 or 0 )
-            local rowpattern = patterns[ patternindex ]
-            rowpattern = nibblerot( rowpattern, offsetx )
-
-            pattern = bor( pattern, shl( rowpattern, 4 * (3 - y)))
-        end
-
-        return pattern
-    end
-
-    function fillstrip( top, topdensity, bottomdensity, color, offsetx )
-        fillp( ditherpattern( topdensity, bottomdensity, offsetx ))
-        rectfill( 0, top, 128, top + 3, color )
-    end
-
-    function fillstripseries( top, height, topdensity, bottomdensity, color, offsetx )
-        offsetx = establish( offsetx, 0 )
-        local bot = top + height - 1
-        for row = top, bot, 4 do
-            local proportionalrow = proportion( row, top, bot )
-            local proportionalbot = proportion( min( bot, row + 3 ), top, top + height - 1 )
-            local striptopdense = clamp( lerp( topdensity, bottomdensity, proportionalrow ), 0, 1 )
-            local stripbotdense = clamp( lerp( topdensity, bottomdensity, proportionalbot ), 0, 1 )
-            fillstrip( row, striptopdense, stripbotdense, color, offsetx )
-        end
-    end
-
     -- grass
-    cls( 1 )
 
     local thetime = self:timeofday()
     local categoricaltime = self:categoricaltimeofday()
 
     function drawgrass()
-        camera( 0, cam.y )
-
-        -- matrix: grasscolors[ categoricaltime ][ darklevel ]
-        local grasscolors = {
-            {
-                5, 3, 11
-            },
-            {
-                1, 5, 3
-            },
-            {
-                0, 1, 3
-            },
-        }
-
-        local gc = grasscolors[ categoricaltime ]
-
-        local grassscrolloffsetx = -( self.player.pos.x % 4 )
-        fillstripseries(  0, 4 , 0, 1, dither_color( gc[2], gc[3] ), grassscrolloffsetx )
-        fillstripseries(  4, 20, 0, 1, dither_color( gc[3], gc[2] ), grassscrolloffsetx )
-        fillstripseries(  24, 8, 0, 1, dither_color( gc[2], gc[1] ), grassscrolloffsetx )
-
-        -- boundary line
+        camera( 0, cam.y)
+        rectfill( 0, 0, 128, 32, 3 )
         line( 0, 0, 128, 0, 0 )
     end
 
     -- sky
 
-    local skycolors = {
-        {
-            1, 13, 7, 12
-        },
-        {
-            0, 1, 10, 9
-        },
-        {
-            0, 1, 13, 1
-        },
-    }
-
-    local sc = skycolors[ categoricaltime ]
-    fillstripseries( -96, 16, 0, 1, dither_color( sc[4], sc[4] ) )
-    fillstripseries( -80, 8, 0, 1, dither_color( sc[4], sc[3] ) )
-    fillstripseries( -72,  8, 0, 1, dither_color( sc[3], sc[4] ) )
-    fillstripseries( -64, 8, 0, 1, dither_color( sc[4], sc[4] ) )
-    fillstripseries( -56, 34, 0, 1, dither_color( sc[4], sc[2] ) )
-    fillstripseries( -30, 36, 0, 1, dither_color( sc[2], sc[1] ) )
+    rectfill( 0, -96, 128, 0, 1 )
 
     camera( cam.x, cam.y )
 
