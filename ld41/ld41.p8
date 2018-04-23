@@ -906,7 +906,7 @@ local items = {
 		sprite = 11,
 		requirements = { mushroom = 5, rawmeat = 3 },
 		oncreated = function(level)
-			level.player.max_satiation += 2
+			level.player.max_satiation = min( level.player.max_satiation + 2, 12 )
 			level.player.satiation = level.player.max_satiation
 		end
 	},
@@ -914,7 +914,7 @@ local items = {
 		sprite = 12,
 		requirements = { wheat = 3, mushroom = 3 },
 		oncreated = function(level)
-			level.player.max_health += 2
+			level.player.max_health = min( level.player.max_health + 2, 16 )
 			level.player:heal( 6 )
 			level.player:eat( 2 )
 		end
