@@ -1718,6 +1718,7 @@ function thingy:activate()
     if not self:available() then
         -- unavailable
         self:flash( 0.05 )
+        self.crafting:on_activating_item( self )
         return
     end
 
