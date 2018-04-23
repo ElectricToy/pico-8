@@ -671,6 +671,7 @@ end
 
 function player:maybe_shoot( other )
 	if self:dead() then return end
+	if other:dead() then return end
 
 	if abs( other.pos.x - self.pos.x ) < weapon_check_distance then
 		
@@ -701,7 +702,7 @@ function player:jump( amount )
 	local jumped = self:superclass().jump( self, amount )
 
 	if jumped then
-		self:drain_satiation( 0.01 )
+		self:drain_satiation( 0.04 )
 		self.jump_count += 1
 	end
 
@@ -855,7 +856,7 @@ local items = {
 		sprite = 19,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 4 )
+			return pctchance( 3 )
 		end
 	},
 	mushroom = {
@@ -863,7 +864,7 @@ local items = {
 		sprite = 20,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 6 )
+			return pctchance( 5 )
 		end
 	},
 	wheat = {
@@ -879,7 +880,7 @@ local items = {
 		sprite = 22,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 12 )
+			return pctchance( 10 )
 		end
 	},
 	oil = {
@@ -887,7 +888,7 @@ local items = {
 		sprite = 23,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 8 )
+			return pctchance( 6 )
 		end
 	},
 	metal = {
@@ -895,7 +896,7 @@ local items = {
 		sprite = 24,
 		showinv = true,
 		shoulddrop = function(level)
-			return pctchance( 8 )
+			return pctchance( 6 )
 		end
 	},
 
@@ -1063,8 +1064,12 @@ function level:new( inventory )
 	}
 	o.creation_records = {
 		coin     = { chance =   100, earliestnext =   64, interval = 8, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
-		stone    = { chance =   4, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
-		creature = { chance =    2, earliestnext = 256, interval = 256, predicate = function() return o:phase() >= 3 and #o:actors_of_class( creature ) == 0 end },
+		stone    = { chance =   100, earliestnext =   64, interval = 48, predicate = function() 
+			return ( #o:actors_of_class( creature ) == 0 ) and pctchance( o:phase() * 2 )
+		end },
+		creature = { chance =   100, earliestnext = 256, interval = 256, predicate = function() 
+			return o:phase() >= 3 and #o:actors_of_class( creature ) == 0 and pctchance( o:phase() * 2 - 2 )
+			end },
 		material = { chance =   100, earliestnext = 64, interval = 24, create = function(level, creation_point)
 			for itemname, type in pairs( items ) do
 				if type.shoulddrop ~= nil then
@@ -1099,7 +1104,7 @@ function level:ramptime()
 	return ( self.tick_count - self.base_tick ) / 60
 end
 
-local day_length = 30
+local day_length = 20
 
 function level:phase()
 	if self.player.jump_count == 0 then return 1 end

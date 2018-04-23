@@ -250,6 +250,8 @@ X hunger flash when nearly dead (and health etc)
     + PERPETUAL DIFFICULTY RAMP
     + Subsequent plays start on second day
 - performance problem when you craft something
+- frog initial y position
+- spend all arrows with weapon
 
 # Draw Tech
 
