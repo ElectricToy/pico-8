@@ -808,7 +808,10 @@ end
 
 local pickup = inheritsfrom( actor )
 function pickup:new( level, itemname, item, x )
-	local o = actor:new( level, x, -10, 6, 6 )     -- todo randomize height somewhat
+
+	local heightadd = flr( (rnd(1) ^ 2) * 4 ) * 16
+
+	local o = actor:new( level, x, -10 - heightadd, 6, 6 )     -- todo randomize height somewhat
 
 	local sprite = item.sprite
 
@@ -971,7 +974,7 @@ local items = {
 		name = 'an apple',
 		sprite = 17,
 		shoulddrop = function(level)
-			return pctchance( 4 )
+			return pctchance( 0.5 )
 		end,
 		onpickedup = function(level)
 			current_player:heal( 2 )
@@ -981,7 +984,7 @@ local items = {
 		name = 'a banana',
 		sprite = 18,
 		shoulddrop = function(level)
-			return pctchance( 4 )
+			return pctchance( 1 )
 		end,
 		onpickedup = function(level)
 			current_player:eat( 1 )
