@@ -28,6 +28,7 @@ end
 local current_level = nil
 local crafting_ui = nil
 local inventory_display = nil
+local current_player = nil
 
 
 function establish( value, default )
@@ -517,7 +518,7 @@ function actor:update( deltatime )
 		end
 	end
 
-	self.pos.x += self.parallaxslide * self.level.player.vel.x
+	self.pos.x += self.parallaxslide * current_player.vel.x
 
 	local liveleft, liveright = self.level:live_actor_span()
 	if self:collision_br().x + 8 < liveleft then
@@ -926,7 +927,7 @@ local items = {
 		sprite =  7,
 		requirements = { metal = 3, oil = 2 },
 		oncreated = function(level)
-			level.player.armor = level.player.max_armor
+			current_player.armor = current_player.max_armor
 		end
 	},
 	cookedmeat = {
@@ -934,8 +935,8 @@ local items = {
 		sprite = 10,
 		requirements = { rawmeat = 1, torch = 1 },
 		oncreated = function(level)
-			level.player:heal( 2 )
-			level.player:eat( 4 )
+			current_player:heal( 2 )
+			current_player:eat( 4 )
 		end
 	},
 	stew = {
@@ -943,8 +944,8 @@ local items = {
 		sprite = 11,
 		requirements = { mushroom = 5, rawmeat = 3 },
 		oncreated = function(level)
-			level.player.max_satiation = min( level.player.max_satiation + 2, 12 )
-			level.player.satiation = level.player.max_satiation
+			current_player.max_satiation = min( current_player.max_satiation + 2, 12 )
+			current_player.satiation = current_player.max_satiation
 		end
 	},
 	pizza = {
@@ -952,9 +953,9 @@ local items = {
 		sprite = 12,
 		requirements = { wheat = 3, mushroom = 3 },
 		oncreated = function(level)
-			level.player.max_health = min( level.player.max_health + 2, 16 )
-			level.player:heal( 4 )
-			level.player:eat( 3 )
+			current_player.max_health = min( current_player.max_health + 2, 16 )
+			current_player:heal( 4 )
+			current_player:eat( 3 )
 		end
 	},
 	torch = {
@@ -976,7 +977,7 @@ local items = {
 			return pctchance( 4 )
 		end,
 		onpickedup = function(level)
-			level.player:heal( 2 )
+			current_player:heal( 2 )
 		end
 	},
 	banana = {
@@ -986,7 +987,7 @@ local items = {
 			return pctchance( 4 )
 		end,
 		onpickedup = function(level)
-			level.player:eat( 1 )
+			current_player:eat( 1 )
 		end
 	},
 	--
@@ -1448,6 +1449,9 @@ local lastbuttonstates = {}
 function wentdown( btn )
 	return buttonstates[ btn ] and not lastbuttonstates[ btn ]
 end
+function jumpwentdown()
+	return wentdown( 4 ) or wentdown( 5 )
+end
 
 function isdown( btn )
 	return buttonstates[ btn ]
@@ -1803,15 +1807,6 @@ function thingy:drawchildren( basepos, activatedonly )
 	end
 end
 
-function thingy:child_index( child )
-	for i = 1, #self.children do
-		if child == self.children[ i ] then
-			return i
-		end
-	end
-	return nil
-end
-
 function thingy:child_from_button( button )
 	if button == nil then return nil end
 
@@ -1870,7 +1865,7 @@ function thingy:update()
 	end
 end
 
-function thingy:expand( parentindex, myindex )
+function thingy:expand( myindex )
 	if myindex == 1 then
 		self.destination = vector:new( -thingy_spacing, 0 )
 	elseif myindex == 2 then
@@ -1932,12 +1927,11 @@ function thingy:activate()
 		self.destination = vector:new( 0, 0 )
 
 		flashduration = 0.15
-		local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 0
 
 		for i = 1, #self.children do
 			local child = self.children[ i ]
 
-			child:expand( myindex, i )
+			child:expand( i )
 		end
 	end
 
@@ -2018,20 +2012,20 @@ end
 --music()
 
 local game_state = 'title'
-local current_level = nil
 
 function restart_world()
 	current_level = level:new( inventory:new() )
+	current_player = current_level.player
 	crafting_ui = crafting:new( current_level, vector:new( 96, 2 + thingy_spacing + 2 ))
 	inventory_display = inventorydisplay:new( current_level )
 end
 
 function player_run_distance()
-	return flr(( current_level.player.pos.x - 0 ) / 40 )
+	return flr(( current_player.pos.x - 0 ) / 40 )
 end
 
 function deltafromplayer( actor )
-	return actor.pos.x - current_level.player.pos.x
+	return actor.pos.x - current_player.pos.x
 end
 
 tidy_map()
@@ -2044,9 +2038,8 @@ function _update60()
 
 	if game_state == 'playing' then
 		function update_input()
-			local player = current_level.player
-			if wentdown(4) or wentdown(5) then
-				player:jump()
+			if jumpwentdown() then
+				current_player:jump()
 			end
 
 			crafting_ui:update()
@@ -2060,12 +2053,12 @@ function _update60()
 				if isdown( 1 ) then
 					move += 1
 				end
-				player.vel.x = move
+				current_player.vel.x = move
 			end
 		end
 
 
-		if current_level.player:dead() then
+		if current_player:dead() then
 			game_state = 'gameover_dying'
 			current_level:after_delay( 2.0, function()
 				game_state = 'gameover'
@@ -2075,12 +2068,12 @@ function _update60()
 		end
 
 	elseif game_state == 'gameover' then
-		if wentdown( 4 ) or wentdown( 5 ) then
+		if jumpwentdown() then
 			restart_world()
 			game_state = 'playing'
 		end
 	elseif game_state == 'title' then
-		if wentdown( 4 ) or wentdown( 5 ) then
+		if jumpwentdown() then
 			game_state = 'playing'
 		end
 	end
@@ -2119,8 +2112,6 @@ end
 function draw_ui()
 
 	function draw_ui_playing()
-		local player = current_level.player
-
 		local iconstepx = 8
 
 		local iconright = 126
@@ -2171,19 +2162,19 @@ function draw_ui()
 		local iconsy = 2
 
 
-		draw_halveable_stat( iconleft, iconsy, player.health, player.max_health, 1, 2, 3 )
+		draw_halveable_stat( iconleft, iconsy, current_player.health, current_player.max_health, 1, 2, 3 )
 		draw_shadowed( 2, iconsy + 1, function(x,y)
 			print( 'life', x, y, 8 )
 		end )
 		iconsy += 9
 
-		draw_fullicon_stat( iconleft, iconsy, player.armor, player.max_armor, 7, 8 )
+		draw_fullicon_stat( iconleft, iconsy, current_player.armor, current_player.max_armor, 7, 8 )
 		draw_shadowed( 6, iconsy + 1, function(x,y)
 			print( 'def', x, y, 13 )
 		end )
 		iconsy += 9
 
-		draw_halveable_stat( iconleft, iconsy, player.satiation, player.max_satiation, 4, 5, 6 )
+		draw_halveable_stat( iconleft, iconsy, current_player.satiation, current_player.max_satiation, 4, 5, 6 )
 		draw_shadowed( 2, iconsy + 1, function(x,y)
 			print( 'food', x, y, 9 )
 		end )
@@ -2191,7 +2182,7 @@ function draw_ui()
 		iconsy += 9
 
 		draw_shadowed( 2, 128 - 2 - 6, function(x,y)
-			print( 'score ' .. player.coins * 10, x, y, 10 )
+			print( 'score ' .. current_player.coins * 10, x, y, 10 )
 		end )
 
 		iconsy += 9
@@ -2199,7 +2190,7 @@ function draw_ui()
 		crafting_ui:draw()
 		inventory_display:draw()
 
-		if player.jump_count == 0 then
+		if current_player.jump_count == 0 then
 			draw_shadowed( 64, 54, function(x,y)
 				print_centered_text( 'press z to jump!', x, y, 8 )
 			end )
@@ -2213,7 +2204,7 @@ function draw_ui()
 
 	function draw_ui_gameover()
 		draw_shadowed( 64, 64, function(x,y)
-			print_centered_text( current_level.player.deathcause, x, y, 8 )
+			print_centered_text( current_player.deathcause, x, y, 8 )
 		end )
 	end
 
@@ -2232,7 +2223,7 @@ function draw_ui()
 
 		draw_shadowed( 64, 0, function(x,y)
 			print_centered_text( 'press z to play again', x, y + 102, 12 )
-			print_centered_text( 'score: ' .. current_level.player.coins, x, y + 16, 10 )
+			print_centered_text( 'score: ' .. current_player.coins, x, y + 16, 10 )
 		end )
 	end
 
@@ -2277,7 +2268,7 @@ function standard_attack_warning( actor, delay )
 end
 
 function set_player_relative_velocity( actor, speedscale )
-	actor.vel.x = current_level.player.vel.x * speedscale
+	actor.vel.x = current_player.vel.x * speedscale
 end
 
 behaviors = {
