@@ -613,7 +613,7 @@ end
 
 local player = inheritsfrom( actor )
 function player:new( level )
-	local o = actor:new( level, 0, -15, 8, 14 )
+	local o = actor:new( level, 0, -14, 8, 14 )
 	o.immortal = false
 	o.do_dynamics = true
 	o.depth = -100
@@ -622,7 +622,6 @@ function player:new( level )
 	o.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 )
 	o.current_animation_name = 'run'
 	o.collision_planes_exc = 0
-
 
 	o.jump_count = 0
 
@@ -1030,7 +1029,16 @@ function level:new( inventory )
 		coin     = { chance =   100, earliestnext =   64, interval = 16, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
 		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
 		creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
-		material = { chance =   80, earliestnext = 64, interval = 24 },
+		material = { chance =   80, earliestnext = 64, interval = 24, create = function(level, creation_point)
+			for itemname, type in pairs( items ) do
+				if type.shoulddrop ~= nil then
+					if type.shoulddrop( level ) then
+						pickup:new( level, itemname, type, creation_point, type.sprite )
+						break	-- drop just one thing at a time
+					end
+				end
+			end
+		end },
 	}
 
 	local finishedobject = setmetatable( o, self )
@@ -1358,9 +1366,14 @@ function level:maybe_create( class, classname )
 	if record.earliestnext < creation_point
 		and ( record.predicate == nil or record.predicate() )
 		and pctchance( record.chance ) then
-		local obj = class:new( self, creation_point )
+
+		-- create
 		record.earliestnext = creation_point + record.interval
-		return obj
+		if record.create ~= nil then
+			return record.create( self, creation_point )
+		else
+			return class:new( self, creation_point )
+		end
 	end
 	return nil
 end
@@ -1371,22 +1384,7 @@ function level:create_props()
 
 	self:maybe_create( stone, 'stone' )
 	self:maybe_create( coin, 'coin' )
-
-	local _, liveright = self:live_actor_span()
-	local creation_point = liveright - 2
-
-	local record = self.creation_records[ 'material' ]
-	if record.earliestnext < creation_point then
-		for itemname, type in pairs( items ) do
-			if type.shoulddrop ~= nil then
-				if type.shoulddrop( self ) then
-					pickup:new( self, itemname, type, liveright - 2, type.sprite )
-					break	-- drop just one thing at a time
-				end
-			end
-		end
-		record.earliestnext = creation_point + record.interval
-	end
+	self:maybe_create( material, 'material' )
 end
 
 function world_to_mapsegment_cell_x( x )
