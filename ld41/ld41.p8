@@ -781,21 +781,6 @@ function player:take_damage( amount )
 	end
 end
 
-function player:grab()
-	if self:dead() then return end
-
-	local pickup, distsqr = self.level:closest_actor( self:collision_center(), function(actor)
-		return actor.may_player_pickup
-	end )
-
-	if pickup ~= nil and
-		( rects_overlap( self:collision_rect(), pickup:collision_rect() )
-			or is_close( self:collision_center(), pickup:collision_center(), self.reach_distance )) then
-		pickup:on_pickedup_by( self )
-	sfx(33)
-	end
-end
-
 function player:draw()
 	if self:dead() or not self.invulnerable or self.armorflicker or flicker( self.level:time(), 8 ) then
 
@@ -994,6 +979,8 @@ function inventory:acquire( type )
 	if self.itemcounts[ type ] < 9 then
 		self.itemcounts[ type ] += 1
 		message( 'got ' .. items[ type ].name )
+
+		sfx( 33 )
 
 		local gaineditems = {}
 		gaineditems[ type ] = items[ type ]
@@ -1271,7 +1258,7 @@ function creature:postdraw( drawpos )
 	self:superclass().postdraw( self, drawpos  )
 
 	if self.whichcreature == 2 then -- snake
-		for i = 1,4 do
+		for i = 1,6 do
 			spr( 88, drawpos.x - 8*i, drawpos.y )
 		end
 	end
@@ -1472,7 +1459,16 @@ function inventorydisplay:highlight_items( items )
 	self.highlighted_items = items
 end
 
+function inventorydisplay:highlighting()
+	return self.flashstarttime ~= nil and self.level:time() < self.flashstarttime + flashduration
+end
+
 function inventorydisplay:on_gained( items )
+	-- don't highlight if higher priority
+	if self:highlighting() and self.item_use_message == 'used:' or self.item_use_message == 'need:' then
+		return
+	end
+
 	self.item_use_message = ''
 	self:highlight_items( items )
 end
@@ -1495,7 +1491,7 @@ function inventorydisplay:draw()
 	local now = self.level:time()
 
 	local colorshift = 0 
-	if self.flashstarttime ~= nil and now < self.flashstarttime + flashduration then
+	if self:highlighting() then
 		colorshift = flicker( now, 2 ) and 8 or 0
 	end
 
@@ -1518,11 +1514,13 @@ function inventorydisplay:draw()
 	end
 
 	-- show needs/used
-	draw_color_shifted( colorshift, function()
-		draw_shadowed( 40, top, 0, 1, 2, function(x,y)
-			print_centered_text( self.item_use_message, x, y, 14 )
-		end )		
-	end )
+	if self:highlighting() then
+		draw_color_shifted( colorshift, function()
+			draw_shadowed( 40, top, 0, 1, 2, function(x,y)
+				print_centered_text( self.item_use_message, x, y, 14 )
+			end )		
+		end )
+	end
 end
 
 local item_tree =
@@ -1674,11 +1672,16 @@ function crafting:draw()
 end
 
 function thingy:new( crafting, parent, item_config )
+	local sprite = nil
+	if item_config.item ~= nil and items[ item_config.item ] then
+		sprite = items[ item_config.item ].sprite
+	end
+	
 	local o = {
 		crafting = crafting,
 		parent = parent,
 		item = items[ item_config.item ],
-		sprite = item_config.item ~= nil and items[ item_config.item ].sprite or nil,
+		sprite = sprite,
 		children = {},
 		pos = vector:new( 0, 0 ),
 		destination = nil,
