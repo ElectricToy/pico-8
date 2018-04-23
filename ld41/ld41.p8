@@ -261,7 +261,7 @@ end
 
 local mapsegment_tile_size = vector:new( 16, 16 )
 local mapsegment_tiles_across_map = 8
-local weapon_check_distance = 24
+local weapon_check_distance = 20
 
 
 local mapsegment = inheritsfrom( nil )
@@ -589,7 +589,7 @@ end
 local player = inheritsfrom( actor )
 function player:new( level )
 	local o = actor:new( level, 0, -64, 8, 14 )
-	o.immortal = true
+	o.immortal = false
 	o.do_dynamics = true
 	o.depth = -100
 	o.vel.x = 1
@@ -683,7 +683,7 @@ function player:update( deltatime )
 		self:maybe_shoot( creature )
 	end
 
-	self:drain_satiation( 0.002 + ( self.armor > 0 and 0.001 or 0 ))
+	self:drain_satiation( 0.001 + ( self.armor > 0 and 0.0005 or 0 ))
 
 	if self.current_animation_name ~= 'run' then
 		self.animations[ 'run' ]:update( deltatime )
@@ -974,8 +974,8 @@ function level:new( inventory )
 		stone    = { chance =   0.5, earliestnext =   64, interval = 48, predicate = function() return ( #o:actors_of_class( creature ) == 0 ) or pctchance( 0.1 ) end  },
 		tree     = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end },
 		shrub    = { chance =    1, earliestnext = -100, interval = 0, predicate = function() return #o.actors < 10 end  },
-		creature = { chance =    100, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
-		material = { chance =   100, earliestnext = 64, interval = 2 },
+		creature = { chance =    0.25, earliestnext = 256, interval = 256, predicate = function() return #o:actors_of_class( creature ) == 0 end },
+		material = { chance =   80, earliestnext = 64, interval = 24 },
 	}
 
 	local finishedobject = setmetatable( o, self )
@@ -2085,8 +2085,10 @@ function draw_ui()
 	function draw_ui_gameover_fully()
 		draw_ui_gameover()
 
-		draw_shadowed( 64, 102, 0, 1, 2, function(x,y)
-			print_centered_text( 'play again? z/x', x, y, 12 )
+		draw_shadowed( 64, 0, 0, 1, 2, function(x,y)
+			print_centered_text( 'play again? z/x', x, y + 102, 12 )
+
+			print_centered_text( 'coins: ' .. current_level.player.coins, x, y + 34, 11 )
 		end )
 
 	end
