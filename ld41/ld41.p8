@@ -35,6 +35,7 @@ function establish( value, default )
 	return value
 end
 
+--todo!!
 local messagedur = 3
 local gamemessage = { text = '', time = nil }
 function message( text )
@@ -1384,7 +1385,8 @@ function level:create_props()
 		for itemname, type in pairs( items ) do
 			if type.shoulddrop ~= nil then
 				if type.shoulddrop( self ) then
-					local pickup = pickup:new( self, itemname, type, liveright - 2, type.sprite )
+					pickup:new( self, itemname, type, liveright - 2, type.sprite )
+					break	-- drop just one thing at a time
 				end
 			end
 		end
@@ -1874,6 +1876,7 @@ function thingy:activate()
 		self:flash( 0.05 )
 		self.crafting:on_activating_item( self, true )
 		inventory_display:on_tried_to_use( self.item.requirements )
+		message( 'for ' .. self.item.name )
 		return
 	end
 
@@ -1882,15 +1885,6 @@ function thingy:activate()
 	local flashduration = 0.25
 
 	if self.parent ~= nil and #self.children == 0 and self.item ~= nil then
-		-- have the requirements?
-		for itemname, count in pairs( self.item.requirements ) do
-			if count > self.crafting.level.inventory:item_count( itemname ) then
-				debug_print( 'failed ' .. itemname)
-				inventory_display:on_tried_to_use( self.item.requirements )
-				return false
-			end
-		end
-
 		-- yes
 		for itemname, count in pairs( self.item.requirements ) do
 			self.crafting.level.inventory:use( itemname, count )

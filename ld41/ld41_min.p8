@@ -766,6 +766,7 @@ end
 if self.itemcounts[ type ] < 9 then
 self.itemcounts[ type ]+=1
 message('got ' .. items[ type ].name)
+sfx(33)
 local gaineditems={}
 gaineditems[ type ]=items[ type ]
 inventory_display:on_gained(gaineditems)
@@ -981,7 +982,7 @@ self:superclass().update(self,deltatime)
 end
 function creature:postdraw(drawpos)
 self:superclass().postdraw(self,drawpos)
-if self.whichcreature==2 then for i=1,4 do
+if self.whichcreature==2 then for i=1,6 do
 spr(88,drawpos.x-8*i,drawpos.y)
 end
 end
@@ -1143,24 +1144,32 @@ function inventorydisplay:highlight_items(items)
 self.flashstarttime=self.level:time()
 self.highlighted_items=items
 end
+function inventorydisplay:highlighting()
+return self.flashstarttime~=nil and self.level:time()< self.flashstarttime+flashduration
+end
 function inventorydisplay:on_gained(items)
+if self:highlighting()and self.item_use_message=='used:' or self.item_use_message=='need:' then
+return
+end
 self.item_use_message=''
 self:highlight_items(items)
 end
 function inventorydisplay:on_used(items)
 self.item_use_message='used:'
 self:highlight_items(items)
+message('made ' .. self.item.name)
 end
 function inventorydisplay:on_tried_to_use(items)
 self.item_use_message='need:'
 self:highlight_items(items)
+message('for ' .. self.item.name)
 end
 function inventorydisplay:draw()
 local left=54
 local top=128-2-9-6
 local i=0
 local now=self.level:time()
-local colorshift=0 if self.flashstarttime~=nil and now < self.flashstarttime+flashduration then
+local colorshift=0 if self:highlighting()then
 colorshift=flicker(now,2)and 8 or 0
 end
 for itemname,item in pairs(items)do
@@ -1176,10 +1185,12 @@ end)
 i+=1
 end
 end
+if self:highlighting()then
 draw_color_shifted(colorshift,function()
 draw_shadowed(40,top,0,1,2,function(x,y)
 print_centered_text(self.item_use_message,x,y,14)
 end)end)
+end
 end
 local item_tree=
 { item=nil,
@@ -1481,7 +1492,6 @@ if action~=nil then
 action(self.crafting.level)
 end
 inventory_display:on_used(self.item.requirements)
-message('made ' .. self.item.name)
 self.crafting:on_activating_item(self,true)
 else
 self.crafting:on_activating_item(self,false)

@@ -224,6 +224,28 @@ X SFX
 - Tuning
 - Extra art variations
 
+
+## FINAL POLISH
+
+- Item distribution (Liam): look for 'shoulddrop = function(level)'
+    + craft balancing (Liam): look for 'requirements'
+    + item power (Liam): look for 'oncreated'
+- Apples (Jeff)
+- Bananas (Jeff)
+- Day/night cycle with darkness, torch (Jeff)
+- fast/slow
+- Snake (Jeff/Liam??)
+- Difficulty ramp (Jeff)
+    + jump quest: no creatures, rocks only, until jump
+    + torch quest: no creatures, small rocks only, specific items for torch, done when create torch, then sunset immediately
+    + first night: add arbitrary items, more stones; done with time
+    + second day: fox
+    + third day:  frog
+    + fourth day: snake
+    + PERPETUAL DIFFICULTY RAMP
+    + Subsequent plays start on second day
++ performance when you craft something
+
 # Draw Tech
 
 Background fill
