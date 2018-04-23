@@ -8,22 +8,22 @@ __lua__
 -->8
 -- general utilities
 
-debug_lines = {}
-function debug_print( text )
-	add( debug_lines, text )
+-- debug_lines = {}
+-- function debug_print( text )
+-- 	add( debug_lines, text )
 
-	while #debug_lines > 10 do
-		del_index( debug_lines, 1 )
-	end
-end
+-- 	while #debug_lines > 10 do
+-- 		del_index( debug_lines, 1 )
+-- 	end
+-- end
 
-function draw_debug_lines()
-	for i = 1, #debug_lines do
-		local line = debug_lines[ #debug_lines - i + 1 ]
-		print( line, 2, 7 * i, rel_color( 8, 1 - i ) )
-	end
-	print( '', 0, (#debug_lines+1) *7 )
-end
+-- function draw_debug_lines()
+-- 	for i = 1, #debug_lines do
+-- 		local line = debug_lines[ #debug_lines - i + 1 ]
+-- 		print( line, 2, 7 * i, rel_color( 8, 1 - i ) )
+-- 	end
+-- 	print( '', 0, (#debug_lines+1) *7 )
+-- end
 
 local current_level = nil
 local crafting_ui = nil
@@ -2271,14 +2271,14 @@ function draw_ui()
 	end
 
 
-	-- todo!!! debug
-	if true then
-		draw_shadowed( 124, 2, function(x,y)
-			print_rightaligned_text( 'phase: ' .. current_level:phase(), x, y, 6 )
-			y += 8
+	-- -- todo!!! debug
+	-- if true then
+	-- 	draw_shadowed( 124, 2, function(x,y)
+	-- 		print_rightaligned_text( 'phase: ' .. current_level:phase(), x, y, 6 )
+	-- 		y += 8
 
-		end )
-	end
+	-- 	end )
+	-- end
 end
 
 function _draw()
@@ -2286,7 +2286,7 @@ function _draw()
 	current_level:draw()
 	camera( 0, 0 )
 	draw_ui()
-	draw_debug_lines()
+	-- draw_debug_lines()
 end
 
 function wait( seconds )
@@ -2364,7 +2364,7 @@ behaviors = {
 		end,
 	pounce_from_left =
 		function(actor)
-			local maxpounces = 3    -- todo based on level age
+			local maxpounces = clamp( actor.level:phase() - 7, 1, 3 )
 			local restpos = -32
 
 			local numpounces = rand_int( 1, maxpounces )
