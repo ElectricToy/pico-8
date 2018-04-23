@@ -288,3 +288,32 @@ Food
 Other
 	• Torch = 1 Oil + 2 Stick
 		Allows you to see better at night. One torch lasts one night.
+
+
+
+
+
+
+
+Game names
+
+Octane Survival / High Octane Survival / Hi-Octane Survival
+Life on the Run
+Survival on the Run
+Crafting on the Run
+Turbocraft / Nitrocraft
+Running from Convention
+Haste makes waste
+Run from the sun
+Run from the night
+Survival Marathon
+MarathonCraft
+Sonicraft
+
+
+
+
+
+
+
+
