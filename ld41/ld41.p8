@@ -167,6 +167,10 @@ function vector:new( x, y )
     return setmetatable( newobj, self )
 end
 
+function vector:copy()
+    return vector:new( self.x, self.y )
+end
+
 function vector:tostring()
     return self.x .. "," .. self.y
 end
@@ -654,6 +658,7 @@ end
 local player = inheritsfrom( actor )
 function player:new( level )
     local newobj = actor:new( level, 0, -64, 8, 14 )
+    newobj.immortal = true
     newobj.do_dynamics = true
     newobj.want_shadow = true
     newobj.depth = -100
@@ -774,7 +779,7 @@ function player:start_invulnerable()
 end
 
 function player:take_damage( amount )
-    if self.invulnerable or self:dead() then return end
+    if self.invulnerable or self.immortal or self:dead() then return end
 
     if amount <= 0 then return end
 
@@ -1409,7 +1414,7 @@ end
 
 local item_tree =
     -- root
-    { sprite = 16, action = nil,
+    { sprite = 0, action = nil,
         children = {
             -- light
             { sprite = 15, action = nil },          
@@ -1430,6 +1435,9 @@ local item_tree =
                     { sprite = 14, action = nil },      
                 }
             },
+
+            -- 'home'
+            { sprite = 27, action = nil },
         }
     }
 
@@ -1442,14 +1450,61 @@ function crafting:new( pos )
     local newobj = {
         pos = pos,
         tick_count = 0,
+        pending_calls = {},        
+        activated = nil,
+        homebutton = false,
+        lockout_input = false,
     }
 
     local resultself =  setmetatable( newobj, self )
 
     resultself.rootthingy = thingy:new( resultself, nil, item_tree )
+    resultself.homebutton = resultself.rootthingy.children[ 4 ]
+    resultself.homebutton.homebutton = true
     resultself.rootthingy:activate()
 
     return resultself
+end
+
+function crafting:on_activating( thing )
+    self.activated = thing
+end
+
+function crafting:on_activating_item( thing )
+
+    self.lockout_input = true
+
+    if not thing.homebutton then
+        self:after_delay( 0.4, function()
+            self:reset()
+        end )
+    else
+        self:reset()
+    end
+end
+
+function crafting:update_pending_calls()
+    local now = self:time()
+
+    erase_elements( self.pending_calls, function(call)
+        if now >= call.deadline then
+            debug_print( 'calling ' .. now )
+            call.fn()
+            return true
+        end
+        return false
+    end )
+end
+
+function crafting:reset()
+    self.activated = nil
+    self.lockout_input = false
+    self.rootthingy:collapse( true )
+    self.rootthingy:activate()
+end
+
+function crafting:after_delay( delay, fn )
+    add( self.pending_calls, { deadline = self:time() + delay, fn = fn } )
 end
 
 function crafting:time()
@@ -1458,11 +1513,23 @@ end
 
 function crafting:update()
     self.tick_count += 1
+
+    self:update_pending_calls()
+
+    if self.activated ~= nil then
+        self.activated:update_input()
+    end
+
     self.rootthingy:update()
 end
 
 function crafting:draw()
-    self.rootthingy:draw( self.pos )
+    self.rootthingy:draw( self.pos, false )
+
+    -- draw again, but only the activated branch
+    if self.activated ~= nil then
+        self.rootthingy:draw( self.pos, true )
+    end
 end
 
 function thingy:new( crafting, parent, item_config )
@@ -1475,7 +1542,7 @@ function thingy:new( crafting, parent, item_config )
         pos = vector:new( 0, 0 ),
         destination = nil,
         lerpspeed = 0.1,
-        activated = false,
+        flashstarttime = nil,
         flashendtime = nil,
     }
 
@@ -1488,16 +1555,47 @@ function thingy:new( crafting, parent, item_config )
 end
 
 function thingy:flash( duration )
-    self.flashendtime = self.crafting:time() + establish( duration, 1 )
+    self.flashstarttime = self.crafting:time()
+    self.flashendtime = self.flashstarttime + establish( duration, 1 )
+end
+
+function thingy:flash_age()
+    if self.flashstarttime == nil then return nil end
+    return self.crafting:time() - self.flashstarttime
 end
 
 function thingy:flashing()
     return self.flashendtime ~= nil and ( self.flashendtime > self.crafting:time() )
 end
 
-function thingy:drawchildren( basepos )
+function thingy:drawself( basepos )
+    local selfpos = basepos + self.pos
+
+    if self.sprite == 0 then return end
+
+    local colorize = 0
+    if self:flashing() and flicker( self:flash_age(), 2 ) then
+        colorize = 8
+    end
+
+    draw_color_shifted( colorize, function()
+        spr( 46, selfpos.x - 2, selfpos.y - 2, 2, 2 )
+
+        local iconcolorshift = colorize
+        if iconcolorshift == 0 and #self.children > 0 then
+            iconcolorshift = -1
+        end
+
+        draw_color_shifted( iconcolorshift, function()
+            spr( self.sprite, selfpos.x, selfpos.y )
+        end )
+    end )
+end
+
+
+function thingy:drawchildren( basepos, activatedonly )
     for child in all( self.children ) do
-        child:draw( basepos )
+        child:draw( basepos, activatedonly )
     end
 end
 
@@ -1520,29 +1618,47 @@ function thingy:child_from_button( button )
     end
 end
 
-function thingy:draw( basepos )
+function thingy:has_activated_descendant()
+    if self.crafting.activated == self then return true end
+
+    for child in all( self.children ) do
+        if child:has_activated_descendant() then
+            return true
+        end
+    end
+    return false
+end
+
+function thingy:draw( basepos, activatedonly )
+    if activatedonly and not self:has_activated_descendant() then return end
+
     local selfpos = basepos + self.pos
 
-    -- draw children
-    self:drawchildren( selfpos )
+    local drawselfontop = true
 
-    -- draw self
-    local colorize = ( self:flashing() and flicker( self.crafting:time(), 2 )) and 8 or 0
+    if not drawselfontop then
+        self:drawself( basepos )
+    end
 
-    draw_color_shifted( colorize, function()
-        spr( self.sprite, selfpos.x, selfpos.y )
-    end )
+    self:drawchildren( selfpos:copy(), activatedonly )
+
+    if drawselfontop then
+        self:drawself( basepos )
+    end
 end
 
 function thingy:update()
 
-    if self.activated then
-        self:update_input()
-    end
-
     if self.destination ~= nil then
-        self.pos.x = lerp( self.pos.x, self.destination.x, self.lerpspeed )
-        self.pos.y = lerp( self.pos.y, self.destination.y, self.lerpspeed )
+        function decisive_lerp( from, to, alpha )
+            local result = lerp( from, to, alpha )
+            if abs( to - result ) < 0.25 then
+                result = to
+            end
+            return result
+        end
+        self.pos.x = decisive_lerp( self.pos.x, self.destination.x, self.lerpspeed )
+        self.pos.y = decisive_lerp( self.pos.y, self.destination.y, self.lerpspeed )
     end
 
     for child in all( self.children ) do
@@ -1561,70 +1677,74 @@ function thingy:expand( parentindex, myindex )
     if adjustedindex == 1 then
         self.destination = vector:new( -thingy_spacing, 0 )
     elseif adjustedindex == 2 then
-        self.destination = vector:new( thingy_spacing, 0 )
+        self.destination = vector:new(  thingy_spacing, 0 )
     elseif adjustedindex == 3 then
         self.destination = vector:new( 0, -thingy_spacing )
     elseif adjustedindex == 4 then
-        self.destination = vector:new( 0, thingy_spacing )
+        self.destination = vector:new( 0, 0 )
     end
 end
 
-function thingy:collapse()
+function thingy:collapse( recursive )
     self.destination = vector:new( 0, 0 )
+
+    if self.homebutton then
+        self.destination = vector:new( 0, thingy_spacing )
+    end
+
+    if recursive then
+        for child in all( self.children ) do
+            child:collapse( recursive )
+        end
+    end
 end
 
 function thingy:activate()
-    self.activated = true
+    self.crafting:on_activating( self )
 
-    self:flash()
-
-    self.destination = vector:new( 0, 0 )
+    local flashduration = 0.25
 
     -- leaf node?
     if self.parent ~= nil and #self.children == 0 then
         -- yes. do what we do
-        
+
         if self.action ~= nil then
             self.action()
         end
 
-        -- todo!!!
-        -- self:deactivate()
+        self.crafting:on_activating_item( self )
 
     else
         -- container. Expand children.
 
-        local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 2
+        self.destination = vector:new( 0, 0 )
+
+        flashduration = 0.15
+        local myindex = (self.parent ~= nil ) and self.parent:child_index( self ) or 0
+
+        debug_print( myindex )
 
         for i = 1, #self.children do
             local child = self.children[ i ]
+
             child:expand( myindex, i )
         end
     end
-end
 
-function thingy:deactivate()
-    self.activated = false
-
-    self.destination = vector:new( 0, 0 )
-
-    if self.parent == nil then
-        -- root
-        self:activate()
-    else
-        for child in all( children ) do
-            child:collapse()
-        end
-
-        self.parent:deactivate()
+    if self.parent ~= nil then
+        self:flash( flashduration )
     end
+
 end
 
 function thingy:update_input()
 
+    if self.crafting.lockout_input then return end
+
     -- home button
     if btnp( 3 ) and self.parent ~= nil then
-        self:deactivate()
+        self.crafting.homebutton:flash( 0.15 )
+        self.crafting:reset()
     else 
         local button = nil    
         if btnp( 2 ) then
@@ -1638,11 +1758,22 @@ function thingy:update_input()
         local activated_child = self:child_from_button( button )
 
         if activated_child ~= nil then
+
+            -- if non-leaf, collapse other children
+            if #activated_child.children > 0 then
+                for child in all( self.children ) do
+                    if activated_child ~= child then
+                        child:collapse()
+                    end
+                end
+            end
+
             activated_child:activate()
 
             -- if root, move down
             if self.parent == nil then
-                self:collapse()
+                -- todo
+                -- self.destination = vector:new( 0, thingy_spacing )
             end
         end
 
@@ -1683,7 +1814,7 @@ end
 --level creation
 music()
 
-local crafting_ui = crafting:new( vector:new( 96, 128 - 2 - 10*2 ))
+local crafting_ui = crafting:new( vector:new( 96, 18 ))
 local current_level = nil
 
 local game_state = 'title'
@@ -2087,25 +2218,25 @@ __gfx__
 007007000011122000111220002222209422222094222220022222200664dd2000222220009990000000dd004422222000094900000062000000c2d000000420
 00000000000122000001220000022200044420000444200002200000000622200022222000000000000006000222220000000900000002200000cd0000000020
 00000000000020000000200000002000002220000022200000222000000020000000200000000000000000000000000000000000000000000000000000000000
-d0d0d0d00000b000004000007000000000000000700a0000000b0000000dd0000000000040090009040090090000000000000000000000000000000000000000
-0000000d008b80000aa0000067e00000007cc0000a7a9000044b30000000dd000077700099990090099990090000000000000000000000000000000000000000
-d00000000878820009a000000eee000007cccd0009a9aa000045300000777d100766660079790090079790900000000000000000000000000000000000000000
-0000000d0888820009aa00000eee20000ccccd007a9a4a000004400007dddd100666660099994990099994900000000000000000000000000000000000000000
-d000000008822200009aa940002220000cccdd000aa4a490000055000dddd1100d666d0009949990099949900000000000000000000000000000000000000000
-0000000d00222000000444000000dd0000f4400000994900000005000011110000ddd00009999990099999900000000000000000000000000000000000000000
-d0000000000000000000000000000600000000000004900000000000000000000000000004094090409040900000000000000000000000000000000000000000
+d0d0d0d00000b000004000007000000000000000700a0000000b0000000dd0000000000040090009040090090004000000000000000000000000000000000000
+0000000d008b80000aa0000067e00000007cc0000a7a9000044b30000000dd000077700099990090099990090041400000000000000000000000000000000000
+d00000000878820009a000000eee000007cccd0009a9aa000045300000777d100766660079790090079790900414240000000000000000000000000000000000
+0000000d0888820009aa00000eee20000ccccd007a9a4a000004400007dddd100666660099994990099994904144424000000000000000000000000000000000
+d000000008822200009aa940002220000cccdd000aa4a490000055000dddd1100d666d0009949990099949900144420000000000000000000000000000000000
+0000000d00222000000444000000dd0000f4400000994900000005000011110000ddd00009999990099999900441440000000000000000000000000000000000
+d0000000000000000000000000000600000000000004900000000000000000000000000004094090409040900221220000000000000000000000000000000000
 0d0d0d0d000000000000000000000000000000000000000000000000000000000000000004094090409004090000000000000000000000000000000000000000
-00044400044440000044000000044400044440000004400000044400044440000044000000044400044440000004400011111111111010100000000000000000
-00444f004444f0ff4444400000444f004444f0440444440000444f004444f0ff4444400000444f004444f0dd0444440011111111010101010000000000000000
-0444ff00444ff0ff4444f0000444ff00444ff04404444f000444ff00444ff0f74444f0000444ff00444ff0d104444f0011111110101010000000000000000000
-044fff0000fff00f044ff000044fff0000fff0040044ff00044fff0000fff006044ff000044fff0000fff0010044ff0011110101000000000000000000000000
-000fff0044ffffff00fff000000fff00fffff444000fff0000076600d176676600fff00000076600767661110007660011101010000000000000000000000000
-004fff0040ff400000fff0f000ffff00f04ff000000fff040016760010666000007660f000766600606660000006760d11110000000000000000000000000000
-004fff0040fff00000fffff000ffff00f0fff000000fff4400166600106660000067667000f66600f06660000006661d11101000000000000000000000000000
-000fff0000fff00000fff000000fff0000fff000000fff0000066600006660000066600000066600006660000006660011010000000000000000000000000000
-000eee0000eee00000eee200000eee0000eee000000eee00000ddd0000ddd00000ddd100000ddd0000ddd000000ddd0010100000000000000000000000000000
-000eee2000eee20000eeee20000eeee000eeee00002eeee0000766d0007661000076661000076660007666000017666011000000000000000000000000000000
-000ee82008ee222000eeee80000ee880022ee880002eee80000666d0076611d00066666000066660011666600016666010100000000000000000000000000000
+00044400044440000044000000044400044440000004400000044400044440000044000000044400044440000004400011111111111010100555555555000000
+00444f004444f0ff4444400000444f004444f0440444440000444f004444f0ff4444400000444f004444f0dd0444440011111111010101015111111111500000
+0444ff00444ff0ff4444f0000444ff00444ff04404444f000444ff00444ff0f74444f0000444ff00444ff0d104444f0011111110101010005111111111500000
+044fff0000fff00f044ff000044fff0000fff0040044ff00044fff0000fff006044ff000044fff0000fff0010044ff0011110101000000005111111111500000
+000fff0044ffffff00fff000000fff00fffff444000fff0000076600d176676600fff00000076600767661110007660011101010000000005111111111500000
+004fff0040ff400000fff0f000ffff00f04ff000000fff040016760010666000007660f000766600606660000006760d11110000000000005111111111500000
+004fff0040fff00000fffff000ffff00f0fff000000fff4400166600106660000067667000f66600f06660000006661d11101000000000005111111111500000
+000fff0000fff00000fff000000fff0000fff000000fff0000066600006660000066600000066600006660000006660011010000000000005111111111500000
+000eee0000eee00000eee200000eee0000eee000000eee00000ddd0000ddd00000ddd100000ddd0000ddd000000ddd0010100000000000005111111111500000
+000eee2000eee20000eeee20000eeee000eeee00002eeee0000766d0007661000076661000076660007666000017666011000000000000005111111111500000
+000ee82008ee222000eeee80000ee880022ee880002eee80000666d0076611d00066666000066660011666600016666010100000000000000555555555000000
 00088840088e0244fff888800002e8f0022288ff4442e880000666d007660ddddd76666000017660011167661111676001000000000000000000000000000000
 0044f4400f80044000ffff4000fffff004200ff0004448f0001176d006600dd0006666d000ddd6600d10066000ddd66010000000000000000000000000000000
 0000f000ff00440000000040000040004400ff00000000f000006000d6001100000000d0000010001d00dd000000006001000000000000000000000000000000
