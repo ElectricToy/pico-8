@@ -132,23 +132,6 @@ function inheritsfrom( baseclass )
 		return baseclass
 	end
 
-	function new_class:isa( theclass )
-		local b_isa = false
-
-		local cur_class = new_class
-
-		while nil ~= cur_class do
-			if cur_class == theclass then
-				b_isa = true
-				break
-			else
-				cur_class = cur_class:superclass()
-			end
-		end
-
-		return b_isa
-	end
-
 	return new_class
 end
 
@@ -709,7 +692,19 @@ function player:jump( amount )
 	return jumped
 end
 
+function fastphase( phase )
+	return phase >= 5 and ( phase % 2 ) == 1
+end
+
 function player:update( deltatime )
+
+	if not self:dead() then
+		self.vel.x = 1
+		if fastphase( self.level:phase() ) then
+			self.vel.x = 1.5
+		end
+	end
+
 	self:superclass().update( self, deltatime )
 
 	local creatures = self.level:actors_of_class( creature )
@@ -961,7 +956,7 @@ local items = {
 		name = 'a torch',
 		sprite = 15,
 		showinv = true,
-		requirements = { oil = 1, stick = 2 },
+		requirements = { oil = 1, stick = 1 },
 		oncreated = function(level)
 			level.inventory:acquire( 'torch' )
 		end
@@ -1063,13 +1058,18 @@ function level:new( inventory )
 		last_creation_cell = 0,
 	}
 	o.creation_records = {
-		coin     = { chance =   100, earliestnext =   64, interval = 8, predicate = function() return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 end },
+		coin     = { chance =   100, earliestnext =   64, interval = 8, predicate = function() 
+			return sin( o:time() / 3 ) * sin( o:time() / 11 ) > 0.25 
+		end },
+
 		stone    = { chance =   100, earliestnext =   64, interval = 48, predicate = function() 
 			return ( #o:actors_of_class( creature ) == 0 ) and pctchance( o:phase() * 2 )
 		end },
+
 		creature = { chance =   100, earliestnext = 256, interval = 256, predicate = function() 
 			return o:phase() >= 3 and #o:actors_of_class( creature ) == 0 and pctchance( o:phase() * 2 - 2 )
 			end },
+
 		material = { chance =   100, earliestnext = 64, interval = 24, create = function(level, creation_point)
 			for itemname, type in pairs( items ) do
 				if type.shoulddrop ~= nil then
@@ -1111,6 +1111,10 @@ function level:phase()
 	if not self.inventory.owned_torch then return 2 end
 
 	return 3 + flr( self:ramptime() / day_length )
+end
+
+function level:time_left_in_phase()
+	return day_length - self:ramptime() % day_length
 end
 
 function level:after_delay( delay, fn )
@@ -2220,13 +2224,14 @@ function draw_ui()
 		crafting_ui:draw()
 		inventory_display:draw()
 
-		if current_level:phase() == 1 then
+		local phase = current_level:phase()
+		if phase == 1 then
 			draw_shadowed( 64, 54, function(x,y)
 				print_centered_text( 'press z to jump!', x, y, 8 )
 			end )
 		end
 
-		if current_level:phase() == 2 then
+		if phase == 2 then
 			draw_shadowed( 64, 46, function(x,y)
 				print_centered_text( 'craft a    with   and', x, y+1, 8 )
 				spr( 15, x - 9, y )
@@ -2239,6 +2244,12 @@ function draw_ui()
 			print_centered_text( curmessage(), x, y, 12 )
 		end )
 
+		if fastphase( phase + 1 ) and current_level:time_left_in_phase() < 3 then
+			draw_shadowed( 64, 54, function(x,y)
+				print_centered_text( 'get ready!', x, y, 8 )
+			end )
+		end
+
 	end
 
 	function draw_ui_gameover()
@@ -2247,7 +2258,13 @@ function draw_ui()
 		end )
 	end
 
+	function drawlogo()
+		spr( 148, 16, 32, 12, 4 )
+	end
+
+
 	function draw_ui_gameover_fully()
+		drawlogo()
 		draw_ui_gameover()
 
 		draw_shadowed( 64, 0, function(x,y)
@@ -2259,7 +2276,7 @@ function draw_ui()
 	if game_state == 'playing' then
 		draw_ui_playing()
 	elseif game_state == 'title' then
-		spr( 148, 16, 32, 12, 4 )
+		drawlogo()
 
 		draw_shadowed( 64, 0, function(x,y)
 			print_centered_text( 'press z to start', x, y + 102, 12 )
