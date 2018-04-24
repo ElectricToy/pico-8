@@ -1,20 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
-debug_lines={}
-function debug_print(text)
-add(debug_lines,text)
-while #debug_lines > 10 do
-del_index(debug_lines,1)
-end
-end
-function draw_debug_lines()
-for i=1,#debug_lines do
-local line=debug_lines[ #debug_lines-i+1 ]
-print(line,2,7*i,rel_color(8,1-i))
-end
-print('',0,(#debug_lines+1)*7)
-end
+local timesplayed=0
 local current_level=nil
 local crafting_ui=nil
 local inventory_display=nil
@@ -98,19 +85,6 @@ return new_class
 end
 function new_class:superclass()
 return baseclass
-end
-function new_class:isa(theclass)
-local b_isa=false
-local cur_class=new_class
-while nil~=cur_class do
-if cur_class==theclass then
-b_isa=true
-break
-else
-cur_class=cur_class:superclass()
-end
-end
-return b_isa
 end
 return new_class
 end
@@ -307,7 +281,6 @@ vel=vector:new(),
 offset=vector:new(),
 collision_size=vector:new(establish(wid,0),establish(hgt,0)),
 collision_planes_inc=1,
-collision_planes_exc=15,
 do_dynamics=false,
 landed_tick=nil,
 does_collide_with_ground=true,
@@ -358,16 +331,12 @@ function actor:may_collide(other)
 return self.active
 and other.active
 and 0~=band(self.collision_planes_inc,other.collision_planes_inc)
-and 0==band(self.collision_planes_exc,other.collision_planes_exc)
-end
-function actor:collision_ul()
-return self.pos
 end
 function actor:collision_br()
-return self:collision_ul()+self.collision_size
+return self.pos+self.collision_size
 end
 function actor:collision_center()
-return self:collision_ul()+self.collision_size*vector:new(0.5)
+return self.pos+self.collision_size*vector:new(0.5)
 end
 function actor:collision_rect()
 return { l=self.pos.x,
@@ -397,7 +366,7 @@ local liveleft,liveright=self.level:live_actor_span()
 if self:collision_br().x+8 < liveleft then
 self.active=false
 end
-if self.vel.x > 0 and self:collision_ul().x > liveright then
+if self.vel.x > 0 and self.pos.x > liveright then
 self.active=false
 end
 local anim=self:current_animation()
@@ -473,7 +442,6 @@ o.do_dynamics=true
 o.animations[ 'run' ]=animation:new(32,6,1,2)
 o.animations[ 'run_armor' ]=animation:new(38,6,1,2)
 o.current_animation_name='run'
-o.collision_planes_exc=0
 o.jump_count=0
 o.coins=0
 o.max_health=6
@@ -490,6 +458,7 @@ local death_anim=animation:new(224,7,2,2)
 death_anim.style='stop'
 death_anim.frames={ 224,226,228,230,230,230,230,230,232,232,232,232,232,232,232,234,236 }
 o.animations[ 'death' ]=death_anim
+o.frame_rate_hz=1
 return setmetatable(o,self)
 end
 function player:has_weapon()
@@ -509,6 +478,7 @@ self.satiation=clamp(self.satiation+amount,0,self.max_satiation)
 end
 function player:maybe_shoot(other)
 if self:dead()then return end
+if other:dead()then return end
 if abs(other.pos.x-self.pos.x)< weapon_check_distance then
 if self:has_weapon()and self:ammo()> 0 then
 other:die()
@@ -531,18 +501,26 @@ end
 function player:jump(amount)
 local jumped=self:superclass().jump(self,amount)
 if jumped then
-self:drain_satiation(0.01)
 self.jump_count+=1
 end
 return jumped
 end
+function fastphase(phase)
+return phase >=5 and (phase % 3)==1
+end
 function player:update(deltatime)
+if not self:dead()then
+self.vel.x=1
+if fastphase(self.level:phase())then
+self.vel.x=1.5
+end
+end
 self:superclass().update(self,deltatime)
 local creatures=self.level:actors_of_class(creature)
 for creature in all(creatures)do
 self:maybe_shoot(creature)
 end
-self:drain_satiation(0.001+(self.armor > 0 and 0.0005 or 0))
+self:drain_satiation(0.002)
 if self.current_animation_name~='run' then
 self.animations[ 'run' ]:update(deltatime)
 end
@@ -612,7 +590,8 @@ end
 end
 local pickup=inheritsfrom(actor)
 function pickup:new(level,itemname,item,x)
-local o=actor:new(level,x,-10,6,6)local sprite=item.sprite
+local heightadd=flr((rnd(1)^ 2)*4)*16
+local o=actor:new(level,x,-10-heightadd,6,6)local sprite=item.sprite
 o.itemname=itemname
 o.item=item
 o.animations[ 'idle' ]=animation:new(sprite)
@@ -645,7 +624,7 @@ name='raw meat',
 sprite=19,
 showinv=true,
 shoulddrop=function(level)
-return pctchance(2)
+return pctchance(3)
 end
 },
 mushroom={
@@ -653,7 +632,7 @@ name='a mushroom',
 sprite=20,
 showinv=true,
 shoulddrop=function(level)
-return pctchance(3)
+return pctchance(5)
 end
 },
 wheat={
@@ -661,7 +640,7 @@ name='wheat',
 sprite=21,
 showinv=true,
 shoulddrop=function(level)
-return pctchance(1)
+return pctchance(2)
 end
 },
 stick={
@@ -669,7 +648,7 @@ name='a stick',
 sprite=22,
 showinv=true,
 shoulddrop=function(level)
-return pctchance(6)
+return pctchance(10)
 end
 },
 oil={
@@ -677,7 +656,7 @@ name='oil',
 sprite=23,
 showinv=true,
 shoulddrop=function(level)
-return pctchance(4)
+return pctchance(6)
 end
 },
 metal={
@@ -685,7 +664,7 @@ name='metal',
 sprite=24,
 showinv=true,
 shoulddrop=function(level)
-return pctchance(4)
+return pctchance(6)
 end
 },
 bow={
@@ -740,14 +719,13 @@ requirements={ wheat=3,mushroom=3 },
 oncreated=function(level)
 current_player.max_health=min(current_player.max_health+2,16)
 current_player:heal(4)
-current_player:eat(3)
 end
 },
 torch={
 name='a torch',
 sprite=15,
 showinv=true,
-requirements={ oil=1,stick=2 },
+requirements={ oil=1,stick=1 },
 oncreated=function(level)
 level.inventory:acquire('torch')
 end
@@ -756,7 +734,7 @@ apple={
 name='an apple',
 sprite=17,
 shoulddrop=function(level)
-return pctchance(4)
+return pctchance(1)
 end,
 onpickedup=function(level)
 current_player:heal(2)
@@ -766,7 +744,7 @@ banana={
 name='a banana',
 sprite=18,
 shoulddrop=function(level)
-return pctchance(4)
+return pctchance(2)
 end,
 onpickedup=function(level)
 current_player:eat(1)
@@ -790,11 +768,21 @@ local inventory=inheritsfrom(nil)
 function inventory:new()
 local o={
 itemcounts={},
+owned_torch=false,
 }
 return setmetatable(o,self)
 end
 function inventory:item_count(type)
 return establish(self.itemcounts[ type ],0)
+end
+function inventory:missing_items(requirements)
+local arr={}
+for itemname,count in pairs(requirements)do
+if self:item_count(itemname)< count then
+arr[ itemname ]=count
+end
+end
+return arr
 end
 function inventory:acquire(type)
 if not self.itemcounts[ type ] then
@@ -808,6 +796,9 @@ sfx(33)
 local gaineditems={}
 gaineditems[ type ]=item
 inventory_display:on_gained(gaineditems)
+if item.name=='a torch' then
+self.owned_torch=true
+end
 end
 end
 function inventory:use(type,count)
@@ -819,8 +810,6 @@ function level:new(inventory)
 local o={
 actors={},
 mapsegments={},
-ground_decorations={},
-horizon_decorations={},
 tick_count=0,
 pending_calls={},
 inventory=inventory,
@@ -828,9 +817,11 @@ last_creation_cell=0,
 }
 o.creation_records={
 coin={ chance=100,earliestnext=64,interval=8,predicate=function()return sin(o:time()/ 3)*sin(o:time()/ 11)> 0.25 end },
-stone={ chance=0.5,earliestnext=64,interval=48,predicate=function()return (#o:actors_of_class(creature)==0)or pctchance(0.1)end },
-creature={ chance=0.25,earliestnext=256,interval=256,predicate=function()return #o:actors_of_class(creature)==0 end },
-material={ chance=80,earliestnext=64,interval=24,create=function(level,creation_point)
+stone={ chance=100,earliestnext=64,interval=48,predicate=function()return (#o:actors_of_class(creature)==0)and pctchance(o:phase()*2)
+end },
+creature={ chance=100,earliestnext=256,interval=256,predicate=function()return o:phase()>=3 and #o:actors_of_class(creature)==0 and pctchance(o:phase()*2-2)
+end },
+material={ chance=100,earliestnext=64,interval=24,create=function(level,creation_point)
 for itemname,type in pairs(items)do
 if type.shoulddrop~=nil then
 if type.shoulddrop(level)then
@@ -849,6 +840,21 @@ return flr(self.player.pos.x / 8)
 end
 function level:time()
 return self.tick_count / 60.0
+end
+function level:ramptime()
+if self.base_tick==nil then
+return 0
+end
+return (self.tick_count-self.base_tick)/ 60
+end
+local day_length=30
+function level:phase()
+if timesplayed==1 and self.player.jump_count==0 then return 1 end
+if timesplayed==1 and not self.inventory.owned_torch then return 2 end
+return 3+flr(self:ramptime()/ day_length)
+end
+function level:time_left_in_phase()
+return day_length-self:ramptime()% day_length
 end
 function level:after_delay(delay,fn)
 add(self.pending_calls,{ deadline=self:time()+delay,fn=fn })
@@ -925,17 +931,18 @@ end
 end
 end
 function level:update()
-local deltatime=1.0 / 60.0
 self.tick_count+=1
+if self.base_tick==nil and (timesplayed > 1 or self.inventory.owned_torch)then
+self.base_tick=self.tick_count
+end
 self:update_pending_calls()
-self:maybe_create(creature,'creature')
 if self.player.alive then
 self:create_props()
 self:update_mapsegments()
 end
 self:update_collision()
 erase_elements(self.actors,function(actor)
-actor:update(deltatime)
+actor:update(1.0 / 60.0)
 return not actor.active
 end)
 del(self.actors,self.player)
@@ -956,25 +963,12 @@ end
 function level:camera_pos()
 return vector:new(self.player.pos.x-32,-96)
 end
-function level:timeofday()
-return 0.5+sin(self:time()/ 50)*0.5
-end
-function level:categoricaltimeofday()
-local thetime=self:timeofday()
-return thetime < 0.7 and 1 or (thetime < 0.9 and 2 or 3)
-end
 function level:draw()
 local cam=self:camera_pos()
+cls(3)
 camera(0,cam.y)
-local thetime=self:timeofday()
-function drawgrass()
-camera(0,cam.y)
-rectfill(0,0,128,32,3)
-line(0,0,128,0,0)
-end
 rectfill(0,-96,128,0,12)
-camera(cam.x,cam.y)
-drawgrass()
+line(0,0,128,0,5)
 camera(cam.x,cam.y)
 for segment in all(self.mapsegments)do
 segment:draw()
@@ -985,7 +979,8 @@ end)
 end
 local behaviors={}
 function creature:new(level,x)
-local whichcreature=rand_int(3,3)
+local maxcreaturetype=flr((level:phase()-4)/ 2)+1
+local whichcreature=rand_int(1,max(1,maxcreaturetype))
 local y=-16
 local wid=14
 local hgt=7
@@ -1048,6 +1043,7 @@ end
 local stone=inheritsfrom(actor)
 function stone:new(level,x)
 local size=rand_int(1,2)
+if level:phase()==2 then size=1 end
 local sprite={ 136,130,164 }
 local spritewidth={ 1,2,3 }
 local spriteheight={ 1,2,2 }
@@ -1085,7 +1081,6 @@ return setmetatable(o,self)
 end
 function coin:on_collision(other)
 self:on_pickedup_by(other)
-self:superclass().on_collision(self,other)
 end
 function coin:on_pickedup_by(other)
 other:add_coins(self.value)
@@ -1111,9 +1106,13 @@ end
 function level:create_props()
 if self.last_creation_cell==self:creation_cell()then return end
 self.last_creation_cell=self:creation_cell()
-self:maybe_create(stone,'stone')
-self:maybe_create(coin,'coin')
+if not self:maybe_create(coin,'coin')then
+if not self:maybe_create(creature,'creature')then
+if not self:maybe_create(stone,'stone')then
 self:maybe_create(material,'material')
+end
+end
+end
 end
 function world_to_mapsegment_cell_x(x)
 return flr(x / maptoworld(mapsegment_tile_size.x))
@@ -1179,9 +1178,9 @@ function inventorydisplay:on_used(items)
 self.item_use_message='used:'
 self:highlight_items(items)
 end
-function inventorydisplay:on_tried_to_use(items)
+function inventorydisplay:on_tried_to_make(item)
 self.item_use_message='need:'
-self:highlight_items(items)
+self:highlight_items(self.level.inventory:missing_items(item.requirements))
 end
 function inventorydisplay:draw()
 local left=54
@@ -1486,7 +1485,7 @@ if not self:available()then
 self:flash(0.05)
 self.crafting:on_activating_item(self,true)
 sfx(41)
-inventory_display:on_tried_to_use(self.item.requirements)
+inventory_display:on_tried_to_make(self.item)
 message('for ' .. self.item.name)
 return
 end
@@ -1569,8 +1568,10 @@ end
 end
 end
 end
+music()
 local game_state='title'
 function restart_world()
+timesplayed+=1
 current_level=level:new(inventory:new())
 current_player=current_level.player
 crafting_ui=crafting:new(current_level,vector:new(96,2+thingy_spacing+2))
@@ -1700,44 +1701,55 @@ end)
 iconsy+=9
 crafting_ui:draw()
 inventory_display:draw()
-if current_player.jump_count==0 then
+local phase=current_level:phase()
+if phase==1 then
 draw_shadowed(64,54,function(x,y)
 print_centered_text('press z to jump!',x,y,8)
+end)
+end
+if phase==2 then
+draw_shadowed(64,46,function(x,y)
+print_centered_text('craft a    with   and',x,y+1,8)
+spr(15,x-9,y)
+spr(22,x+20,y)
+spr(23,x+44,y)
 end)
 end
 draw_shadowed(90,128-28,function(x,y)
 print_centered_text(curmessage(),x,y,12)
 end)
+local phasespeed=fastphase(phase)and 1 or 0
+local nextphasespeed=fastphase(phase+1)and 1 or 0
+local speedchange=nextphasespeed-phasespeed
+if speedchange~=0 and current_level:time_left_in_phase()< 3 and flicker(current_level:time(),2)then
+draw_shadowed(64,54,function(x,y)
+print_centered_text(speedchange > 0 and 'get ready!' or 'nearly there!',x,y,8)
+end)
+end
 end
 function draw_ui_gameover()
 draw_shadowed(64,64,function(x,y)
-print_centered_text(current_player.deathcause,x,y,8)
+print_centered_text(current_level.player.deathcause,x,y,8)
 end)
+end
+function drawlogo()
+spr(148,16,16,12,4)
 end
 if game_state=='playing' then
 draw_ui_playing()
 elseif game_state=='title' then
-spr(148,16,32,12,4)
+drawlogo()
 draw_shadowed(64,0,function(x,y)
-print_centered_text('press z to start',x,y+102,12)
+print_centered_text('press z to start',x,y+108,12)
 end)
 elseif game_state=='gameover_dying' then
 draw_ui_gameover()
 elseif game_state=='gameover' then
+drawlogo()
 draw_ui_gameover()
 draw_shadowed(64,0,function(x,y)
-print_centered_text('press z to play again',x,y+102,12)
-print_centered_text('score: ' .. current_player.coins,x,y+16,10)
-end)
-end
-if false then
-draw_shadowed(124,2,function(x,y)
-print_rightaligned_text('t: ' ..flr(current_level:time()),x,y,6)
-y+=8
-print_rightaligned_text('x: ' .. flr(current_player.pos.x),x,y,6)
-y+=8
-print_rightaligned_text('actors: ' .. #current_level.actors,x,y,6)
-y+=8
+print_centered_text('press z to play again',x,y+108,12)
+print_centered_text('score: ' .. current_level.player.coins*10,x,y+64+10,10)
 end)
 end
 end
@@ -1745,7 +1757,6 @@ function _draw()
 current_level:draw()
 camera(0,0)
 draw_ui()
-draw_debug_lines()
 end
 function wait(seconds)
 for i=0,seconds*60 do
@@ -1814,7 +1825,8 @@ end
 end,
 pounce_from_left=
 function(actor)
-local maxpounces=3 local restpos=-32
+local maxpounces=clamp(actor.level:phase()-7,1,3)
+local restpos=-32
 local numpounces=rand_int(1,maxpounces)
 actor.pos.x=stage_left_appear_pos()
 local stored_collision_planes=actor.collision_planes_inc
@@ -1921,38 +1933,38 @@ b3b33bb000b333bb044461164400440033bb33bb13bb33bb33bbb35113bbb351e111010e00000000
 00b33b0000b33300006411d11dd11000bb33bb331533bb33bb333b3115333b31e110100e00000000000000000000000000000000000000000000000000000000
 0b3bb300bb3bbbbb00661ddddddd444033553355011533553355533101155331e101010e00000000000000000000000000000000000000000000000000000000
 00b3bbb000b333b044446dddddd4440011111111001111111111111000111110e000000e00000000000000000000000000000000000000000000000000000000
-bb3b300000005b300044441ddd11dd00777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777
-0b33bb00000bb3000066411dddddddd0700000077777770000000000000000000000000000000000000000000000000000000000000000000007777777777007
-00bb30000bb33bbb4446ddddddddddd0700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0005bbb0000bb3300441dddddddddddd700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0005000000b35bbb0611dddddddddddd700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00040000000050000666dddddddddddd700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0004000000004000006dddddddddddd0700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-000400000000400000000dddddddd000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-000000000000000000000bbb00000000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00000000000000b00000bbbbbbbb0000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0000000000b00bb0000bb33bbb000000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0000000000bbb33000bbbbbbb0000000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0000000000bb33030bbbb33000000000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-000000000bb33000bbb33030bbbbbbb0700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00000000bbb3300bbb33000bbbbb0000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00000000bbb3bbbbb3300bbbbbb00000770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0000000bbb33bbbb3333bbbbbb0b0000770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-000000bbbb3bbbb333bbbbbbb00b0000770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-000000bbb3bbb3333bbbbbb3330bbbbb770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00000bbbbbb3333bbbbbb33000bbbb00700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0000bb3bbbbbbbbbbbbb3300bbbbb000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-000bb33bb3333bbbb3333333bb330030700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00bb3bb3333bbb3333333bbbb33bb30b770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-bbbbbbbbb3bbbbbb33bbbbbbbbbbb33b770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00000440000000000000000000000000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00004444400000000000000044000000700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-00044444f00000000000004444440000770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0000444ff00000000000000444444000770000000000000000000000000000000000000000000000000000000000000700000000000000000000000000000007
-00000fff00000000000004444444f000770000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007
-0444fff0000000000000000044fff0ff770000000000000000000000000000000000000000000000000000000000000000000007777777770000000000000007
-0000ffffff00000000004442ffff0ff0770000000000077770000000000000000000000000000000000000000000000707777777777777777777777777700007
-000fff0000000000000040ffffffff00777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777
+bb3b300000005b300044441ddd11dd00000000000666666600660000066066666666006600000660666666666066000006600000066660066650000000000000
+0b33bb00000bb3000066411dddddddd0000000006666666660665000066566666666606660006665666666666566600066650006666665066500000000000000
+00bb30000bb33bbb4446ddddddddddd0000000006665556665665000066566555566656660006665556665555566600066650066655665066500000000000000
+0005bbb0000bb3300441dddddddddddd000000006650005555665000066566500006655666066655000665000056660666550066500665066500000000000000
+0005000000b35bbb0611dddddddddddd000000006666666600665000066566666666650666066650000666500006660666500665000665066500000000000000
+00040000000050000666dddddddddddd000000005666666660665000066566666666550566066550000666500005660665500665000665066500000000000000
+0004000000004000006dddddddddddd0000000000555555665665000066566566655500066666500000066500000666665000666666665066500000000000000
+000400000000400000000dddddddd000000000006660006665666000666566506665000056665500000066650000566655006655555665066500006000000000
+000000000000000000000bbb00000000000000006666666665666666666566500666500006665000066666666650066650006650000665066666666500000000
+00000000000000b00000bbbbbbbb0000000000005666666655566666665566650066650005655000006666666665056550006660006665066666666500000000
+0000000000b00bb0000bb33bbb000000000000000555555550055555555055500005550000550000000555555555005500005550005555055555555500000000
+0000000000bbb33000bbbbbbb00000000007077aaa777777777770000000000000000077aaa77700000007777777000007a00077777700000077777770000000
+0000000000bb33030bbbb3300000000007a000aaa777aaaaaaaaaaa000000000007a000000777a97a077777aaaaaaaaa0000077777aa9900000077aaa9900000
+000000000bb33000bbb33030bbbbbbb00000000007aaaaaaaaaaaaaaa00000000000000007aaaa900007aaaaaaaaaaaaaaa00007aaaa7a07aaa77aaaa9900000
+00000000bbb3300bbb33000bbbbb00000000000007aaaaaaaaaaaaaaaa000707aa077aaa7aaaaa90077aaaaaaaaaaaaaaaa9000aaaaa99000000aaaaa9900000
+00000000bbb3bbbbb3300bbbbbb000000000000007aaaaaaaaaaaaaaaa00000000000007aaaaaa90007aaaaaaaaaaaaaaaa9007aaaaa9900000aaaaaa9900000
+0000000bbb33bbbb3333bbbbbb0b0000000070077aaaaa9999aaaaaaaaa000000000007aaaaaaa907aaaaaaa9999aaaaaa99007aaaa999707aaaaaaa99900000
+000000bbbb3bbbb333bbbbbbb00b0000000000007aaaaa999999aaaaaaa00000000007aaaaaaaa9000aaaa99990000aaaa9007aaaaa99000000aaaaa99000000
+000000bbb3bbb3333bbbbbb3330bbbbb000000007aaaaa9900000aaaaaa9700000007aaaa9aaaa9000aaaa000007a00aaa90aaaaaaa990000007aaaa99000000
+00000bbbbbb3333bbbbbb33000bbbb00000000007aaaaa99000007aaaaa900000aa7aaaa997aaa90000aaa7770000000099000aaaaaa77777777aaaa99000000
+0000bb3bbbbbbbbbbbbb3300bbbbb000000000007aaaa999070aa77aaaa90000007aaaa9997aaaa070aaaaaaa7777770000007aaaaaaaaaaaaaaaaaa99000000
+000bb33bb3333bbbb3333333bb33003000000007aaaaa9900000077aaaa9000007aaaa99aa07aaa900000aaaaaaaaaa7900007aaaaaaaaaaaaaaaaa999000000
+00bb3bb3333bbb3333333bbbb33bb30b07a07aa7aaaaa9900000777aaaa900007aaaa9990007aaa900700009aaaaaaaaa970aaaaaaaaaaaaaaaaaaa990000000
+bbbbbbbbb3bbbbbb33bbbbbbbbbbb33b00000007aaaaa990007777aaaa990007aaaa99900007aaa907770000009997aaa99007aaaa99999999aaaaa990000000
+0000044000000000000000000000000000000007aaaaaa777777aaaaaa99007aaaaaa7777777aaa9077a70000000007aaa9007aaaa9900000aaaaaa990000000
+00004444400000000000000044000000007aa07aaaaaaaaaaaaaaaaaa99007aaaaaaaaaaaaaaaaa977aaaaaa0000007aaa997aaaaa9900000aaaaaa990000000
+00044444f000000000000044444400000000007aaaaaaaaaaaaaaaaa99907aaaaaaaaaaaaaaaaaa97aaaaaaaa777777aaa997aaaa997a07aaaaaaa9990000000
+0000444ff000000000000004444440000000007aaaaaaaaaaaaaaaa99907aaaa99999999999aaaa97aaaaaaaaaaaaaaaa9997aaaa9900000aaaaaa9900000000
+00000fff00000000000004444444f00077aa7aaaaaaaaaaaaaaaa999977aaaa9990000000007aaa909aaaaaaaaaaaaaaa9907aaaa9907000aaaaaa9900000000
+0444fff0000000000000000044fff0ff0aa0aaaaaaaaaaaaaa999797aaaaaa9990a000aaa0a7aaa90099aaaaaaaaaaa9979aaaaaa970007aaaaaaa9900000000
+0000ffffff00000000004442ffff0ff0000000099999999999990000009999990000000000009999000099999999999990000999999000000099999900000000
+000fff0000000000000040ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00eee0000000000000000eefff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00eeee00000000000400eeeef0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 022ee8800000000004488eee00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -2035,8 +2047,8 @@ __sfx__
 0002000016610196301c6401a0003f65033650226501c65018630126201a0001a0001a0001a0001a0001a000163411636116361163611534112331103110d330083301a0001a0001a0001a0001a0001a0001a000
 0004000014040150611507116071180711d0712c0611d0002600034000053000630026000340000533006341083510a3510c3500e3500f3510f3510f3510f3510f3510e3510c3510b35109341073310532101311
 00020000170511a0511e051270512f0513a000370503705037050370403704037030370303702037020370103701037010370103700037000380003800037000330002c0001b000150001500036000340002f000
-000100002a63035610233402334000100001001963020610283402834000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100
-000100003f6103f6203d6303d6403c6503b6303a62039620386203762035630346303364032640316502f6502d6402b640296302765023630206301e6201a62016620136300f6300c63009630066200262101620
+000100002a63035610233302333000100001001963020610283302833000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100001000010000100
+000100003e0103d0303d0403c0403b0203a0203802037020350403303030050306002f60031640316402f6402d6302b62029620226101d6101961012610086100560002600016000c60009600066000260101600
 000100000b3500b3000b3500b3500b3500c3000c3500c3500d3500d3500e3500f3000f350113501330013350153501635018350193501c3501f3502235025350293502d350323503f6003f6003f6003f6003f600
 000100002e6202e6112e6112e6012e6010f6010b6052e6102e6102e6002e6003160031600316003f600016003f600016003f600016003f600016003f600016003f600016003f600016003f600016003f60001600
 000300000537005370053700030005370053700537005370053000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
