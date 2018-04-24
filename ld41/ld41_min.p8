@@ -1708,7 +1708,7 @@ end)
 end
 if phase==2 then
 draw_shadowed(64,46,function(x,y)
-print_centered_text('craft a    with   and',x,y+1,8)
+print_centered_text('craft a with and',x,y+1,8)
 spr(15,x-9,y)
 spr(22,x+20,y)
 spr(23,x+44,y)
