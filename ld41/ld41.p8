@@ -702,9 +702,9 @@ function player:update( deltatime )
 	self:superclass().update( self, deltatime )
 
 	local creatures = self.level:actors_of_class( creature )
-	for creature in all( creatures ) do
+	foreach( creatures, function(creature)
 		self:maybe_shoot( creature )
-	end
+	end )
 
 	self:drain_satiation( 0.002 )
 
@@ -1135,11 +1135,11 @@ end
 
 function level:actors_of_class( class )
 	local arr = {}
-	for actor in all( self.actors ) do
+	foreach( self.actors, function(actor)
 		if actor.active and ( class == nil or getmetatable( actor ) == class ) then
 			add( arr, actor )
 		end
-	end
+	end)
 	return arr
 end
 
@@ -1147,7 +1147,7 @@ function level:closest_actor( pos, filter )
 	local closest = nil
 	local closest_dist_sqr = nil
 
-	for actor in all( self.actors ) do
+	foreach( self.actors, function(actor)
 		if actor.active and filter( actor ) and is_close( actor.pos, pos, 180 ) then
 			local distsqr = ( actor.pos - pos ):lengthsquared()
 			if closest_dist_sqr == nil or distsqr < closest_dist_sqr then
@@ -1155,7 +1155,7 @@ function level:closest_actor( pos, filter )
 				closest_dist_sqr = distsqr
 			end
 		end
-	end
+	end )
 
 	return closest, closest_dist_sqr
 end
@@ -1173,11 +1173,11 @@ function level:update_pending_calls()
 end
 
 function level:eachactor( apply )
-	for actor in all( self.actors ) do
+	foreach( self.actors, function(actor)
 		if actor.active then
 			apply( actor )
 		end
-	end
+	end )
 end
 
 function update_actor_collision( a, b )
@@ -1198,13 +1198,13 @@ function level:update_collision()
 
 	local footheight = self.player:collision_rect().b
 	if self.player.vel.y >= 0 then
-		for segment in all( self.mapsegments ) do
+		foreach( self.mapsegments, function( segment )
 			local collision = segment:colliding_tile( self.player )
 			if collision ~= nil and footheight < collision.y + 4 then
 				self.player.pos.y = collision.y - self.player.collision_size.y
 				self.player:landed()
 			end
-		end
+		end )
 	end
 end
 
@@ -1237,17 +1237,17 @@ function level:update()
 	-- fix wrapping
 	local limit = 32000
 	if self.player.pos.x >= limit then
-		for actor in all( self.actors ) do
+		foreach( self.actors, function(actor)
 			actor.pos.x -= limit
-		end
+		end )
 
 		for _, record in pairs( self.creation_records ) do
 			record.earliestnext -= limit
 		end
 
-		for segment in all( self.mapsegments ) do
+		foreach( self.mapsegments, function(segment)
 			segment.worldx -= limit
-		end
+		end )
 	end
 end
 
@@ -1270,9 +1270,9 @@ function level:draw()
 
 	camera( cam.x, cam.y )
 
-	for segment in all( self.mapsegments ) do
+	foreach( self.mapsegments, function(segment)
 		segment:draw()
-	end
+	end)
 
 	self:eachactor( function( actor )
 		actor:draw()
@@ -1556,7 +1556,7 @@ function inventorydisplay:draw()
 
 	local ordered = ordered_items()
 
-	for itemrecord in all( ordered ) do
+	foreach( ordered, function(itemrecord)
 		local item = itemrecord.item
 		local itemname = itemrecord.name
 
@@ -1575,7 +1575,7 @@ function inventorydisplay:draw()
 
 			i += 1
 		end
-	end
+	end )
 
 	-- show needs/used
 	if self:highlighting() then
@@ -1755,9 +1755,9 @@ function thingy:new( crafting, parent, item_config )
 	}
 
 	local configchildren = item_config.children
-	for child in all( configchildren ) do
+	foreach( configchildren, function(child)
 		add( o.children, thingy:new( crafting, o, child ) )
-	end
+	end )
 
 	return setmetatable( o, self )
 end
@@ -1780,11 +1780,11 @@ function thingy:recursively_usable()
 	if self.homebutton then return true end
 	if #self.children == 0 and self:available() then return true end
 
-	for child in all( self.children ) do
+	foreach( self.children, function(child)
 		if child:recursively_usable() then
 			return true
 		end
-	end
+	end )
 	return false
 end
 
@@ -1835,9 +1835,9 @@ end
 
 
 function thingy:drawchildren( basepos, activatedonly )
-	for child in all( self.children ) do
+	foreach( self.children, function(child)
 		child:draw( basepos, activatedonly )
-	end
+	end )
 end
 
 function thingy:child_from_button( button )
@@ -1853,11 +1853,11 @@ end
 function thingy:has_activated_descendant()
 	if self.crafting.activated == self then return true end
 
-	for child in all( self.children ) do
+	foreach( self.children, function(child)
 		if child:has_activated_descendant() then
 			return true
 		end
-	end
+	end )
 	return false
 end
 
@@ -1893,9 +1893,9 @@ function thingy:update()
 		self.pos.y = decisive_lerp( self.pos.y, self.destination.y, self.lerpspeed )
 	end
 
-	for child in all( self.children ) do
+	foreach( self.children, function(child)
 		child:update()
-	end
+	end )
 end
 
 function thingy:expand( myindex )
@@ -1918,9 +1918,9 @@ function thingy:collapse( recursive )
 	end
 
 	if recursive then
-		for child in all( self.children ) do
+		foreach( self.children, function(child)
 			child:collapse( recursive )
-		end
+		end )
 	end
 end
 
@@ -1962,9 +1962,7 @@ function thingy:activate()
 		flashduration = 0.15
 
 		for i = 1, #self.children do
-			local child = self.children[ i ]
-
-			child:expand( i )
+			self.children[ i ]:expand( i )
 		end
 	end
 
@@ -1997,12 +1995,12 @@ function thingy:update_input()
 		if activated_child ~= nil then
 
 			if #activated_child.children > 0 then
-				for child in all( self.children ) do
+				foreach( self.children, function(child)
 					if activated_child ~= child then
 						child:collapse()
 						sfx(37)
 					end
-				end
+				end )
 			end
 
 			activated_child:activate()
