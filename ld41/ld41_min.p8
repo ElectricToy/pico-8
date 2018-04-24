@@ -517,9 +517,9 @@ end
 end
 self:superclass().update(self,deltatime)
 local creatures=self.level:actors_of_class(creature)
-for creature in all(creatures)do
+foreach(creatures,function(creature)
 self:maybe_shoot(creature)
-end
+end)
 self:drain_satiation(0.002)
 if self.current_animation_name~='run' then
 self.animations[ 'run' ]:update(deltatime)
@@ -869,17 +869,17 @@ return left-16,right+32
 end
 function level:actors_of_class(class)
 local arr={}
-for actor in all(self.actors)do
+foreach(self.actors,function(actor)
 if actor.active and (class==nil or getmetatable(actor)==class)then
 add(arr,actor)
 end
-end
+end)
 return arr
 end
 function level:closest_actor(pos,filter)
 local closest=nil
 local closest_dist_sqr=nil
-for actor in all(self.actors)do
+foreach(self.actors,function(actor)
 if actor.active and filter(actor)and is_close(actor.pos,pos,180)then
 local distsqr=(actor.pos-pos):lengthsquared()
 if closest_dist_sqr==nil or distsqr < closest_dist_sqr then
@@ -887,7 +887,7 @@ closest=actor
 closest_dist_sqr=distsqr
 end
 end
-end
+end)
 return closest,closest_dist_sqr
 end
 function level:update_pending_calls()
@@ -901,11 +901,11 @@ return false
 end)
 end
 function level:eachactor(apply)
-for actor in all(self.actors)do
+foreach(self.actors,function(actor)
 if actor.active then
 apply(actor)
 end
-end
+end)
 end
 function update_actor_collision(a,b)
 if a:does_collide(b)then
@@ -921,13 +921,13 @@ end
 end
 local footheight=self.player:collision_rect().b
 if self.player.vel.y >=0 then
-for segment in all(self.mapsegments)do
+foreach(self.mapsegments,function(segment)
 local collision=segment:colliding_tile(self.player)
 if collision~=nil and footheight < collision.y+4 then
 self.player.pos.y=collision.y-self.player.collision_size.y
 self.player:landed()
 end
-end
+end)
 end
 end
 function level:update()
@@ -949,15 +949,15 @@ del(self.actors,self.player)
 add(self.actors,self.player)
 local limit=32000
 if self.player.pos.x >=limit then
-for actor in all(self.actors)do
+foreach(self.actors,function(actor)
 actor.pos.x-=limit
-end
+end)
 for _,record in pairs(self.creation_records)do
 record.earliestnext-=limit
 end
-for segment in all(self.mapsegments)do
+foreach(self.mapsegments,function(segment)
 segment.worldx-=limit
-end
+end)
 end
 end
 function level:camera_pos()
@@ -970,9 +970,9 @@ camera(0,cam.y)
 rectfill(0,-96,128,0,12)
 line(0,0,128,0,5)
 camera(cam.x,cam.y)
-for segment in all(self.mapsegments)do
+foreach(self.mapsegments,function(segment)
 segment:draw()
-end
+end)
 self:eachactor(function(actor)
 actor:draw()
 end)
@@ -1191,7 +1191,7 @@ local colorshift=0 if self:highlighting()then
 colorshift=flicker(now,2)and 8 or 0
 end
 local ordered=ordered_items()
-for itemrecord in all(ordered)do
+foreach(ordered,function(itemrecord)
 local item=itemrecord.item
 local itemname=itemrecord.name
 if item.showinv then
@@ -1205,7 +1205,7 @@ end)
 end)
 i+=1
 end
-end
+end)
 if self:highlighting()then
 draw_color_shifted(colorshift,function()
 draw_shadowed(40,top,function(x,y)
@@ -1348,9 +1348,9 @@ flashstarttime=nil,
 flashendtime=nil,
 }
 local configchildren=item_config.children
-for child in all(configchildren)do
+foreach(configchildren,function(child)
 add(o.children,thingy:new(crafting,o,child))
-end
+end)
 return setmetatable(o,self)
 end
 function thingy:flash(duration)
@@ -1367,11 +1367,11 @@ end
 function thingy:recursively_usable()
 if self.homebutton then return true end
 if #self.children==0 and self:available()then return true end
-for child in all(self.children)do
+foreach(self.children,function(child)
 if child:recursively_usable()then
 return true
 end
-end
+end)
 return false
 end
 function thingy:available()
@@ -1409,9 +1409,9 @@ end)
 end)
 end
 function thingy:drawchildren(basepos,activatedonly)
-for child in all(self.children)do
+foreach(self.children,function(child)
 child:draw(basepos,activatedonly)
-end
+end)
 end
 function thingy:child_from_button(button)
 if button==nil then return nil end
@@ -1423,11 +1423,11 @@ end
 end
 function thingy:has_activated_descendant()
 if self.crafting.activated==self then return true end
-for child in all(self.children)do
+foreach(self.children,function(child)
 if child:has_activated_descendant()then
 return true
 end
-end
+end)
 return false
 end
 function thingy:draw(basepos,activatedonly)
@@ -1454,9 +1454,9 @@ end
 self.pos.x=decisive_lerp(self.pos.x,self.destination.x,self.lerpspeed)
 self.pos.y=decisive_lerp(self.pos.y,self.destination.y,self.lerpspeed)
 end
-for child in all(self.children)do
+foreach(self.children,function(child)
 child:update()
-end
+end)
 end
 function thingy:expand(myindex)
 if myindex==1 then
@@ -1475,9 +1475,9 @@ if self.homebutton then
 self.destination=vector:new(0,thingy_spacing)
 end
 if recursive then
-for child in all(self.children)do
+foreach(self.children,function(child)
 child:collapse(recursive)
-end
+end)
 end
 end
 function thingy:activate()
@@ -1508,8 +1508,7 @@ self.crafting:on_activating_item(self,false)
 self.destination=vector:new(0,0)
 flashduration=0.15
 for i=1,#self.children do
-local child=self.children[ i ]
-child:expand(i)
+self.children[ i ]:expand(i)
 end
 end
 if self.parent~=nil then
@@ -1534,12 +1533,12 @@ end
 local activated_child=self:child_from_button(button)
 if activated_child~=nil then
 if #activated_child.children > 0 then
-for child in all(self.children)do
+foreach(self.children,function(child)
 if activated_child~=child then
 child:collapse()
 sfx(37)
 end
-end
+end)
 end
 activated_child:activate()
 end
@@ -1709,7 +1708,7 @@ end)
 end
 if phase==2 then
 draw_shadowed(64,46,function(x,y)
-print_centered_text('craft a    with   and',x,y+1,8)
+print_centered_text('craft a with and',x,y+1,8)
 spr(15,x-9,y)
 spr(22,x+20,y)
 spr(23,x+44,y)
