@@ -25,6 +25,8 @@ __lua__
 -- 	print( '', 0, (#debug_lines+1) *7 )
 -- end
 
+local timesplayed = 0
+
 local current_level = nil
 local crafting_ui = nil
 local inventory_display = nil
@@ -692,7 +694,7 @@ function player:jump( amount )
 end
 
 function fastphase( phase )
-	return phase >= 5 and ( phase % 2 ) == 1
+	return phase >= 5 and ( phase % 3 ) == 1
 end
 
 function player:update( deltatime )
@@ -1049,8 +1051,6 @@ function level:new( inventory )
 	local o = {
 		actors = {},
 		mapsegments = {},
-		ground_decorations = {},
-		horizon_decorations = {},
 		tick_count = 0,
 		pending_calls = {},
 		inventory = inventory,
@@ -1103,11 +1103,11 @@ function level:ramptime()
 	return ( self.tick_count - self.base_tick ) / 60
 end
 
-local day_length = 20
+local day_length = 30
 
 function level:phase()
-	if self.player.jump_count == 0 then return 1 end
-	if not self.inventory.owned_torch then return 2 end
+	if timesplayed == 1 and self.player.jump_count == 0 then return 1 end
+	if timesplayed == 1 and not self.inventory.owned_torch then return 2 end
 
 	return 3 + flr( self:ramptime() / day_length )
 end
@@ -1211,7 +1211,7 @@ function level:update()
 
 	self.tick_count += 1
 
-	if self.base_tick == nil and self.inventory.owned_torch then
+	if self.base_tick == nil and ( timesplayed > 1 or self.inventory.owned_torch ) then
 		self.base_tick = self.tick_count
 	end
 
@@ -2047,6 +2047,7 @@ music()
 local game_state = 'title'
 
 function restart_world()
+	timesplayed += 1
 	current_level = level:new( inventory:new() )
 	current_player = current_level.player
 	crafting_ui = crafting:new( current_level, vector:new( 96, 2 + thingy_spacing + 2 ))
@@ -2243,9 +2244,12 @@ function draw_ui()
 			print_centered_text( curmessage(), x, y, 12 )
 		end )
 
-		if fastphase( phase + 1 ) and current_level:time_left_in_phase() < 3 then
+		local phasespeed = fastphase( phase ) and 1 or 0
+		local nextphasespeed = fastphase( phase + 1 ) and 1 or 0
+		local speedchange = nextphasespeed - phasespeed
+		if speedchange ~= 0 and current_level:time_left_in_phase() < 3 and flicker( current_level:time(), 2 ) then
 			draw_shadowed( 64, 54, function(x,y)
-				print_centered_text( 'get ready!', x, y, 8 )
+				print_centered_text( speedchange > 0 and 'get ready!' or 'nearly there!', x, y, 8 )
 			end )
 		end
 
@@ -2258,18 +2262,7 @@ function draw_ui()
 	end
 
 	function drawlogo()
-		spr( 148, 16, 32, 12, 4 )
-	end
-
-
-	function draw_ui_gameover_fully()
-		drawlogo()
-		draw_ui_gameover()
-
-		draw_shadowed( 64, 0, function(x,y)
-			print_centered_text( 'press z to play again', x, y + 102, 12 )
-			print_centered_text( 'score: ' .. current_level.player.coins * 10, x, y + 64 + 10, 11 )
-		end )
+		spr( 148, 16, 16, 12, 4 )
 	end
 
 	if game_state == 'playing' then
@@ -2283,11 +2276,12 @@ function draw_ui()
 	elseif game_state == 'gameover_dying' then
 		draw_ui_gameover()
 	elseif game_state == 'gameover' then
+		drawlogo()
 		draw_ui_gameover()
 
 		draw_shadowed( 64, 0, function(x,y)
-			print_centered_text( 'press z to play again', x, y + 102, 12 )
-			print_centered_text( 'score: ' .. current_player.coins, x, y + 16, 10 )
+			print_centered_text( 'press z to play again', x, y + 110, 12 )
+			print_centered_text( 'score: ' .. current_level.player.coins * 10, x, y + 64 + 10, 10 )
 		end )
 	end
 
