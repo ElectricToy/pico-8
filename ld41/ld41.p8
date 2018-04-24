@@ -685,7 +685,6 @@ function player:jump( amount )
 	local jumped = self:superclass().jump( self, amount )
 
 	if jumped then
-		self:drain_satiation( 0.04 )
 		self.jump_count += 1
 	end
 
@@ -712,7 +711,7 @@ function player:update( deltatime )
 		self:maybe_shoot( creature )
 	end
 
-	self:drain_satiation( 0.001 + ( self.armor > 0 and 0.0005 or 0 ))
+	self:drain_satiation( 0.0005 )
 
 	if self.current_animation_name ~= 'run' then
 		self.animations[ 'run' ]:update( deltatime )
@@ -2269,7 +2268,7 @@ function draw_ui()
 
 		draw_shadowed( 64, 0, function(x,y)
 			print_centered_text( 'press z to play again', x, y + 102, 12 )
-			print_centered_text( 'score: ' .. current_level.player.coins * 10, x, y + 34, 11 )
+			print_centered_text( 'score: ' .. current_level.player.coins * 10, x, y + 64 + 10, 11 )
 		end )
 	end
 
