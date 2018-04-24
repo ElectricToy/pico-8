@@ -713,7 +713,7 @@ function player:update( deltatime )
 		self:maybe_shoot( creature )
 	end
 
-	self:drain_satiation( 0.0005 )
+	self:drain_satiation( 0.002 )
 
 	if self.current_animation_name ~= 'run' then
 		self.animations[ 'run' ]:update( deltatime )
@@ -2271,7 +2271,7 @@ function draw_ui()
 		drawlogo()
 
 		draw_shadowed( 64, 0, function(x,y)
-			print_centered_text( 'press z to start', x, y + 102, 12 )
+			print_centered_text( 'press z to start', x, y + 108, 12 )
 		end )
 	elseif game_state == 'gameover_dying' then
 		draw_ui_gameover()
@@ -2280,7 +2280,7 @@ function draw_ui()
 		draw_ui_gameover()
 
 		draw_shadowed( 64, 0, function(x,y)
-			print_centered_text( 'press z to play again', x, y + 110, 12 )
+			print_centered_text( 'press z to play again', x, y + 108, 12 )
 			print_centered_text( 'score: ' .. current_level.player.coins * 10, x, y + 64 + 10, 10 )
 		end )
 	end
