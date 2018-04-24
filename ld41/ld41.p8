@@ -450,7 +450,7 @@ function actor:die( cause )
 end
 
 function actor:age()
-	return self.tick_count / 60.0
+	return self.tick_count / 0x0.003c
 end
 
 function actor:may_collide( other )
@@ -484,7 +484,7 @@ end
 
 function actor:update( deltatime )
 
-	self.tick_count += 1
+	self.tick_count += 0x0.0001
 
 	if self.do_dynamics then
 		self.vel.y += self.gravity_scalar * 0.125
@@ -529,7 +529,7 @@ function actor:landed()
 end
 
 function actor:grounded()
-	return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 2
+	return self.landed_tick ~= nil and self.level.tick_count - self.landed_tick < 0x0.0002
 end
 
 function actor:jump( amount )
@@ -1100,14 +1100,14 @@ function level:creation_cell()
 end
 
 function level:time()
-	return self.tick_count / 60.0
+	return self.tick_count / 0x0.003c
 end
 
 function level:ramptime()
 	if self.base_tick == nil then
 		return 0
 	end
-	return ( self.tick_count - self.base_tick ) / 60
+	return ( self.tick_count - self.base_tick ) / 0x0.003c
 end
 
 local day_length = 30
@@ -1214,7 +1214,7 @@ end
 
 function level:update()
 
-	self.tick_count += 1
+	self.tick_count += 0x0.0001
 
 	if self.base_tick == nil and ( timesplayed > 1 or self.inventory.owned_torch ) then
 		self.base_tick = self.tick_count
@@ -1686,11 +1686,11 @@ function crafting:after_delay( delay, fn )
 end
 
 function crafting:time()
-	return self.tick_count / 60.0
+	return self.tick_count / 0x0.003c
 end
 
 function crafting:update()
-	self.tick_count += 1
+	self.tick_count += 0x0.0001
 
 	self:update_pending_calls()
 
@@ -1784,11 +1784,11 @@ function thingy:recursively_usable()
 	if self.homebutton then return true end
 	if #self.children == 0 and self:available() then return true end
 
-	foreach( self.children, function(child)
+	for child in all( self.children ) do
 		if child:recursively_usable() then
 			return true
 		end
-	end )
+	end
 	return false
 end
 
@@ -1857,11 +1857,11 @@ end
 function thingy:has_activated_descendant()
 	if self.crafting.activated == self then return true end
 
-	foreach( self.children, function(child)
+	for child in all( self.children ) do
 		if child:has_activated_descendant() then
 			return true
 		end
-	end )
+	end
 	return false
 end
 
