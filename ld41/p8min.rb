@@ -15,11 +15,13 @@ code.gsub!( /--.*$/, '' )
 code.gsub!( /^\s+/, '' )
 
 # remove spurious space between stuff
-code.gsub!( /([ \t])\s+/, '\1' )
-code.gsub!( /([\(=,\)\+\-\*])[ \t]/, '\1' )
-code.gsub!( /[ \t]([\)=\,\~\+\-\*])/, '\1' )
+code.each_line do |line|
+	line.gsub!( /(?=([^']*'[^']*')*[^']*$)([ \t])\s+/, '\2' )
+	line.gsub!( /(?=([^']*'[^']*')*[^']*$)([\(=,\)\+\-\*'])[ \t]/, '\2' )
+	line.gsub!( /(?=([^']*'[^']*')*[^']*$)[ \t]([\)=\,\~\+\-\*'])/, '\2' )
+	print line
+end
 
-print code
 print therest
 
 

@@ -17,18 +17,20 @@ gamemessage.text=text
 gamemessage.time=time()
 end
 function curmessage()
-return (gamemessage.time~=nil and time()< gamemessage.time+messagedur)and gamemessage.text or ''
+return (gamemessage.time~=nil and time()< gamemessage.time+messagedur)and gamemessage.text or''
 end
 function rel_color(base,change)
 local brighten_table={ 5,13,8,11,8,6,7,7,14,10,7,7,6,12,15,7 }
 local darken_table={ 0,0,0,0,0,0,5,6,2,4,9,3,13,1,8,14 }
-if change==0 then
-return base
-elseif change > 0 then
-return rel_color(brighten_table[base+1],change-1)
-else
-return rel_color(darken_table[base+1],change+1)
+while change > 0 do
+base=brighten_table[base+1]
+change-=1
 end
+while change < 0 do
+base=darken_table[base+1]
+change+=1
+end
+return base
 end
 function maptoworld(x)
 return x*8
@@ -159,7 +161,7 @@ local manhattanlength=delta:manhattanlength()
 if manhattanlength > maxdist*1.8 then return false
 end
 if manhattanlength > 180 then
-printh("objects may be close but we don't have the numeric precision to decide. ignoring.")
+printh( "objects may be close but we don't have the numeric precision to decide. ignoring.")
 return false
 end
 local distsquared=delta:lengthsquared()
@@ -321,11 +323,11 @@ self.flashamount=0
 self.alive=false
 self.vel.x=0
 self.collision_planes_inc=0
-self.animations[ 'death' ].current_frame=1
+self.animations['death' ].current_frame=1
 self.current_animation_name='death'
 end
 function actor:age()
-return self.tick_count / 60.0
+return self.tick_count / 0x0.003c
 end
 function actor:may_collide(other)
 return self.active
@@ -351,7 +353,7 @@ end
 function actor:on_collision(other)
 end
 function actor:update(deltatime)
-self.tick_count+=1
+self.tick_count+=0x0.0001
 if self.do_dynamics then
 self.vel.y+=self.gravity_scalar*0.125
 self.pos.x+=self.vel.x
@@ -386,7 +388,7 @@ self.vel.y=0
 self.landed_tick=self.level.tick_count
 end
 function actor:grounded()
-return self.landed_tick~=nil and self.level.tick_count-self.landed_tick < 2
+return self.landed_tick~=nil and self.level.tick_count-self.landed_tick < 0x0.0002
 end
 function actor:jump(amount)
 if self:dead()or not self:grounded()then return false end
@@ -439,8 +441,8 @@ function player:new(level)
 local o=actor:new(level,0,-14,8,14)
 o.vel.x=1	o.immortal=false
 o.do_dynamics=true
-o.animations[ 'run' ]=animation:new(32,6,1,2)
-o.animations[ 'run_armor' ]=animation:new(38,6,1,2)
+o.animations['run' ]=animation:new(32,6,1,2)
+o.animations['run_armor' ]=animation:new(38,6,1,2)
 o.current_animation_name='run'
 o.jump_count=0
 o.coins=0
@@ -457,7 +459,7 @@ o.deathcause=''
 local death_anim=animation:new(224,7,2,2)
 death_anim.style='stop'
 death_anim.frames={ 224,226,228,230,230,230,230,230,232,232,232,232,232,232,232,234,236 }
-o.animations[ 'death' ]=death_anim
+o.animations['death' ]=death_anim
 o.frame_rate_hz=1
 return setmetatable(o,self)
 end
@@ -522,10 +524,10 @@ self:maybe_shoot(creature)
 end)
 self:drain_satiation(0.002)
 if self.current_animation_name~='run' then
-self.animations[ 'run' ]:update(deltatime)
+self.animations['run' ]:update(deltatime)
 end
-local frame=self.animations[ 'run' ].current_frame
-self.animations[ 'run_armor' ].current_frame=frame
+local frame=self.animations['run' ].current_frame
+self.animations['run_armor' ].current_frame=frame
 end
 function player:die(cause)
 if self:dead()then return end
@@ -578,7 +580,7 @@ function player:draw()
 if self:dead()or not self.invulnerable or self.armorflicker or flicker(self.level:time(),8)then
 if not self:dead()then
 self.current_animation_name=
-(self.armor > 0 or (self.armorflicker and flicker(self.level:time(),6)))and 'run_armor' or 'run'
+(self.armor > 0 or (self.armorflicker and flicker(self.level:time(),6)))and'run_armor' or'run'
 end
 self:superclass().draw(self)
 end
@@ -594,7 +596,7 @@ local heightadd=flr((rnd(1)^ 2)*4)*16
 local o=actor:new(level,x,-10-heightadd,6,6)local sprite=item.sprite
 o.itemname=itemname
 o.item=item
-o.animations[ 'idle' ]=animation:new(sprite)
+o.animations['idle' ]=animation:new(sprite)
 o.current_animation_name='idle'
 o.collision_planes_inc=1
 o.may_player_pickup=true
@@ -603,7 +605,7 @@ o.floatbobamplitude=2
 local swirl=animation:new(25,7,1,1)
 swirl.style='stop'
 swirl.frames={ 25,26,27,28,29,30,31,61 }
-o.animations[ 'pickup' ]=swirl
+o.animations['pickup' ]=swirl
 return setmetatable(o,self)
 end
 function pickup:on_collision(other)
@@ -839,13 +841,13 @@ function level:creation_cell()
 return flr(self.player.pos.x / 8)
 end
 function level:time()
-return self.tick_count / 60.0
+return self.tick_count / 0x0.003c
 end
 function level:ramptime()
 if self.base_tick==nil then
 return 0
 end
-return (self.tick_count-self.base_tick)/ 60
+return (self.tick_count-self.base_tick)/ 0x0.003c
 end
 local day_length=30
 function level:phase()
@@ -931,7 +933,7 @@ end)
 end
 end
 function level:update()
-self.tick_count+=1
+self.tick_count+=0x0.0001
 if self.base_tick==nil and (timesplayed > 1 or self.inventory.owned_torch)then
 self.base_tick=self.tick_count
 end
@@ -993,23 +995,23 @@ o.current_animation_name='run'
 o.jumpforce=1.5
 o.whichcreature=whichcreature
 if whichcreature==1 then
-o.animations[ 'stop' ]=animation:new(64,1,2,1)
-o.animations[ 'death' ]=o.animations[ 'stop' ]
-o.animations[ 'run' ]=animation:new(64,3,2,1)
-o.animations[ 'coil' ]=o.animations[ 'run' ]
-o.animations[ 'pounce' ]=o.animations[ 'run' ]
+o.animations['stop' ]=animation:new(64,1,2,1)
+o.animations['death' ]=o.animations['stop' ]
+o.animations['run' ]=animation:new(64,3,2,1)
+o.animations['coil' ]=o.animations['run' ]
+o.animations['pounce' ]=o.animations['run' ]
 o.behavior=cocreate(behaviors.slide_left_fast)
 elseif whichcreature==2 then
-o.animations[ 'run' ]=animation:new(80,3,2,1)
-o.animations[ 'coil' ]=animation:new(86,1,2,1)
-o.animations[ 'pounce' ]=animation:new(88,1,2,1)
-o.animations[ 'stop' ]=o.animations[ 'pounce' ]
-o.animations[ 'death' ]=o.animations[ 'stop' ]
+o.animations['run' ]=animation:new(80,3,2,1)
+o.animations['coil' ]=animation:new(86,1,2,1)
+o.animations['pounce' ]=animation:new(88,1,2,1)
+o.animations['stop' ]=o.animations['pounce' ]
+o.animations['death' ]=o.animations['stop' ]
 o.behavior=cocreate(behaviors.pounce_from_left)
-else o.animations[ 'run' ]=animation:new(96,3,2,2)
-o.animations[ 'pounce' ]=animation:new(102,1,2,2)
-o.animations[ 'stop' ]=o.animations[ 'run' ]
-o.animations[ 'death' ]=o.animations[ 'stop' ]
+else o.animations['run' ]=animation:new(96,3,2,2)
+o.animations['pounce' ]=animation:new(102,1,2,2)
+o.animations['stop' ]=o.animations['run' ]
+o.animations['death' ]=o.animations['stop' ]
 o.behavior=cocreate(behaviors.maybe_jump)
 end
 return setmetatable(o,self)
@@ -1053,7 +1055,7 @@ local collisionwid={ 4,12,16 }
 local collisionhgt={ 4,12,12 }
 local damage={ 1,2,2 }
 local o=actor:new(level,x,-collisionhgt[ size ],0,0)
-o.animations[ 'idle' ]=animation:new(sprite[size],1,spritewidth[size],spriteheight[size])
+o.animations['idle' ]=animation:new(sprite[size],1,spritewidth[size],spriteheight[size])
 o.current_animation_name='idle'
 o.do_dynamics=false
 o.offset.x=spriteoffsetx[ size ]
@@ -1070,7 +1072,7 @@ local coin=inheritsfrom(actor)
 function coin:new(level,x)
 local y=-48+8*flr(sin(x / 300)*5)
 local o=actor:new(level,x,y,4,4)
-o.animations[ 'idle' ]=animation:new(16)
+o.animations['idle' ]=animation:new(16)
 o.current_animation_name='idle'
 o.collision_planes_inc=1
 o.may_player_pickup=true
@@ -1291,10 +1293,10 @@ function crafting:after_delay(delay,fn)
 add(self.pending_calls,{ deadline=self:time()+delay,fn=fn })
 end
 function crafting:time()
-return self.tick_count / 60.0
+return self.tick_count / 0x0.003c
 end
 function crafting:update()
-self.tick_count+=1
+self.tick_count+=0x0.0001
 self:update_pending_calls()
 if self.activated~=nil then
 self.activated:update_input()
@@ -1367,11 +1369,11 @@ end
 function thingy:recursively_usable()
 if self.homebutton then return true end
 if #self.children==0 and self:available()then return true end
-foreach(self.children,function(child)
+for child in all(self.children)do
 if child:recursively_usable()then
 return true
 end
-end)
+end
 return false
 end
 function thingy:available()
@@ -1423,11 +1425,11 @@ end
 end
 function thingy:has_activated_descendant()
 if self.crafting.activated==self then return true end
-foreach(self.children,function(child)
+for child in all(self.children)do
 if child:has_activated_descendant()then
 return true
 end
-end)
+end
 return false
 end
 function thingy:draw(basepos,activatedonly)
@@ -1708,7 +1710,7 @@ end)
 end
 if phase==2 then
 draw_shadowed(64,46,function(x,y)
-print_centered_text('craft a with and',x,y+1,8)
+print_centered_text('craft a    with   and',x,y+1,8)
 spr(15,x-9,y)
 spr(22,x+20,y)
 spr(23,x+44,y)
@@ -1722,7 +1724,7 @@ local nextphasespeed=fastphase(phase+1)and 1 or 0
 local speedchange=nextphasespeed-phasespeed
 if speedchange~=0 and current_level:time_left_in_phase()< 3 and flicker(current_level:time(),2)then
 draw_shadowed(64,54,function(x,y)
-print_centered_text(speedchange > 0 and 'get ready!' or 'nearly there!',x,y,8)
+print_centered_text(speedchange > 0 and'get ready!' or'nearly there!',x,y,8)
 end)
 end
 end
