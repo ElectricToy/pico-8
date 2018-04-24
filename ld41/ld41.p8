@@ -392,7 +392,6 @@ function actor:new( level, x, y, wid, hgt )
 		offset = vector:new(),
 		collision_size = vector:new( establish( wid, 0 ), establish( hgt, 0 )),
 		collision_planes_inc = 1,
-		collision_planes_exc = 15,
 		do_dynamics = false,
 		landed_tick = nil,
 		does_collide_with_ground = true,
@@ -454,19 +453,14 @@ function actor:may_collide( other )
 	return  self.active
 			and other.active
 			and 0 ~= band( self.collision_planes_inc, other.collision_planes_inc )
-			and 0 == band( self.collision_planes_exc, other.collision_planes_exc )
-end
-
-function actor:collision_ul()
-	return self.pos
 end
 
 function actor:collision_br()
-	return self:collision_ul() + self.collision_size
+	return self.pos + self.collision_size
 end
 
 function actor:collision_center()
-	return self:collision_ul() + self.collision_size * vector:new( 0.5 )
+	return self.pos + self.collision_size * vector:new( 0.5 )
 end
 
 function actor:collision_rect()
@@ -506,7 +500,7 @@ function actor:update( deltatime )
 		self.active = false
 	end
 
-	if self.vel.x > 0 and self:collision_ul().x > liveright then
+	if self.vel.x > 0 and self.pos.x > liveright then
 		self.active = false
 	end
 
@@ -605,7 +599,6 @@ function player:new( level )
 	o.animations[ 'run' ] = animation:new( 32, 6, 1, 2 )
 	o.animations[ 'run_armor' ] = animation:new( 38, 6, 1, 2 )
 	o.current_animation_name = 'run'
-	o.collision_planes_exc = 0
 
 	o.jump_count = 0
 
@@ -1017,6 +1010,16 @@ function inventory:item_count( type )
 	return establish( self.itemcounts[ type ], 0 )
 end
 
+function inventory:missing_items( requirements )
+	local arr = {}
+	for itemname, count in pairs( requirements ) do
+		if self:item_count( itemname ) < count then
+			arr[ itemname ] = count
+		end
+	end
+	return arr
+end
+
 function inventory:acquire( type )
 
 	if not self.itemcounts[ type ] then
@@ -1207,8 +1210,6 @@ end
 
 function level:update()
 
-	local deltatime = 1.0 / 60.0
-
 	self.tick_count += 1
 
 	if self.base_tick == nil and ( timesplayed > 1 or self.inventory.owned_torch ) then
@@ -1225,7 +1226,7 @@ function level:update()
 	self:update_collision()
 
 	erase_elements( self.actors, function(actor)
-		actor:update( deltatime )
+		actor:update( 1.0 / 60.0 )
 		return not actor.active
 	end)
 
@@ -1408,7 +1409,6 @@ end
 
 function coin:on_collision( other )
 	self:on_pickedup_by( other )
-	self:superclass().on_collision( self, other )
 end
 
 function coin:on_pickedup_by( other )
@@ -1537,9 +1537,9 @@ function inventorydisplay:on_used( items )
 	self:highlight_items( items )
 end
 
-function inventorydisplay:on_tried_to_use( items )
+function inventorydisplay:on_tried_to_make( item )
 	self.item_use_message = 'need:'
-	self:highlight_items( items )
+	self:highlight_items( self.level.inventory:missing_items( item.requirements ) )
 end
 
 function inventorydisplay:draw()
@@ -1929,7 +1929,7 @@ function thingy:activate()
 		self:flash( 0.05 )
 		self.crafting:on_activating_item( self, true )
 		sfx(41)
-		inventory_display:on_tried_to_use( self.item.requirements )
+		inventory_display:on_tried_to_make( self.item )
 		message( 'for ' .. self.item.name )
 		return
 	end

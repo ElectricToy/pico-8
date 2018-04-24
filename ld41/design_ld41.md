@@ -234,13 +234,12 @@ X Mushroom art
 X hunger flash when nearly dead (and health etc)
 ~~- Day/night cycle with darkness, torch (Jeff)~~
 ~~- Snake (Jeff/Liam??)~~
-- Item distribution (Liam): look for 'shoulddrop = function(level)'
+X Item distribution (Liam): look for 'shoulddrop = function(level)'
     + craft balancing (Liam): look for 'requirements'
     + item power (Liam): look for 'oncreated'
-- fast/slow
-- Title screen (Jeff)
-- Fast/slow run periods (Jeff)
-- Difficulty ramp (Jeff)
+X Title screen (Jeff)
+X Fast/slow run periods (Jeff)
+X Difficulty ramp (Jeff)
     + 1 jump quest: no creatures, rocks only, until jump
     + 2 torch quest: no creatures, small rocks only, specific items for torch, done when create torch, then sunset immediately
     + 3 first night: add arbitrary items, more stones; done with time
@@ -250,8 +249,8 @@ X hunger flash when nearly dead (and health etc)
     + PERPETUAL DIFFICULTY RAMP
     + Subsequent plays start on second day
 - performance problem when you craft something
-- frog initial y position
-- spend all arrows with weapon
+X frog initial y position
+X spend all arrows with weapon
 
 # Draw Tech
 
