@@ -54,13 +54,17 @@ function rel_color( base, change )
 
 	local darken_table =   { 0,  0,  0,  0,  0,  0,  5,  6,  2,  4,  9,  3, 13,  1,  8, 14 }
 
-	if change == 0 then
-		return base
-	elseif change > 0 then
-		return rel_color( brighten_table[base+1], change - 1 )
-	else
-		return rel_color(   darken_table[base+1], change + 1 )
+	while change > 0 do
+		base = brighten_table[base+1]
+		change -= 1
 	end
+
+	while change < 0 do
+		base = darken_table[base+1]
+		change += 1
+	end
+
+	return base
 end
 
 function maptoworld( x )
